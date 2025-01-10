@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tabula
 import pandas as pd
 import pdfplumber
@@ -19,8 +20,6 @@ def import_statement(filename: str) -> dict[pd.DataFrame] | pd.DataFrame:
      the function attempts to extract data from all pdf files
     :return: a DataFrame or dict of DataFrame if a folder was passed
     """
-    import re
-
     # Extracting raw text from the PDF for analysis
     all_pages_text = []
 
@@ -39,10 +38,11 @@ def import_statement(filename: str) -> dict[pd.DataFrame] | pd.DataFrame:
     # Define a regex pattern to extract transaction rows
     # (Date, Operation, Figure, Detail)
     transaction_pattern = re.compile(
-        r"(^\d{2}\/\d{2})\s+"
-        r"([^\n]*?)\s+"
-        r"(-?(?:\d{1,3}|\d{1,3}(?:(?:\.|\s)\d{3})+)(?:,\s?\d*)?)$\s+"
-        r"(.+\n)"
+        r"\n(\d{2}\/\d{2})\s+"  # capturing date in format DD/MM
+        r"([^\n]*?)\s"          # capturing object
+        r"(-?(?:\d{1,3}|\d{1,3}(?:(?:\.|\s)\d{3})+),\s?\d{2}?)"     
+        # capturing amount in format ' XXX XXX,XX\n'
+        r"(\n.*)"               # capturing additional description on next line
     )
 
     # Parse each page's text for transactions
