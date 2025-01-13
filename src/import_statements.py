@@ -19,6 +19,7 @@ FILE_PATH = os.path.join(FOLDER, FILE)
 DAY_MONTH_PATTERN = re.compile(r"(0[1-9]|[12][0-9]|3[01])[/\-](0[1-9]|1[012])")
 REF_CREDIT_STR_LIST = [
     "VIREMENT DE",
+    "VIREMENT INSTANTANE DE",
     "CREDIT",
 ]
 
@@ -73,7 +74,8 @@ def import_statement(filename: str) -> dict[pd.DataFrame] | pd.DataFrame:
         r"([^\n]*?)\s"  # capturing object
         r"(-?(?:\d{1,3}|\d{1,3}(?:(?:\.|\s)\d{3})+),\s?\d{2}?)"
         # capturing amount in format ' XXX XXX,XX\n'
-        r"\n(.*)"  # capturing additional description on next line
+        r"(?:\n((?!\d{2}/\d{2}).*))?"  # capturing additional description on next line
+        # ONLY IF it does not contain the date format signaling a new transaction
     )
 
     # Parse each page's text for transactions
@@ -88,6 +90,32 @@ def import_statement(filename: str) -> dict[pd.DataFrame] | pd.DataFrame:
     columns = ["Date", "Operation", "Amount", "Details"]
     transactions_df = pd.DataFrame(transactions, columns=columns)
 
+    # regex for catching total of expenses and earnings
+    total_des_operations_pattern = re.compile(
+        r"Total\s?des\s?op.rations\s"
+        r"(-?(?:\d{1,3}|\d{1,3}(?:(?:\.|\s)\d{3})+),\s?\d{2}?)\s"
+        r"(-?(?:\d{1,3}|\d{1,3}(?:(?:\.|\s)\d{3})+),\s?\d{2}?)"
+    )
+
+    # scanning through all pages until a total is found
+    total_des_operations = None
+    for page in all_pages_text[::-1]:
+        total_des_operations = total_des_operations_pattern.findall(page[1])
+        if total_des_operations.__len__() > 0:
+            break
+
+    if total_des_operations.__len__() == 0:
+        print(f"\nNo operations total found in doc {filename}")
+    else:
+        total_debit, total_credit = (
+            extract_amount_from_string(total_des_operations[0][0]),
+            extract_amount_from_string(total_des_operations[0][1]),
+        )
+        if -total_debit + total_credit != transactions_df["Amount"].sum():
+            print(f"\nThere is an amount sign import error in doc {filename}")
+            print(f"\nDebit + credit is: {-total_debit + total_credit }")
+            print(f"sum of operations is: {transactions_df.Amount.sum()}")
+
     return transactions_df
 
 
@@ -97,19 +125,31 @@ def sanitize_transaction(
 
     day, month = DAY_MONTH_PATTERN.findall(transaction[0])[0]
     # spending by default
-    amount = -1 * Decimal(re.sub(r"[^\d\-.]", "", transaction[2].replace(",", ".")))
+    amount = -1 * extract_amount_from_string(transaction[2])
 
     if any(
         ref_str.lower() in transaction[1].lower() for ref_str in REF_CREDIT_STR_LIST
     ):
         amount *= -1
 
-    return (
-        datetime.date(int(date_year), int(month), int(day)),
-        transaction[1],
-        amount,
-        transaction[3],
-    )
+    if len(transaction) > 3:
+        return (
+            datetime.date(int(date_year), int(month), int(day)),
+            transaction[1],
+            amount,
+            transaction[3],
+        )
+    else:
+        return (
+            datetime.date(int(date_year), int(month), int(day)),
+            transaction[1],
+            amount,
+            "",
+        )
+
+
+def extract_amount_from_string(amount_str: str) -> decimal.Decimal:
+    return Decimal(re.sub(r"[^\d\-.]", "", amount_str.replace(",", ".")))
 
 
 if __name__ == "__main__":
