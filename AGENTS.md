@@ -81,6 +81,28 @@ Use this template:
 ### 2026-02-23 - codex
 - Branch: `chore/bootstrap-python-tooling`
 - Completed:
+  - Implemented historical FX module with ECB SDW polling, local parquet cache,
+    and previous-business-day fallback by transaction booking date.
+  - Updated workflow/config/models/store to persist dated FX metadata per
+    transaction (`fx_rate_to_eur`, `fx_rate_date`, `fx_source`) and compute EUR
+    amounts from dated rates for new rows.
+  - Added FX-focused tests for ECB CSV parsing, fallback resolution, and cache
+    hydration flow; updated README env documentation for FX cache settings.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Add fixture-backed tests against real statement samples for each bank parser.
+  - Add OCR fallback for scanned/image-only PDF statements.
+- Next action:
+  - Run full historical ingestion and inspect warnings for missing FX ranges or
+    parser edge cases.
+
+### 2026-02-23 - codex
+- Branch: `chore/bootstrap-python-tooling`
+- Completed:
   - Implemented parser plugin architecture with dedicated parsers for
     LaBanquePostale, HSBC, Boursobank, and Revolut plus generic fallback.
   - Migrated useful logic from legacy LaBanquePostale importer into typed
