@@ -7,8 +7,10 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 from finance_tooling.classify import classify_transactions
+from finance_tooling.completeness import build_completeness_report
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
@@ -100,6 +102,11 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     classified = classify_transactions(extracted)
     enriched, fx_warnings = _apply_fx_and_mtime(classified, settings)
     warnings.extend(fx_warnings)
+    completeness_report = build_completeness_report(files, enriched)
+    completeness_status = cast(str, completeness_report["status"])
+    completeness_coverage_ratio = cast(float, completeness_report["file_coverage_ratio"])
+    missing_source_file_count = cast(int, completeness_report["missing_source_file_count"])
+    _write_json(settings.completeness_json_path, completeness_report)
 
     upsert = upsert_transactions(settings.master_parquet_path, enriched)
 
@@ -128,6 +135,10 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "total_rows": upsert.total_rows,
             "parquet_path": str(upsert.parquet_path),
             "dashboard_path": str(dashboard_path),
+            "completeness_report_path": str(settings.completeness_json_path),
+            "completeness_status": completeness_status,
+            "file_coverage_ratio": completeness_coverage_ratio,
+            "missing_source_file_count": missing_source_file_count,
             "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
         },
@@ -139,10 +150,14 @@ def run_workflow(settings: Settings) -> WorkflowResult:
         csv_path=settings.export_csv_path,
         json_path=settings.export_json_path,
         summary_path=settings.summary_json_path,
+        completeness_path=settings.completeness_json_path,
         files_scanned=len(files),
         files_failed=files_failed,
         transactions_parsed=len(enriched),
         new_rows=upsert.new_rows,
         total_rows=upsert.total_rows,
+        completeness_status=completeness_status,
+        completeness_coverage_ratio=completeness_coverage_ratio,
+        missing_source_file_count=missing_source_file_count,
         warnings=tuple(warnings),
     )
