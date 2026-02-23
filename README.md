@@ -28,19 +28,41 @@ uv run pytest
 uv run pre-commit run --all-files
 ```
 
+## Statement Workflow
+
+By default, the workflow scans:
+
+`/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw`
+
+You can override all paths with environment variables:
+
+```bash
+export FINANCE_STATEMENTS_PATH="/path/to/statements"
+export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
+export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
+export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"
+export FINANCE_EXPORT_JSON_PATH="/path/to/output/transactions_normalized.json"
+export FINANCE_BASE_CURRENCY="EUR"
+export FINANCE_FX_RATES_PATH="/path/to/fx_rates.json"
+
+uv run python -m finance_tooling
+```
+
+The workflow recursively scans statement PDFs, uses bank-specific parsers
+(LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies
+transactions, upserts into a canonical parquet store, and generates dashboard + exports.
+
+## Outputs
+
+- HTML dashboard
+- Canonical parquet master store (`transactions_master.parquet`)
+- Normalized CSV + JSON exports
+- Run summary JSON
+
 ## Repository Layout
 
 ```text
 src/
-  finance_tooling/      # new package scaffold
-  LBP_API.py            # existing integration script (legacy)
-  import_statements.py  # existing parser script (legacy)
+  finance_tooling/      # package modules and parser plugins
 tests/
 ```
-
-## Notes
-
-- Existing scripts are kept as-is and treated as legacy until migrated into
-  package modules.
-- Lint and type quality gates are currently enforced on the new package scaffold
-  (`src/finance_tooling`) while legacy scripts are migrated incrementally.

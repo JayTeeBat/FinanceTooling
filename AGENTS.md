@@ -41,11 +41,12 @@ categorization, and reporting.
 
 ## Legacy and Migration Policy
 
-- `src/LBP_API.py` and `src/import_statements.py` are legacy scripts.
+- Legacy script logic has been migrated into typed package modules under
+  `src/finance_tooling/`.
 - New work should go into package modules under `src/finance_tooling/`.
-- Migrate legacy code incrementally with tests that lock behavior before refactor.
-- Strict lint/type gates are applied to scaffold/package code first; legacy scripts
-  are brought under full checks as they are migrated.
+- Parsing behavior should be locked with tests when migrating additional bank
+  formats or edge cases.
+- Strict lint/type gates apply to package modules and tests.
 
 ## Session Hand-Off Protocol
 
@@ -76,6 +77,50 @@ Use this template:
 ```
 
 ## Hand-Off Log
+
+### 2026-02-23 - codex
+- Branch: `chore/bootstrap-python-tooling`
+- Completed:
+  - Implemented parser plugin architecture with dedicated parsers for
+    LaBanquePostale, HSBC, Boursobank, and Revolut plus generic fallback.
+  - Migrated useful logic from legacy LaBanquePostale importer into typed
+    parser modules and removed legacy scripts (`src/LBP_API.py`,
+    `src/import_statements.py`).
+  - Added canonical parquet store with idempotent upsert, exports, FX-aware
+    metrics, and dashboard generation from parquet as source of truth.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Improve parser coverage for scanned/image-only PDFs (OCR fallback).
+  - Add fixture PDFs per bank format for richer regression coverage.
+- Next action:
+  - Add OCR-backed extraction fallback and bank fixture-based golden tests.
+
+### 2026-02-23 - codex
+- Branch: `chore/bootstrap-python-tooling`
+- Completed:
+  - Upgraded `.pre-commit-config.yaml` to include official `ruff-pre-commit`
+    hooks and standard hygiene hooks.
+  - Implemented an end-to-end workflow under `src/finance_tooling/` for env-based
+    folder scanning, PDF text extraction, transaction parsing, heuristic
+    classification, metrics aggregation, and HTML dashboard rendering.
+  - Replaced scaffold CLI with workflow execution via env settings and added tests
+    for parsing, classification, and metrics.
+- Checks:
+  - `uv run pre-commit run --all-files`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Add bank-specific parsers (per bank format) and OCR fallback for scanned PDFs.
+  - Add currency-aware cross-currency reporting (FX normalization strategy).
+- Next action:
+  - Introduce parser plugins per bank statement format with fixture PDFs and
+    golden tests.
 
 ### 2026-02-22 - codex
 - Branch: `chore/bootstrap-python-tooling`
