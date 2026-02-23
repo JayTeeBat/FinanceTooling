@@ -12,6 +12,7 @@ from finance_tooling.classify import classify_transactions
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
+from finance_tooling.fx import ensure_fx_cache, resolve_rate
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers import select_parser
 from finance_tooling.scanner import discover_statement_pdfs
@@ -24,25 +25,47 @@ def _apply_fx_and_mtime(
     enriched: list[Transaction] = []
     warnings: list[str] = []
 
+    cache, cache_warnings = ensure_fx_cache(
+        settings.fx_cache_path,
+        transactions,
+        base_currency=settings.base_currency,
+        auto_fetch=settings.fx_auto_fetch,
+    )
+    warnings.extend(cache_warnings)
+
     for tx in transactions:
         currency = tx.currency.upper()
         amount_eur: Decimal | None = None
+        fx_rate: Decimal | None = None
+        fx_rate_date = None
+        fx_source = None
 
-        rate = settings.fx_rates.get(currency)
-        if rate is None:
+        resolution = resolve_rate(
+            cache,
+            currency=currency,
+            booking_date=tx.booking_date,
+            base_currency=settings.base_currency,
+        )
+        if resolution is None:
             warnings.append(
-                "Missing FX rate for currency "
-                f"{currency} ({tx.source_file.name}); "
+                "Missing dated FX rate for currency "
+                f"{currency} on or before {tx.booking_date} ({tx.source_file.name}); "
                 "converted metrics will skip this row"
             )
         else:
-            amount_eur = tx.amount_native * rate
+            fx_rate = resolution.rate_to_eur
+            fx_rate_date = resolution.rate_date
+            fx_source = resolution.source
+            amount_eur = tx.amount_native * resolution.rate_to_eur
 
         mtime = datetime.fromtimestamp(tx.source_file.stat().st_mtime, tz=UTC)
         enriched.append(
             replace(
                 tx,
                 currency=currency,
+                fx_rate_to_eur=fx_rate,
+                fx_rate_date=fx_rate_date,
+                fx_source=fx_source,
                 amount_eur=amount_eur,
                 source_file_mtime=mtime,
             )
@@ -105,6 +128,7 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "total_rows": upsert.total_rows,
             "parquet_path": str(upsert.parquet_path),
             "dashboard_path": str(dashboard_path),
+            "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
         },
     )

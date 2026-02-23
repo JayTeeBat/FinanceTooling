@@ -13,6 +13,9 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "description",
     "amount_native",
     "currency",
+    "fx_rate_to_eur",
+    "fx_rate_date",
+    "fx_source",
     "amount_eur",
     "category",
     "bank",
@@ -37,6 +40,9 @@ class Transaction:
     parser: str
     category: str = "Uncategorized"
     account_label: str | None = None
+    fx_rate_to_eur: Decimal | None = None
+    fx_rate_date: date | None = None
+    fx_source: str | None = None
     amount_eur: Decimal | None = None
     source_file_mtime: datetime | None = None
 

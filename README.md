@@ -43,19 +43,23 @@ export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
 export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"
 export FINANCE_EXPORT_JSON_PATH="/path/to/output/transactions_normalized.json"
 export FINANCE_BASE_CURRENCY="EUR"
-export FINANCE_FX_RATES_PATH="/path/to/fx_rates.json"
+export FINANCE_FX_CACHE_PATH="/path/to/output/fx_rates_history.parquet"
+export FINANCE_FX_AUTO_FETCH="true"
 
 uv run python -m finance_tooling
 ```
 
 The workflow recursively scans statement PDFs, uses bank-specific parsers
 (LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies
-transactions, upserts into a canonical parquet store, and generates dashboard + exports.
+transactions, auto-fetches historical daily ECB FX rates and applies conversion
+using transaction booking dates (with previous business-day fallback), upserts into
+a canonical parquet store, and generates dashboard + exports.
 
 ## Outputs
 
 - HTML dashboard
 - Canonical parquet master store (`transactions_master.parquet`)
+- FX history cache (`fx_rates_history.parquet`)
 - Normalized CSV + JSON exports
 - Run summary JSON
 

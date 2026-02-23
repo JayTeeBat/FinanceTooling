@@ -26,7 +26,14 @@ _TOTAL_PATTERN = re.compile(
     r"(-?(?:\d{1,3}|\d{1,3}(?:(?:\.|\s)\d{3})+),\s?\d{2}?)\s"
     r"(-?(?:\d{1,3}|\d{1,3}(?:(?:\.|\s)\d{3})+),\s?\d{2}?)"
 )
-_CREDIT_HINTS = ("VIREMENT DE", "VIREMENT INSTANTANE DE", "CREDIT DU")
+_CREDIT_HINTS = (
+    "VIREMENT DE",
+    "VIREMENT INSTANTANE DE",
+    "CREDIT DU",
+    "CREDIT CARTE BANCAIRE",
+    "REMISE DE CHEQUES",
+    "AVANTAGE CREDIT IMMOBILIER",
+)
 
 
 class LaBanquePostaleParser:
