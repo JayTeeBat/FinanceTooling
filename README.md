@@ -1,4 +1,68 @@
-# FinanceTracker
+# Finance Tooling
 
-This is a lightweight little piece of code to import LBP bank statements from pdf and
-export to Excel
+Python tooling for monitoring personal finances, starting with import pipelines for
+bank statements and expanding toward categorization, reconciliation, and reporting.
+
+## Tech Stack
+
+- `uv` for environment and dependency management
+- `ruff` for linting and formatting
+- `ty` for static type analysis
+- `pre-commit` for local quality gates
+- `pytest` for automated tests
+
+## Quick Start
+
+```bash
+uv sync --all-groups
+uv run python -m finance_tooling
+```
+
+## Development Commands
+
+```bash
+uv run ruff check .
+uv run ruff format .
+uv run ty check src/finance_tooling tests
+uv run pytest
+uv run pre-commit run --all-files
+```
+
+## Statement Workflow
+
+By default, the workflow scans:
+
+`/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw`
+
+You can override all paths with environment variables:
+
+```bash
+export FINANCE_STATEMENTS_PATH="/path/to/statements"
+export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
+export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
+export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"
+export FINANCE_EXPORT_JSON_PATH="/path/to/output/transactions_normalized.json"
+export FINANCE_BASE_CURRENCY="EUR"
+export FINANCE_FX_RATES_PATH="/path/to/fx_rates.json"
+
+uv run python -m finance_tooling
+```
+
+The workflow recursively scans statement PDFs, uses bank-specific parsers
+(LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies
+transactions, upserts into a canonical parquet store, and generates dashboard + exports.
+
+## Outputs
+
+- HTML dashboard
+- Canonical parquet master store (`transactions_master.parquet`)
+- Normalized CSV + JSON exports
+- Run summary JSON
+
+## Repository Layout
+
+```text
+src/
+  finance_tooling/      # package modules and parser plugins
+tests/
+```
