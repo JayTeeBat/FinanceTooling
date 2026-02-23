@@ -7,14 +7,17 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 from finance_tooling.classify import classify_transactions
+from finance_tooling.completeness import build_completeness_report
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
 from finance_tooling.fx import ensure_fx_cache, resolve_rate
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers import select_parser
+from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.scanner import discover_statement_pdfs
 from finance_tooling.store import upsert_transactions
 
@@ -84,6 +87,7 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     warnings: list[str] = []
     files_failed = 0
     extracted: list[Transaction] = []
+    validations: list[StatementValidation] = []
 
     files = discover_statement_pdfs(settings.input_path)
     for pdf_path in files:
@@ -93,6 +97,8 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             output = parser.parse(pdf_path, extracted_text.full_text)
             extracted.extend(output.transactions)
             warnings.extend(output.warnings)
+            if output.validation is not None:
+                validations.append(output.validation)
         except Exception as exc:
             files_failed += 1
             warnings.append(f"Failed to process {pdf_path}: {exc}")
@@ -100,6 +106,16 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     classified = classify_transactions(extracted)
     enriched, fx_warnings = _apply_fx_and_mtime(classified, settings)
     warnings.extend(fx_warnings)
+    completeness_report = build_completeness_report(files, enriched, validations=validations)
+    completeness_status = cast(str, completeness_report["status"])
+    completeness_coverage_ratio = cast(float, completeness_report["file_coverage_ratio"])
+    missing_source_file_count = cast(int, completeness_report["missing_source_file_count"])
+    reconciliation = cast(dict[str, object], completeness_report["statement_reconciliation"])
+    reconciliation_checkable_count = cast(int, reconciliation["checkable_file_count"])
+    reconciliation_fail_count = cast(int, reconciliation["fail_count"])
+    reconciliation_uncheckable_count = cast(int, reconciliation["uncheckable_file_count"])
+    reconciliation_pass_ratio = cast(float | None, reconciliation["pass_ratio"])
+    _write_json(settings.completeness_json_path, completeness_report)
 
     upsert = upsert_transactions(settings.master_parquet_path, enriched)
 
@@ -128,6 +144,14 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "total_rows": upsert.total_rows,
             "parquet_path": str(upsert.parquet_path),
             "dashboard_path": str(dashboard_path),
+            "completeness_report_path": str(settings.completeness_json_path),
+            "completeness_status": completeness_status,
+            "file_coverage_ratio": completeness_coverage_ratio,
+            "missing_source_file_count": missing_source_file_count,
+            "statement_reconciliation_checkable_file_count": reconciliation_checkable_count,
+            "statement_reconciliation_fail_count": reconciliation_fail_count,
+            "statement_reconciliation_uncheckable_file_count": reconciliation_uncheckable_count,
+            "statement_reconciliation_pass_ratio": reconciliation_pass_ratio,
             "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
         },
@@ -139,10 +163,18 @@ def run_workflow(settings: Settings) -> WorkflowResult:
         csv_path=settings.export_csv_path,
         json_path=settings.export_json_path,
         summary_path=settings.summary_json_path,
+        completeness_path=settings.completeness_json_path,
         files_scanned=len(files),
         files_failed=files_failed,
         transactions_parsed=len(enriched),
         new_rows=upsert.new_rows,
         total_rows=upsert.total_rows,
+        completeness_status=completeness_status,
+        completeness_coverage_ratio=completeness_coverage_ratio,
+        missing_source_file_count=missing_source_file_count,
+        reconciliation_checkable_file_count=reconciliation_checkable_count,
+        reconciliation_fail_count=reconciliation_fail_count,
+        reconciliation_uncheckable_file_count=reconciliation_uncheckable_count,
+        reconciliation_pass_ratio=reconciliation_pass_ratio,
         warnings=tuple(warnings),
     )

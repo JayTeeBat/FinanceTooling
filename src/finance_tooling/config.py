@@ -28,6 +28,7 @@ class Settings:
     export_csv_path: Path
     export_json_path: Path
     summary_json_path: Path
+    completeness_json_path: Path
     base_currency: str
     fx_cache_path: Path
     fx_auto_fetch: bool
@@ -70,6 +71,7 @@ def load_settings_from_env() -> Settings:
         input_path / "transactions_normalized.json"
     )
     summary_json_path = input_path / "run_summary.json"
+    completeness_json_path = input_path / "completeness_report.json"
 
     base_currency = os.environ.get(BASE_CURRENCY_ENV, "EUR").strip().upper() or "EUR"
     fx_cache_path = _resolve_path_from_env(FX_CACHE_PATH_ENV) or (
@@ -84,6 +86,7 @@ def load_settings_from_env() -> Settings:
         export_csv_path=export_csv_path,
         export_json_path=export_json_path,
         summary_json_path=summary_json_path,
+        completeness_json_path=completeness_json_path,
         base_currency=base_currency,
         fx_cache_path=fx_cache_path,
         fx_auto_fetch=fx_auto_fetch,

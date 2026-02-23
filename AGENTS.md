@@ -79,6 +79,43 @@ Use this template:
 ## Hand-Off Log
 
 ### 2026-02-23 - codex
+- Branch: `fix/lbp-fx-dated-rates`
+- Completed:
+  - Audited end-to-end ingestion completeness against source PDFs under
+    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw`.
+  - Verified parser reconciliation fix for LaBanquePostale statements and
+    confirmed zero LBP totals mismatches in current run.
+  - Isolated remaining gap as completeness/coverage (not reconciliation):
+    many PDFs still produce zero parsed rows.
+- Checks:
+  - `uv run python -m finance_tooling`: pass
+  - `uv run pytest`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+- Open items:
+  - Parsed coverage is incomplete:
+    `transactions_master.parquet` currently spans only 2018-2024 while source
+    PDFs exist for 2016-2026.
+  - 134 of 187 PDFs currently have zero parsed transactions.
+  - Most missing coverage appears in Boursobank/Revolut and earlier HSBC years.
+- Next action:
+  - Implement automated completeness reporting in workflow output with
+    machine-readable pass/warn/fail thresholds and explicit missing-file lists.
+  - Minimum spec for next agent:
+    - Add `src/finance_tooling/completeness.py` with:
+      - source PDF count
+      - unique parsed source file count
+      - file coverage ratio
+      - counts by year (source vs parsed)
+      - counts by bank guess (source) and by bank (parsed)
+      - missing source files list + grouped summaries
+      - status: `pass` / `warn` / `fail`
+      - reasons and thresholds in payload
+    - Write `<input>/completeness_report.json` each run.
+    - Add report path + key coverage stats to `run_summary.json` and CLI output.
+    - Add tests in `tests/test_completeness.py` and pipeline integration tests.
+
+### 2026-02-23 - codex
 - Branch: `chore/bootstrap-python-tooling`
 - Completed:
   - Implemented historical FX module with ECB SDW polling, local parquet cache,
@@ -164,3 +201,19 @@ Use this template:
   - Add domain model for transactions and statement metadata.
 - Next action:
   - Run `uv sync --all-groups` and execute all quality gates, then fix findings.
+
+### 2026-02-23 - codex
+- Branch: `fix/completeness-reporting`
+- Completed:
+  - Added `src/finance_tooling/completeness.py` to compute machine-readable post-parse completeness metrics: source PDF count, parsed unique source file count, coverage ratio, counts by year, source bank-guess counts, parsed bank counts, missing-file list, grouped missing summaries, and thresholded status/reasons.
+  - Integrated completeness reporting into workflow output by writing `<input>/completeness_report.json` each run and by adding completeness path/status/coverage/missing-file stats into `run_summary.json`, CLI output, and `WorkflowResult`.
+  - Added tests in `tests/test_completeness.py` and `tests/test_pipeline.py` to validate completeness logic and pipeline integration/wiring.
+- Checks:
+  - `uv run ruff format .`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Current bank/year source inference in completeness reporting is filename/path heuristic-based and may need refinement per real statement naming conventions.
+- Next action:
+  - Run a full ingestion against the real statement corpus and tune completeness status thresholds/heuristics based on observed false positives.

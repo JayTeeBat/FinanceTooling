@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import ParserOutput
+from finance_tooling.parsers.base import ParserOutput, StatementValidation
 from finance_tooling.parsers.common import detect_currency, parse_date, parse_decimal
 
 _DATE_REGEX = re.compile(r"\b(\d{1,4}[/-]\d{1,2}[/-]\d{2,4})\b")
@@ -61,4 +62,18 @@ class GenericParser:
                 )
             )
 
-        return ParserOutput(transactions=transactions, warnings=[])
+        validation = StatementValidation(
+            source_file=file_path,
+            bank=self.bank,
+            parser=self.name,
+            statement_type="statement",
+            opening_balance=None,
+            closing_balance=None,
+            transaction_sum=sum((tx.amount_native for tx in transactions), start=Decimal("0")),
+            expected_closing_balance=None,
+            difference=None,
+            status="uncheckable",
+            reason="unsupported_parser",
+            severity="info",
+        )
+        return ParserOutput(transactions=transactions, warnings=[], validation=validation)

@@ -56,9 +56,17 @@ class WorkflowResult:
     csv_path: Path
     json_path: Path
     summary_path: Path
+    completeness_path: Path
     files_scanned: int
     files_failed: int
     transactions_parsed: int
     new_rows: int
     total_rows: int
+    completeness_status: str
+    completeness_coverage_ratio: float
+    missing_source_file_count: int
+    reconciliation_checkable_file_count: int
+    reconciliation_fail_count: int
+    reconciliation_uncheckable_file_count: int
+    reconciliation_pass_ratio: float | None
     warnings: tuple[str, ...]
