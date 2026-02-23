@@ -81,3 +81,33 @@ def test_boursobank_parser_parses_lines_without_space_after_date() -> None:
 
     assert len(result.transactions) == 1
     assert result.transactions[0].amount_native > 0
+
+
+def test_hsbc_parser_emits_warning_for_reconciliation_mismatch() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 100.00
+    02 Mar 2024 CARD SHOP 10.00 90.00
+    Closing Balance 91.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert result.validation is not None
+    assert result.validation.status == "fail"
+    assert result.validation.severity == "warning"
+    assert len(result.warnings) == 1
+
+
+def test_hsbc_parser_marks_uncheckable_as_info_when_balances_missing() -> None:
+    parser = HsbcParser()
+    text = """
+    02 Mar 2024 CARD SHOP 10.00 90.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert result.validation is not None
+    assert result.validation.status == "uncheckable"
+    assert result.validation.severity == "info"
+    assert result.warnings == []

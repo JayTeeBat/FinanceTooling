@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from finance_tooling.completeness import build_completeness_report, classify_statement_type
 from finance_tooling.models import Transaction
+from finance_tooling.parsers.base import StatementValidation
 
 
 def _tx(source_file: Path, bank: str) -> Transaction:
@@ -107,3 +108,53 @@ def test_classify_statement_type_detects_non_statement_documents() -> None:
     assert (
         classify_statement_type(Path("/data/HSBC Jacques 2024-01-31_Statement.pdf")) == "statement"
     )
+
+
+def test_build_completeness_report_includes_reconciliation_kpis() -> None:
+    source_file = Path("/data/HSBC_2024_statement.pdf")
+    parsed = [_tx(source_file, "HSBC")]
+    validations = [
+        StatementValidation(
+            source_file=source_file,
+            bank="HSBC",
+            parser="hsbc",
+            statement_type="statement",
+            opening_balance=Decimal("100.00"),
+            closing_balance=Decimal("90.00"),
+            transaction_sum=Decimal("-9.00"),
+            expected_closing_balance=Decimal("91.00"),
+            difference=Decimal("1.00"),
+            status="fail",
+            reason="balance_mismatch",
+            severity="warning",
+        ),
+        StatementValidation(
+            source_file=Path("/data/HSBC_2023_statement.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            statement_type="statement",
+            opening_balance=None,
+            closing_balance=None,
+            transaction_sum=Decimal("0.00"),
+            expected_closing_balance=None,
+            difference=None,
+            status="uncheckable",
+            reason="missing_opening_or_closing",
+            severity="info",
+        ),
+    ]
+
+    report = build_completeness_report(
+        source_files=[source_file],
+        parsed_transactions=parsed,
+        validations=validations,
+    )
+    reconciliation = cast(dict[str, Any], report["statement_reconciliation"])
+
+    assert reconciliation["files_with_validation_record_count"] == 2
+    assert reconciliation["checkable_file_count"] == 1
+    assert reconciliation["fail_count"] == 1
+    assert reconciliation["uncheckable_file_count"] == 1
+    assert reconciliation["counts_by_severity"] == {"info": 1, "warning": 1}
+    assert len(reconciliation["warning_items"]) == 1
+    assert len(reconciliation["info_items"]) == 1

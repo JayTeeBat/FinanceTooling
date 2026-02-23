@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import ParserOutput
+from finance_tooling.parsers.base import ParserOutput, StatementValidation
 from finance_tooling.parsers.common import parse_decimal
 
 _DAY_MONTH_PATTERN = re.compile(r"(0[1-9]|[12][0-9]|3[01])[/\-](0[1-9]|1[012])")
@@ -83,19 +83,34 @@ class LaBanquePostaleParser:
                 )
             )
 
+        transaction_sum = sum((tx.amount_native for tx in transactions), start=Decimal("0"))
         total_matches = _TOTAL_PATTERN.findall(full_text)
         if total_matches and transactions:
             debit = parse_decimal(total_matches[-1][0])
             credit = parse_decimal(total_matches[-1][1])
             if debit is not None and credit is not None:
                 expected = -debit + credit
-                actual = sum((tx.amount_native for tx in transactions), start=Decimal("0"))
-                if actual != expected:
+                if transaction_sum != expected:
                     warnings.append(
-                        f"{file_path.name}: totals mismatch expected {expected} but parsed {actual}"
+                        f"{file_path.name}: totals mismatch expected {expected} "
+                        f"but parsed {transaction_sum}"
                     )
 
-        return ParserOutput(transactions=transactions, warnings=warnings)
+        validation = StatementValidation(
+            source_file=file_path,
+            bank=self.bank,
+            parser=self.name,
+            statement_type="statement",
+            opening_balance=None,
+            closing_balance=None,
+            transaction_sum=transaction_sum,
+            expected_closing_balance=None,
+            difference=None,
+            status="uncheckable",
+            reason="missing_opening_or_closing",
+            severity="info",
+        )
+        return ParserOutput(transactions=transactions, warnings=warnings, validation=validation)
 
     @staticmethod
     def _resolve_year(filename: str) -> int:

@@ -65,4 +65,8 @@ class WorkflowResult:
     completeness_status: str
     completeness_coverage_ratio: float
     missing_source_file_count: int
+    reconciliation_checkable_file_count: int
+    reconciliation_fail_count: int
+    reconciliation_uncheckable_file_count: int
+    reconciliation_pass_ratio: float | None
     warnings: tuple[str, ...]

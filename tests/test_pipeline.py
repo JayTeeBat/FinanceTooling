@@ -114,8 +114,16 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["completeness_report_path"] == str(settings.completeness_json_path)
     assert summary_payload["completeness_status"] == "fail"
     assert summary_payload["missing_source_file_count"] == 1
+    assert summary_payload["statement_reconciliation_checkable_file_count"] == 0
+    assert summary_payload["statement_reconciliation_fail_count"] == 0
+    assert summary_payload["statement_reconciliation_uncheckable_file_count"] == 0
+    assert summary_payload["statement_reconciliation_pass_ratio"] is None
 
     assert result.completeness_path == settings.completeness_json_path
     assert result.completeness_status == "fail"
     assert result.completeness_coverage_ratio == 0.5
     assert result.missing_source_file_count == 1
+    assert result.reconciliation_checkable_file_count == 0
+    assert result.reconciliation_fail_count == 0
+    assert result.reconciliation_uncheckable_file_count == 0
+    assert result.reconciliation_pass_ratio is None

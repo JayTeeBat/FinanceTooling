@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 from finance_tooling.models import Transaction
+from finance_tooling.parsers.base import StatementValidation
 
 _DEFAULT_WARN_COVERAGE_RATIO = 0.90
 _DEFAULT_FAIL_COVERAGE_RATIO = 0.70
@@ -68,6 +71,7 @@ def _group_missing_by_year_and_bank(missing_files: list[Path]) -> list[dict[str,
 def build_completeness_report(
     source_files: list[Path],
     parsed_transactions: list[Transaction],
+    validations: list[StatementValidation] | None = None,
     *,
     warn_coverage_ratio: float = _DEFAULT_WARN_COVERAGE_RATIO,
     fail_coverage_ratio: float = _DEFAULT_FAIL_COVERAGE_RATIO,
@@ -154,6 +158,17 @@ def build_completeness_report(
     if missing_statement_files:
         reasons.append(f"{len(missing_statement_files)} statement PDFs have zero parsed rows")
 
+    reconciliation = _build_reconciliation_summary(validations or [])
+    reconciliation_fail_count = cast(int, reconciliation["fail_count"])
+    reconciliation_uncheckable_count = cast(int, reconciliation["uncheckable_file_count"])
+    if reconciliation_fail_count > 0:
+        reasons.append(f"{reconciliation_fail_count} statements failed balance reconciliation")
+    if reconciliation_uncheckable_count > 0:
+        reasons.append(
+            "info: "
+            f"{reconciliation_uncheckable_count} statements are uncheckable for reconciliation"
+        )
+
     return {
         "status": status,
         "reasons": reasons,
@@ -192,4 +207,99 @@ def build_completeness_report(
         "missing_source_files": [str(path) for path in missing_statement_files],
         "missing_source_files_all": [str(path) for path in missing_files_all],
         "missing_non_statement_source_files": [str(path) for path in missing_non_statement_files],
+        "statement_reconciliation": reconciliation,
     }
+
+
+def _build_reconciliation_summary(validations: list[StatementValidation]) -> dict[str, object]:
+    file_validations: dict[str, StatementValidation] = {}
+    for validation in validations:
+        file_validations[str(validation.source_file)] = validation
+
+    unique_validations = list(file_validations.values())
+    checkable = [
+        validation
+        for validation in unique_validations
+        if validation.opening_balance is not None and validation.closing_balance is not None
+    ]
+    pass_count = sum(1 for validation in checkable if validation.status == "pass")
+    fail_count = sum(1 for validation in checkable if validation.status == "fail")
+    uncheckable = [
+        validation for validation in unique_validations if validation.status == "uncheckable"
+    ]
+
+    by_status = Counter(validation.status for validation in unique_validations)
+    by_severity = Counter(validation.severity for validation in unique_validations)
+    by_bank_status = Counter(
+        (validation.bank, validation.status) for validation in unique_validations
+    )
+    by_year_status = Counter(
+        (guess_source_year(validation.source_file), validation.status)
+        for validation in unique_validations
+    )
+    uncheckable_reasons = Counter(
+        (validation.reason or "unknown")
+        for validation in unique_validations
+        if validation.status == "uncheckable"
+    )
+
+    warning_items = [
+        _validation_item(validation)
+        for validation in unique_validations
+        if validation.severity == "warning"
+    ]
+    info_items = [
+        _validation_item(validation)
+        for validation in unique_validations
+        if validation.severity == "info"
+    ]
+    checkable_count = len(checkable)
+
+    return {
+        "files_with_validation_record_count": len(unique_validations),
+        "checkable_file_count": checkable_count,
+        "uncheckable_file_count": len(uncheckable),
+        "pass_count": pass_count,
+        "fail_count": fail_count,
+        "pass_ratio": (pass_count / checkable_count) if checkable_count else None,
+        "fail_ratio": (fail_count / checkable_count) if checkable_count else None,
+        "counts_by_status": dict(sorted(by_status.items())),
+        "counts_by_severity": dict(sorted(by_severity.items())),
+        "counts_by_bank_and_status": [
+            {"bank": bank, "status": status, "count": count}
+            for (bank, status), count in sorted(
+                by_bank_status.items(), key=lambda item: (item[0][0], item[0][1])
+            )
+        ],
+        "counts_by_year_and_status": [
+            {"year": year, "status": status, "count": count}
+            for (year, status), count in sorted(
+                by_year_status.items(), key=lambda item: (item[0][0], item[0][1])
+            )
+        ],
+        "warning_items": warning_items,
+        "info_items": info_items,
+        "uncheckable_reasons": dict(sorted(uncheckable_reasons.items())),
+    }
+
+
+def _validation_item(validation: StatementValidation) -> dict[str, object]:
+    return {
+        "source_file": str(validation.source_file),
+        "bank": validation.bank,
+        "parser": validation.parser,
+        "status": validation.status,
+        "severity": validation.severity,
+        "reason": validation.reason,
+        "opening_balance": _decimal_or_none(validation.opening_balance),
+        "transaction_sum": _decimal_or_none(validation.transaction_sum),
+        "expected_closing_balance": _decimal_or_none(validation.expected_closing_balance),
+        "closing_balance": _decimal_or_none(validation.closing_balance),
+        "difference": _decimal_or_none(validation.difference),
+    }
+
+
+def _decimal_or_none(value: Decimal | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
