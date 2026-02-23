@@ -10,9 +10,17 @@ from finance_tooling.parsers.base import ParserOutput
 from finance_tooling.parsers.common import parse_date, parse_decimal
 
 _LINE_PATTERN = re.compile(
-    r"^(\d{2}/\d{2}/\d{4})\s+(.+?)\s+(\d{2}/\d{2}/\d{4})?\s*(-?\d[\d\s,.]*,\d{2})$"
+    r"^(\d{2}/\d{2}/\d{4})\s*(.+?)\s+(\d{2}/\d{2}/\d{4})?\s*(-?\d[\d\s,.]*,\d{2})$"
 )
-_POSITIVE_HINTS = ("VIRSEPA", "VIREMENT", "CREDIT", "REMBOURSEMENT", "VERSEMENT")
+_POSITIVE_HINTS = (
+    "VIRSEPA",
+    "VIREMENT",
+    "VIR INST",
+    "VIR INSTANTANE",
+    "CREDIT",
+    "REMBOURSEMENT",
+    "VERSEMENT",
+)
 
 
 class BoursobankParser:
@@ -23,6 +31,8 @@ class BoursobankParser:
 
     def can_handle(self, file_path: Path, first_page_text: str) -> bool:
         marker = f"{file_path.name} {first_page_text}".lower()
+        if "revolut" in marker and "account-statement" in marker:
+            return False
         return "boursobank" in marker or "boursorama" in marker
 
     def parse(self, file_path: Path, full_text: str) -> ParserOutput:

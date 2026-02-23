@@ -12,10 +12,11 @@ from finance_tooling.parsers.common import detect_currency, parse_date, parse_de
 _LINE_PATTERN = re.compile(
     r"^(\d{1,2}\s[A-Za-z]{3}\s\d{4})\s+"
     r"(.+?)\s+"
-    r"([€£$]?\d[\d,.]*)\s+"
+    r"([€£$]?-?\d[\d,.]*)\s+"
     r"([€£$]?\d[\d,.]*)$"
 )
 _NEGATIVE_HINTS = ("TO ", "CARD PAYMENT", "ATM", "WITHDRAWAL", "EXCHANGE")
+_POSITIVE_HINTS = ("PAYMENT FROM", "TRANSFER FROM", "REFUND", "REVERSAL")
 
 
 class RevolutParser:
@@ -40,11 +41,17 @@ class RevolutParser:
             booking_date = parse_date(match.group(1))
             description = match.group(2)
             raw_amount = match.group(3)
-            amount = parse_decimal(raw_amount)
+            amount = parse_decimal(_strip_currency_symbol(raw_amount))
             if booking_date is None or amount is None:
                 continue
 
-            if any(hint in description.upper() for hint in _NEGATIVE_HINTS):
+            description_upper = description.upper()
+            amount = abs(amount)
+            if any(hint in description_upper for hint in _POSITIVE_HINTS):
+                amount = abs(amount)
+            elif any(hint in description_upper for hint in _NEGATIVE_HINTS):
+                amount = -abs(amount)
+            else:
                 amount = -abs(amount)
 
             transactions.append(
@@ -60,3 +67,7 @@ class RevolutParser:
             )
 
         return ParserOutput(transactions=transactions, warnings=[])
+
+
+def _strip_currency_symbol(token: str) -> str:
+    return token.replace("€", "").replace("£", "").replace("$", "")

@@ -13,8 +13,8 @@ from finance_tooling.parsers.revolut import RevolutParser
 
 PARSERS: tuple[StatementParser, ...] = (
     LaBanquePostaleParser(),
-    BoursobankParser(),
     RevolutParser(),
+    BoursobankParser(),
     HsbcParser(),
     GenericParser(),
 )

@@ -15,6 +15,12 @@ _LINE_PATTERN = re.compile(
     r"(-?\d[\d,.]*)\s+"
     r"(-?\d[\d,.]*)$"
 )
+_COMPACT_LINE_PATTERN = re.compile(
+    r"^(\d{2}[A-Za-z]{3}\d{2,4})\s+"
+    r"(.+?)\s+"
+    r"(-?\d[\d,.]*)\s+"
+    r"(-?\d[\d,.]*)$"
+)
 _POSITIVE_HINTS = ("SALARY", "PAYMENT IN", "TRANSFER FROM", "INTEREST", "REFUND")
 _SKIP_HINTS = ("BALANCEBROUGHTFORWARD", "BALANCECARRIEDFORWARD")
 
@@ -33,7 +39,7 @@ class HsbcParser:
         transactions: list[Transaction] = []
         for raw_line in full_text.splitlines():
             line = " ".join(raw_line.split())
-            match = _LINE_PATTERN.match(line)
+            match = _LINE_PATTERN.match(line) or _COMPACT_LINE_PATTERN.match(line)
             if not match:
                 continue
 
@@ -41,7 +47,7 @@ class HsbcParser:
             if any(skip in description for skip in _SKIP_HINTS):
                 continue
 
-            booking_date = parse_date(match.group(1))
+            booking_date = parse_date(_normalize_compact_date(match.group(1)))
             amount = parse_decimal(match.group(3))
             if booking_date is None or amount is None:
                 continue
@@ -62,3 +68,10 @@ class HsbcParser:
             )
 
         return ParserOutput(transactions=transactions, warnings=[])
+
+
+def _normalize_compact_date(raw_date: str) -> str:
+    compact = re.fullmatch(r"(\d{2})([A-Za-z]{3})(\d{2,4})", raw_date)
+    if compact is None:
+        return raw_date
+    return f"{compact.group(1)} {compact.group(2)} {compact.group(3)}"
