@@ -3,7 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
-from finance_tooling.completeness import build_completeness_report
+from finance_tooling.completeness import build_completeness_report, classify_statement_type
 from finance_tooling.models import Transaction
 
 
@@ -24,6 +24,7 @@ def test_build_completeness_report_tracks_missing_files_and_groupings() -> None:
         Path("/data/Boursobank_statement_2018.pdf"),
         Path("/data/Revolut_account-statement_2021.pdf"),
         Path("/data/HSBC_2017_statement.pdf"),
+        Path("/data/LaBanquePostale Relevé de frais_2024.pdf"),
     ]
 
     parsed = [
@@ -34,20 +35,32 @@ def test_build_completeness_report_tracks_missing_files_and_groupings() -> None:
 
     report = build_completeness_report(source_files, parsed)
 
-    assert report["source_pdf_count"] == 3
+    assert report["source_pdf_count"] == 4
+    assert report["source_statement_pdf_count"] == 3
+    assert report["source_non_statement_pdf_count"] == 1
     assert report["parsed_unique_source_file_count"] == 2
+    assert report["parsed_unique_statement_source_file_count"] == 2
+    assert report["parsed_unique_non_statement_source_file_count"] == 0
     assert report["file_coverage_ratio"] == 2 / 3
+    assert report["overall_file_coverage_ratio"] == 0.5
     assert report["status"] == "fail"
     assert report["missing_source_file_count"] == 1
+    assert report["missing_source_file_count_all"] == 2
+    assert report["missing_non_statement_source_file_count"] == 1
     assert report["missing_source_files"] == ["/data/HSBC_2017_statement.pdf"]
+    assert report["missing_non_statement_source_files"] == [
+        "/data/LaBanquePostale Relevé de frais_2024.pdf"
+    ]
     assert report["counts_by_year"] == {
         "2017": {"source_files": 1, "parsed_source_files": 0},
         "2018": {"source_files": 1, "parsed_source_files": 1},
         "2021": {"source_files": 1, "parsed_source_files": 1},
+        "2024": {"source_files": 1, "parsed_source_files": 0},
     }
     assert report["source_counts_by_bank_guess"] == {
         "Boursobank": 1,
         "HSBC": 1,
+        "LaBanquePostale": 1,
         "Revolut": 1,
     }
     assert report["parsed_transaction_counts_by_bank"] == {"Boursobank": 2, "Revolut": 1}
@@ -81,3 +94,16 @@ def test_build_completeness_report_can_warn_between_thresholds() -> None:
 
     assert report["file_coverage_ratio"] == 0.75
     assert report["status"] == "warn"
+
+
+def test_classify_statement_type_detects_non_statement_documents() -> None:
+    assert (
+        classify_statement_type(Path("/data/Boursobank Jacques COM-20-01-2025.pdf"))
+        == "non_statement"
+    )
+    assert classify_statement_type(Path("/data/LaBanquePostale Relevé de frais_20231231.pdf")) == (
+        "non_statement"
+    )
+    assert (
+        classify_statement_type(Path("/data/HSBC Jacques 2024-01-31_Statement.pdf")) == "statement"
+    )
