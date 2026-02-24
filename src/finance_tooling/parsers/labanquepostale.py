@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import ParserOutput, StatementValidation
+from finance_tooling.parsers.base import BaseStatementParser, ValidationPayload
 from finance_tooling.parsers.common import parse_decimal
 
 _DAY_MONTH_PATTERN = re.compile(r"(0[1-9]|[12][0-9]|3[01])[/\-](0[1-9]|1[012])")
@@ -36,7 +36,7 @@ _CREDIT_HINTS = (
 )
 
 
-class LaBanquePostaleParser:
+class LaBanquePostaleParser(BaseStatementParser):
     """Parser for La Banque Postale monthly account statements."""
 
     name = "labanquepostale"
@@ -51,7 +51,9 @@ class LaBanquePostaleParser:
             or "releve de votre ccp" in marker
         )
 
-    def parse(self, file_path: Path, full_text: str) -> ParserOutput:
+    def _parse_transactions(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[Transaction], list[str]]:
         year = self._resolve_year(file_path.name)
         warnings: list[str] = []
         transactions: list[Transaction] = []
@@ -96,21 +98,22 @@ class LaBanquePostaleParser:
                         f"but parsed {transaction_sum}"
                     )
 
-        validation = StatementValidation(
-            source_file=file_path,
-            bank=self.bank,
-            parser=self.name,
-            statement_type="statement",
+        return transactions, warnings
+
+    def _build_validation_payload(
+        self,
+        file_path: Path,
+        full_text: str,
+        transaction_sum: Decimal,
+    ) -> ValidationPayload:
+        del file_path, full_text, transaction_sum
+        return ValidationPayload(
+            mode="uncheckable",
             opening_balance=None,
             closing_balance=None,
-            transaction_sum=transaction_sum,
-            expected_closing_balance=None,
-            difference=None,
-            status="uncheckable",
             reason="missing_opening_or_closing",
             severity="info",
         )
-        return ParserOutput(transactions=transactions, warnings=warnings, validation=validation)
 
     @staticmethod
     def _resolve_year(filename: str) -> int:

@@ -7,14 +7,14 @@ from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import ParserOutput, StatementValidation
+from finance_tooling.parsers.base import BaseStatementParser, ValidationPayload
 from finance_tooling.parsers.common import detect_currency, parse_date, parse_decimal
 
 _DATE_REGEX = re.compile(r"\b(\d{1,4}[/-]\d{1,2}[/-]\d{2,4})\b")
 _AMOUNT_REGEX = re.compile(r"[-+]?\(?\d[\d,.\s]*\d(?:[.,]\d{1,2})?\)?-?")
 
 
-class GenericParser:
+class GenericParser(BaseStatementParser):
     """Regex-based fallback parser."""
 
     name = "generic"
@@ -23,7 +23,9 @@ class GenericParser:
     def can_handle(self, file_path: Path, first_page_text: str) -> bool:
         return True
 
-    def parse(self, file_path: Path, full_text: str) -> ParserOutput:
+    def _parse_transactions(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[Transaction], list[str]]:
         transactions: list[Transaction] = []
 
         for raw_line in full_text.splitlines():
@@ -62,18 +64,19 @@ class GenericParser:
                 )
             )
 
-        validation = StatementValidation(
-            source_file=file_path,
-            bank=self.bank,
-            parser=self.name,
-            statement_type="statement",
+        return transactions, []
+
+    def _build_validation_payload(
+        self,
+        file_path: Path,
+        full_text: str,
+        transaction_sum: Decimal,
+    ) -> ValidationPayload:
+        del file_path, full_text, transaction_sum
+        return ValidationPayload(
+            mode="uncheckable",
             opening_balance=None,
             closing_balance=None,
-            transaction_sum=sum((tx.amount_native for tx in transactions), start=Decimal("0")),
-            expected_closing_balance=None,
-            difference=None,
-            status="uncheckable",
             reason="unsupported_parser",
             severity="info",
         )
-        return ParserOutput(transactions=transactions, warnings=[], validation=validation)

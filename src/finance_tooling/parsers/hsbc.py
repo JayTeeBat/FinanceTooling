@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import ParserOutput, StatementValidation
+from finance_tooling.parsers.base import BaseStatementParser, ValidationPayload
 from finance_tooling.parsers.common import parse_date, parse_decimal
 
 _LINE_PATTERN = re.compile(
@@ -28,7 +28,7 @@ _OPENING_PATTERN = re.compile(r"Opening\s*Balance\s+(-?\d[\d,.]*)", re.IGNORECAS
 _CLOSING_PATTERN = re.compile(r"Closing\s*Balance\s+(-?\d[\d,.]*)", re.IGNORECASE)
 
 
-class HsbcParser:
+class HsbcParser(BaseStatementParser):
     """Parser for HSBC statement transaction rows."""
 
     name = "hsbc"
@@ -38,7 +38,9 @@ class HsbcParser:
         marker = f"{file_path.name} {first_page_text}".lower()
         return "hsbc" in marker or "your statement" in marker
 
-    def parse(self, file_path: Path, full_text: str) -> ParserOutput:
+    def _parse_transactions(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[Transaction], list[str]]:
         transactions: list[Transaction] = []
         for raw_line in full_text.splitlines():
             line = " ".join(raw_line.split())
@@ -70,21 +72,24 @@ class HsbcParser:
                 )
             )
 
-        transaction_sum = sum((tx.amount_native for tx in transactions), start=Decimal("0"))
+        return transactions, []
+
+    def _build_validation_payload(
+        self,
+        file_path: Path,
+        full_text: str,
+        transaction_sum: Decimal,
+    ) -> ValidationPayload:
+        del file_path, transaction_sum
         opening_balance = _extract_balance(full_text, _OPENING_PATTERN)
         closing_balance = _extract_balance(full_text, _CLOSING_PATTERN)
-        validation, validation_warning = _build_validation(
-            file_path=file_path,
-            bank=self.bank,
-            parser=self.name,
+        return ValidationPayload(
+            mode="balance",
             opening_balance=opening_balance,
             closing_balance=closing_balance,
-            transaction_sum=transaction_sum,
+            reason="missing_opening_or_closing",
+            severity="info",
         )
-        warnings: list[str] = []
-        if validation_warning:
-            warnings.append(validation_warning)
-        return ParserOutput(transactions=transactions, warnings=warnings, validation=validation)
 
 
 def _normalize_compact_date(raw_date: str) -> str:
@@ -99,76 +104,3 @@ def _extract_balance(full_text: str, pattern: re.Pattern[str]) -> Decimal | None
     if match is None:
         return None
     return parse_decimal(match.group(1))
-
-
-def _build_validation(
-    *,
-    file_path: Path,
-    bank: str,
-    parser: str,
-    opening_balance: Decimal | None,
-    closing_balance: Decimal | None,
-    transaction_sum: Decimal,
-) -> tuple[StatementValidation, str | None]:
-    if opening_balance is None or closing_balance is None:
-        return (
-            StatementValidation(
-                source_file=file_path,
-                bank=bank,
-                parser=parser,
-                statement_type="statement",
-                opening_balance=opening_balance,
-                closing_balance=closing_balance,
-                transaction_sum=transaction_sum,
-                expected_closing_balance=None,
-                difference=None,
-                status="uncheckable",
-                reason="missing_opening_or_closing",
-                severity="info",
-            ),
-            None,
-        )
-
-    expected = opening_balance + transaction_sum
-    difference = expected - closing_balance
-    if abs(difference) <= Decimal("0.01"):
-        return (
-            StatementValidation(
-                source_file=file_path,
-                bank=bank,
-                parser=parser,
-                statement_type="statement",
-                opening_balance=opening_balance,
-                closing_balance=closing_balance,
-                transaction_sum=transaction_sum,
-                expected_closing_balance=expected,
-                difference=difference,
-                status="pass",
-                reason=None,
-                severity="none",
-            ),
-            None,
-        )
-
-    warning = (
-        f"{file_path.name}: reconciliation mismatch opening {opening_balance} + "
-        f"transactions {transaction_sum} = {expected} but closing is {closing_balance} "
-        f"(diff {difference})"
-    )
-    return (
-        StatementValidation(
-            source_file=file_path,
-            bank=bank,
-            parser=parser,
-            statement_type="statement",
-            opening_balance=opening_balance,
-            closing_balance=closing_balance,
-            transaction_sum=transaction_sum,
-            expected_closing_balance=expected,
-            difference=difference,
-            status="fail",
-            reason="balance_mismatch",
-            severity="warning",
-        ),
-        warning,
-    )
