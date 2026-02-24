@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from finance_tooling.models import Transaction
+from finance_tooling.parsers.common import normalize_row_to_transaction
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,31 @@ class StatementParser(Protocol):
 
 
 @dataclass(frozen=True)
+class ParsedRow:
+    """Raw row extracted by a parser before shared normalization."""
+
+    raw_date: str
+    raw_description: str
+    raw_amount: str
+    raw_currency_hint: str | None = None
+
+
+@dataclass(frozen=True)
+class NormalizeConfig:
+    """Parser-specific normalization policy knobs."""
+
+    sign_mode: Literal[
+        "explicit_sign",
+        "debit_default_with_positive_hints",
+        "positive_default_with_negative_hints",
+    ]
+    default_currency: str
+    positive_hints: tuple[str, ...] = ()
+    negative_hints: tuple[str, ...] = ()
+    description_fallback: str = "Unknown transaction"
+
+
+@dataclass(frozen=True)
 class ValidationPayload:
     """Parser-provided inputs for statement validation construction."""
 
@@ -67,7 +93,23 @@ class BaseStatementParser(ABC):
     bank: str
 
     def parse(self, file_path: Path, full_text: str) -> ParserOutput:
-        transactions, warnings = self._parse_transactions(file_path, full_text)
+        rows, warnings = self._extract_rows(file_path, full_text)
+        config = self._normalize_config()
+
+        transactions: list[Transaction] = []
+        for row in rows:
+            transaction = normalize_row_to_transaction(
+                row=row,
+                file_path=file_path,
+                bank=self.bank,
+                parser_name=self.name,
+                config=config,
+            )
+            if transaction is not None:
+                transactions.append(transaction)
+
+        warnings.extend(self._post_normalization_warnings(file_path, full_text, transactions))
+
         transaction_sum = sum((tx.amount_native for tx in transactions), start=Decimal("0"))
         payload = self._build_validation_payload(file_path, full_text, transaction_sum)
 
@@ -100,10 +142,12 @@ class BaseStatementParser(ABC):
         """Return whether this parser can handle the provided statement."""
 
     @abstractmethod
-    def _parse_transactions(
-        self, file_path: Path, full_text: str
-    ) -> tuple[list[Transaction], list[str]]:
-        """Parse transactions and parser warnings from statement text."""
+    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+        """Extract raw statement rows and parser warnings from input text."""
+
+    @abstractmethod
+    def _normalize_config(self) -> NormalizeConfig:
+        """Return parser-specific normalization config for row -> transaction conversion."""
 
     @abstractmethod
     def _build_validation_payload(
@@ -113,6 +157,15 @@ class BaseStatementParser(ABC):
         transaction_sum: Decimal,
     ) -> ValidationPayload:
         """Build validation payload for shared reconciliation construction."""
+
+    def _post_normalization_warnings(
+        self,
+        file_path: Path,
+        full_text: str,
+        transactions: list[Transaction],
+    ) -> list[str]:
+        del file_path, full_text, transactions
+        return []
 
     def _validation_uncheckable(
         self,

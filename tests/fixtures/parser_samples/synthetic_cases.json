@@ -1,0 +1,32 @@
+[
+  {
+    "name": "hsbc_basic",
+    "parser": "hsbc",
+    "file_name": "HSBC_2016_statement.pdf",
+    "input_text": "02Mar16 DD AIL-HSBC 6.87 4,953.91\n03Mar16 SALARY COMPANY LTD 1,500.00 6,453.91",
+    "expected_transaction_count": 2,
+    "expected_validation_status": "uncheckable",
+    "expected_positive_count": 1,
+    "expected_negative_count": 1
+  },
+  {
+    "name": "revolut_basic",
+    "parser": "revolut",
+    "file_name": "account-statement_2019.pdf",
+    "input_text": "19 Jun 2019 PayPlug €4.90 €4.90\n24 Nov 2019 International Transfer to John €90.00 €0.45",
+    "expected_transaction_count": 2,
+    "expected_validation_status": "uncheckable",
+    "expected_positive_count": 0,
+    "expected_negative_count": 2
+  },
+  {
+    "name": "labanquepostale_basic",
+    "parser": "labanquepostale",
+    "file_name": "releve_CCP1126215Y027_20241224.pdf",
+    "input_text": "25/11 CREDIT CARTE BANCAIRE 4,00\n26/11 VIREMENT DE EMPLOYEUR 1 200,00\n27/11 ACHAT CB SUPERMARCHE 42,00\nTotal des operations 4,00 1 200,00",
+    "expected_transaction_count": 3,
+    "expected_validation_status": "uncheckable",
+    "expected_positive_count": 2,
+    "expected_negative_count": 1
+  }
+]

@@ -70,3 +70,14 @@ src/
   finance_tooling/      # package modules and parser plugins
 tests/
 ```
+
+## Parser Conformance Fixtures
+
+Parser conformance samples live under:
+
+`tests/fixtures/parser_samples/synthetic_cases.json`
+
+The conformance harness (`tests/test_parser_conformance.py`) validates parser-level
+transaction count, sign distribution, and reconciliation status from fixture cases.
+Add new entries as parser behavior is expanded or when snapshot text extracted from
+real PDFs is available.

@@ -6,9 +6,13 @@ import re
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import BaseStatementParser, ValidationPayload
-from finance_tooling.parsers.common import detect_currency, parse_date, parse_decimal
+from finance_tooling.parsers.base import (
+    BaseStatementParser,
+    NormalizeConfig,
+    ParsedRow,
+    ValidationPayload,
+)
+from finance_tooling.parsers.common import parse_decimal
 
 _LINE_PATTERN = re.compile(
     r"^(\d{1,2}\s[A-Za-z]{3}\s\d{4})\s+"
@@ -35,10 +39,9 @@ class RevolutParser(BaseStatementParser):
         marker = f"{file_path.name} {first_page_text}".lower()
         return "revolut" in marker and "account-statement" in marker
 
-    def _parse_transactions(
-        self, file_path: Path, full_text: str
-    ) -> tuple[list[Transaction], list[str]]:
-        transactions: list[Transaction] = []
+    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+        del file_path
+        rows: list[ParsedRow] = []
 
         for raw_line in full_text.splitlines():
             line = " ".join(raw_line.split())
@@ -46,35 +49,26 @@ class RevolutParser(BaseStatementParser):
             if not match:
                 continue
 
-            booking_date = parse_date(match.group(1))
-            description = match.group(2)
             raw_amount = match.group(3)
-            amount = parse_decimal(_strip_currency_symbol(raw_amount))
-            if booking_date is None or amount is None:
-                continue
-
-            description_upper = description.upper()
-            amount = abs(amount)
-            if any(hint in description_upper for hint in _POSITIVE_HINTS):
-                amount = abs(amount)
-            elif any(hint in description_upper for hint in _NEGATIVE_HINTS):
-                amount = -abs(amount)
-            else:
-                amount = -abs(amount)
-
-            transactions.append(
-                Transaction(
-                    booking_date=booking_date,
-                    description=description,
-                    amount_native=amount,
-                    currency=detect_currency(raw_amount),
-                    source_file=file_path,
-                    bank=self.bank,
-                    parser=self.name,
+            rows.append(
+                ParsedRow(
+                    raw_date=match.group(1),
+                    raw_description=match.group(2),
+                    raw_amount=_strip_currency_symbol(raw_amount),
+                    raw_currency_hint=raw_amount,
                 )
             )
 
-        return transactions, []
+        return rows, []
+
+    def _normalize_config(self) -> NormalizeConfig:
+        return NormalizeConfig(
+            sign_mode="debit_default_with_positive_hints",
+            default_currency="UNKNOWN",
+            positive_hints=_POSITIVE_HINTS,
+            negative_hints=_NEGATIVE_HINTS,
+            description_fallback="Unknown transaction",
+        )
 
     def _build_validation_payload(
         self,

@@ -6,9 +6,13 @@ import re
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import BaseStatementParser, ValidationPayload
-from finance_tooling.parsers.common import parse_date, parse_decimal
+from finance_tooling.parsers.base import (
+    BaseStatementParser,
+    NormalizeConfig,
+    ParsedRow,
+    ValidationPayload,
+)
+from finance_tooling.parsers.common import parse_decimal
 
 _LINE_PATTERN = re.compile(
     r"^(\d{2}/\d{2}/\d{4})\s*(.+?)\s+(\d{2}/\d{2}/\d{4})?\s*(-?\d[\d\s,.]*,\d{2})$"
@@ -37,10 +41,9 @@ class BoursobankParser(BaseStatementParser):
             return False
         return "boursobank" in marker or "boursorama" in marker
 
-    def _parse_transactions(
-        self, file_path: Path, full_text: str
-    ) -> tuple[list[Transaction], list[str]]:
-        transactions: list[Transaction] = []
+    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+        del file_path
+        rows: list[ParsedRow] = []
 
         for raw_line in full_text.splitlines():
             line = " ".join(raw_line.split())
@@ -48,28 +51,24 @@ class BoursobankParser(BaseStatementParser):
             if not match:
                 continue
 
-            booking_date = parse_date(match.group(1))
-            amount = parse_decimal(match.group(4))
-            if booking_date is None or amount is None:
-                continue
-
-            description = match.group(2)
-            if not any(hint in description.upper() for hint in _POSITIVE_HINTS):
-                amount = -amount
-
-            transactions.append(
-                Transaction(
-                    booking_date=booking_date,
-                    description=description,
-                    amount_native=amount,
-                    currency="EUR",
-                    source_file=file_path,
-                    bank=self.bank,
-                    parser=self.name,
+            rows.append(
+                ParsedRow(
+                    raw_date=match.group(1),
+                    raw_description=match.group(2),
+                    raw_amount=match.group(4),
+                    raw_currency_hint="EUR",
                 )
             )
 
-        return transactions, []
+        return rows, []
+
+    def _normalize_config(self) -> NormalizeConfig:
+        return NormalizeConfig(
+            sign_mode="debit_default_with_positive_hints",
+            default_currency="EUR",
+            positive_hints=_POSITIVE_HINTS,
+            description_fallback="Unknown transaction",
+        )
 
     def _build_validation_payload(
         self,
