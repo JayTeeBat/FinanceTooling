@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
@@ -45,6 +46,36 @@ _CLOSING_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"New\s*Balance\s+([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)", re.IGNORECASE),
 )
 _DESCRIPTION_SIGN_PATTERN = re.compile(r"^(?P<marker>CR|DR)\b", re.IGNORECASE)
+_NOISE_PREFIXES = (
+    "CONTACT TEL",
+    "TEXT PHONE",
+    "WWW.HSBC",
+    "PO BOX",
+    "YOUR STATEMENT",
+    "ACCOUNT NAME",
+    "DATE PAYMENT TYPE",
+    "INTERNATIONAL BANK ACCOUNT NUMBER",
+    "BRANCH IDENTIFIER CODE",
+    "ACCOUNT SUMMARY",
+    "SORTCODE",
+    "ACCOUNT NUMBER",
+    "SHEET NUMBER",
+)
+_NON_TXN_BALANCE_MARKERS = (
+    "OPENINGBALANCE",
+    "CLOSINGBALANCE",
+    "PAYMENTSIN",
+    "PAYMENTSOUT",
+    "BALANCEBROUGHTFORWARD",
+    "BALANCECARRIEDFORWARD",
+)
+
+
+@dataclass(frozen=True)
+class _ParsedBlock:
+    raw_date: str
+    header_text: str
+    continuation_lines: list[str]
 
 
 class HsbcParser(BaseStatementParser):
@@ -62,8 +93,10 @@ class HsbcParser(BaseStatementParser):
     def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
         del file_path
         rows: list[ParsedRow] = []
-        pending_date: str | None = None
-        pending_description: str = ""
+        blocks: list[_ParsedBlock] = []
+        current_date: str | None = None
+        current_header: str = ""
+        current_continuations: list[str] = []
 
         for raw_line in full_text.splitlines():
             line = " ".join(raw_line.split())
@@ -72,31 +105,32 @@ class HsbcParser(BaseStatementParser):
 
             match = _DATE_PREFIX_PATTERN.match(line)
             if match is not None:
-                row = _parse_statement_row(
-                    raw_date=match.group("date"),
-                    rest=match.group("rest"),
+                if current_date is not None:
+                    blocks.append(
+                        _ParsedBlock(
+                            raw_date=current_date,
+                            header_text=current_header,
+                            continuation_lines=current_continuations,
+                        )
+                    )
+                current_date = match.group("date")
+                current_header = match.group("rest")
+                current_continuations = []
+                continue
+
+            if current_date is not None:
+                current_continuations.append(line)
+
+        if current_date is not None:
+            blocks.append(
+                _ParsedBlock(
+                    raw_date=current_date,
+                    header_text=current_header,
+                    continuation_lines=current_continuations,
                 )
-                if row is not None:
-                    rows.append(row)
-                    pending_date = None
-                    pending_description = ""
-                    continue
-
-                pending_date = match.group("date")
-                pending_description = match.group("rest")
-                continue
-
-            if pending_date is None:
-                continue
-
-            row = _parse_statement_row(
-                raw_date=pending_date,
-                rest=f"{pending_description} {line}",
             )
-            if row is not None:
-                rows.append(row)
-            pending_date = None
-            pending_description = ""
+        for block in blocks:
+            rows.extend(_rows_from_block(block))
 
         return rows, []
 
@@ -163,14 +197,63 @@ def _extract_balance(full_text: str, patterns: tuple[re.Pattern[str], ...]) -> D
     return None
 
 
-def _parse_statement_row(raw_date: str, rest: str) -> ParsedRow | None:
+def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
+    rows: list[ParsedRow] = []
+    pending_context_parts: list[str] = []
+
+    header_row = _parse_statement_row(block.raw_date, block.header_text)
+    header_context: str | None = None
+    if header_row is not None:
+        rows.append(header_row)
+    elif not _is_non_transaction_line(block.header_text):
+        header_context = block.header_text
+
+    for line in block.continuation_lines:
+        if _is_non_transaction_line(line):
+            pending_context_parts = []
+            continue
+
+        if not _contains_amount(line):
+            pending_context_parts.append(line)
+            continue
+
+        line_context = " ".join(pending_context_parts).strip() if pending_context_parts else None
+        fallback_context = " ".join(
+            part for part in (header_context, line_context) if part is not None and part
+        )
+        row = _parse_statement_row(
+            block.raw_date,
+            line,
+            fallback_context=fallback_context or None,
+        )
+        if row is not None:
+            rows.append(row)
+        pending_context_parts = []
+
+    return rows
+
+
+def _parse_statement_row(
+    raw_date: str,
+    rest: str,
+    *,
+    fallback_context: str | None = None,
+) -> ParsedRow | None:
+    if _is_non_transaction_line(rest):
+        return None
+
     matches = list(_AMOUNT_TOKEN_PATTERN.finditer(rest))
     if not matches:
         return None
-    transaction_token = (
-        matches[-2].group("amount") if len(matches) >= 2 else matches[-1].group("amount")
+    selected = _select_transaction_match(rest, matches)
+    if selected is None:
+        return None
+
+    transaction_token = selected.group("amount")
+    description_lead = rest[: selected.start()].strip()
+    description = (
+        f"{fallback_context} {description_lead}".strip() if fallback_context else description_lead
     )
-    description = rest[: matches[-2].start() if len(matches) >= 2 else matches[-1].start()].strip()
     if not description:
         return None
     description_upper = description.upper()
@@ -190,6 +273,29 @@ def _parse_statement_row(raw_date: str, rest: str) -> ParsedRow | None:
         raw_amount=str(abs(amount)),
         raw_currency_hint="GBP",
     )
+
+
+def _contains_amount(line: str) -> bool:
+    return _AMOUNT_TOKEN_PATTERN.search(line) is not None
+
+
+def _is_non_transaction_line(line: str) -> bool:
+    upper = line.upper()
+    compact = upper.replace(" ", "")
+    if any(marker in compact for marker in _NON_TXN_BALANCE_MARKERS):
+        return True
+    if any(upper.startswith(prefix) for prefix in _NOISE_PREFIXES):
+        return True
+    return False
+
+
+def _select_transaction_match(line: str, matches: list[re.Match[str]]) -> re.Match[str] | None:
+    if _is_non_transaction_line(line):
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    # Most HSBC rows end with running balance; transaction amount is penultimate token.
+    return matches[-2]
 
 
 def _parse_amount_token(token: str) -> Decimal | None:

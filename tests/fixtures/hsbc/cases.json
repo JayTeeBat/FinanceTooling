@@ -206,5 +206,53 @@
     "expected_validation_reason": "missing_opening_or_closing",
     "expected_difference": null,
     "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_2019_multiline_block_pass",
+    "description": "Date-anchored block should parse multiple continuation transactions",
+    "file_name": "HSBC_2019-12-multiline-redacted.pdf",
+    "text_file": "case_real_2019_multiline_block_pass.txt",
+    "expected_transaction_amounts": ["156.96", "-4.00", "-198.51"],
+    "expected_transaction_count": 3,
+    "expected_transaction_sum": "-45.55",
+    "expected_opening_balance": "1000.00",
+    "expected_closing_balance": "954.45",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_2019_cash_with_running_balance",
+    "description": "Continuation line with transaction and running balance should select transaction amount",
+    "file_name": "HSBC_2019-12-cash-redacted.pdf",
+    "text_file": "case_real_2019_cash_with_running_balance.txt",
+    "expected_transaction_amounts": ["-50.00"],
+    "expected_transaction_count": 1,
+    "expected_transaction_sum": "-50.00",
+    "expected_opening_balance": "200.00",
+    "expected_closing_balance": "150.00",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_2019_wrapped_merchants_uncheckable",
+    "description": "Wrapped merchant lines should resolve into separate debit continuation transaction",
+    "file_name": "HSBC_2019-12-wrapped-redacted.pdf",
+    "text_file": "case_real_2019_wrapped_merchants_uncheckable.txt",
+    "expected_transaction_amounts": ["156.96", "-10.46"],
+    "expected_transaction_count": 2,
+    "expected_transaction_sum": "146.50",
+    "expected_opening_balance": null,
+    "expected_closing_balance": null,
+    "expected_validation_status": "uncheckable",
+    "expected_validation_severity": "info",
+    "expected_validation_reason": "missing_opening_or_closing",
+    "expected_difference": null,
+    "expected_warning_substrings": []
   }
 ]

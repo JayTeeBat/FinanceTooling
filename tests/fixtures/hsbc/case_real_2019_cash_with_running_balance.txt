@@ -1,0 +1,4 @@
+Opening Balance 200.00
+07 Dec 19 DR CASH POSTOFF DEC07
+118 PITSHANG@10:49 50.00 150.00
+Closing Balance 150.00

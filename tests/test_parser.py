@@ -207,3 +207,26 @@ def test_hsbc_parser_warns_when_balances_exist_but_no_rows_parsed() -> None:
     assert result.validation.status == "pass"
     assert len(result.transactions) == 0
     assert len(result.warnings) == 1
+
+
+def test_hsbc_parser_parses_multiple_continuation_transactions_in_single_date_block() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 1000.00
+    27 Nov 19 CR MARS CHOCOLATE UK 156.96
+    VIS LONDON BOROUGH OF
+    LONDON W6 9JU 4.00
+    VIS BRITISH GAS ONLINE
+    BRITISHGAS.CO 198.51
+    Closing Balance 954.45
+    """
+
+    result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
+
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("156.96"),
+        Decimal("-4.00"),
+        Decimal("-198.51"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
