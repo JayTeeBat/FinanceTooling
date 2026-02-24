@@ -100,6 +100,15 @@ def infer_signed_amount(
             signed = -abs(amount)
         return signed
 
+    if mode == "hint_priority_with_default_debit":
+        has_positive_hint = any(hint in description_upper for hint in positive_hints)
+        has_negative_hint = any(hint in description_upper for hint in negative_hints)
+        if has_negative_hint:
+            return -abs(amount)
+        if has_positive_hint:
+            return abs(amount)
+        return -abs(amount)
+
     return amount
 
 

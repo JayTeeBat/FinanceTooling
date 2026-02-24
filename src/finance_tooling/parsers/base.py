@@ -47,8 +47,6 @@ class StatementParser(Protocol):
 
     def match_score(self, file_path: Path, first_page_text: str) -> int: ...
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool: ...
-
     def parse(self, file_path: Path, full_text: str) -> ParserOutput: ...
 
 
@@ -70,6 +68,7 @@ class NormalizeConfig:
         "explicit_sign",
         "debit_default_with_positive_hints",
         "positive_default_with_negative_hints",
+        "hint_priority_with_default_debit",
     ]
     default_currency: str
     positive_hints: tuple[str, ...] = ()
@@ -153,10 +152,6 @@ class BaseStatementParser(ABC):
         if validation_warning is not None:
             warnings.append(validation_warning)
         return ParserOutput(transactions=transactions, warnings=warnings, validation=validation)
-
-    @abstractmethod
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        """Return whether this parser can handle the provided statement."""
 
     @abstractmethod
     def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:

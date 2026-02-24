@@ -16,7 +16,7 @@ from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
 from finance_tooling.fx import ensure_fx_cache, resolve_rate
 from finance_tooling.models import Transaction, WorkflowResult
-from finance_tooling.parsers import select_parser
+from finance_tooling.parsers import select_parser_with_diagnostics
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.scanner import discover_statement_pdfs
 from finance_tooling.store import upsert_transactions
@@ -88,12 +88,39 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     files_failed = 0
     extracted: list[Transaction] = []
     validations: list[StatementValidation] = []
+    parser_selection_diagnostics: list[dict[str, object]] = []
+    parser_low_confidence_file_count = 0
 
     files = discover_statement_pdfs(settings.input_path)
     for pdf_path in files:
         try:
             extracted_text = extract_text_from_pdf(pdf_path)
-            parser = select_parser(pdf_path, extracted_text.first_page_text)
+            selection = select_parser_with_diagnostics(pdf_path, extracted_text.first_page_text)
+            parser = selection.parser
+            top_candidates = [
+                {"parser": item.parser_name, "score": item.score}
+                for item in selection.candidates[:3]
+            ]
+            parser_selection_diagnostics.append(
+                {
+                    "source_file": str(pdf_path),
+                    "selected_parser": parser.name,
+                    "selected_score": selection.score,
+                    "threshold": selection.threshold,
+                    "top_candidates": top_candidates,
+                }
+            )
+            is_low_confidence = selection.score <= selection.threshold
+            is_ambiguous_tie = (
+                len(selection.candidates) > 1
+                and selection.candidates[0].score == selection.candidates[1].score
+            )
+            if is_low_confidence or is_ambiguous_tie:
+                parser_low_confidence_file_count += 1
+                warnings.append(
+                    f"Low-confidence parser selection for {pdf_path.name}: selected "
+                    f"{parser.name} (score={selection.score}, threshold={selection.threshold})"
+                )
             output = parser.parse(pdf_path, extracted_text.full_text)
             extracted.extend(output.transactions)
             warnings.extend(output.warnings)
@@ -152,6 +179,8 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "statement_reconciliation_fail_count": reconciliation_fail_count,
             "statement_reconciliation_uncheckable_file_count": reconciliation_uncheckable_count,
             "statement_reconciliation_pass_ratio": reconciliation_pass_ratio,
+            "parser_low_confidence_file_count": parser_low_confidence_file_count,
+            "parser_selection_diagnostics": parser_selection_diagnostics,
             "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
         },

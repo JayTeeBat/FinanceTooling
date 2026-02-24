@@ -23,9 +23,6 @@ class GenericParser(BaseStatementParser):
     name = "generic"
     bank = "Unknown"
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        return True
-
     def match_score(self, file_path: Path, first_page_text: str) -> int:
         del file_path, first_page_text
         return 0

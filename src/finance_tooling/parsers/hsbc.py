@@ -38,10 +38,6 @@ class HsbcParser(BaseStatementParser):
     name = "hsbc"
     bank = "HSBC"
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        marker = f"{file_path.name} {first_page_text}".lower()
-        return "hsbc" in marker or "your statement" in marker
-
     def _filename_markers(self) -> tuple[str, ...]:
         return ("hsbc",)
 

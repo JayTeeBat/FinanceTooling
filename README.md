@@ -81,3 +81,6 @@ The conformance harness (`tests/test_parser_conformance.py`) validates parser-le
 transaction count, sign distribution, and reconciliation status from fixture cases.
 Add new entries as parser behavior is expanded or when snapshot text extracted from
 real PDFs is available.
+
+Parser routing uses score-based selection (`match_score`) with diagnostics captured
+in `run_summary.json` under `parser_selection_diagnostics`.

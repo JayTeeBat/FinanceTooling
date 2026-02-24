@@ -35,10 +35,6 @@ class RevolutParser(BaseStatementParser):
     name = "revolut"
     bank = "Revolut"
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        marker = f"{file_path.name} {first_page_text}".lower()
-        return "revolut" in marker and "account-statement" in marker
-
     def _filename_markers(self) -> tuple[str, ...]:
         return ("revolut", "account-statement")
 
@@ -69,7 +65,7 @@ class RevolutParser(BaseStatementParser):
 
     def _normalize_config(self) -> NormalizeConfig:
         return NormalizeConfig(
-            sign_mode="debit_default_with_positive_hints",
+            sign_mode="hint_priority_with_default_debit",
             default_currency="UNKNOWN",
             positive_hints=_POSITIVE_HINTS,
             negative_hints=_NEGATIVE_HINTS,

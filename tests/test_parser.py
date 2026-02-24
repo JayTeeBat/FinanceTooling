@@ -4,7 +4,7 @@ from pathlib import Path
 from finance_tooling.parsers.boursobank import BoursobankParser
 from finance_tooling.parsers.hsbc import HsbcParser
 from finance_tooling.parsers.labanquepostale import LaBanquePostaleParser
-from finance_tooling.parsers.registry import select_parser
+from finance_tooling.parsers.registry import select_parser, select_parser_with_diagnostics
 from finance_tooling.parsers.revolut import RevolutParser
 
 
@@ -59,6 +59,18 @@ def test_registry_falls_back_to_generic_when_no_parser_matches_threshold() -> No
     )
 
     assert parser.name == "generic"
+
+
+def test_registry_returns_diagnostics_payload() -> None:
+    selection = select_parser_with_diagnostics(
+        Path("Revolut account-statement_2023.pdf"),
+        "Revolut account-statement",
+    )
+
+    assert selection.parser.name == "revolut"
+    assert selection.score >= selection.threshold
+    assert len(selection.candidates) >= 2
+    assert selection.candidates[0].parser_name == "revolut"
 
 
 def test_revolut_parser_parses_currency_symbol_amounts() -> None:

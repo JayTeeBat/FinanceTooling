@@ -35,12 +35,6 @@ class BoursobankParser(BaseStatementParser):
     name = "boursobank"
     bank = "Boursobank"
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        marker = f"{file_path.name} {first_page_text}".lower()
-        if "revolut" in marker and "account-statement" in marker:
-            return False
-        return "boursobank" in marker or "boursorama" in marker
-
     def _filename_markers(self) -> tuple[str, ...]:
         return ("boursobank", "boursorama")
 

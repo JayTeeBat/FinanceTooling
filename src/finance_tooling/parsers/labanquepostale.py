@@ -47,15 +47,6 @@ class LaBanquePostaleParser(BaseStatementParser):
     name = "labanquepostale"
     bank = "LaBanquePostale"
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        marker = f"{file_path.name} {first_page_text}".lower()
-        return (
-            "labanquepostale" in marker
-            or "la banque postale" in marker
-            or "releve_ccp" in marker
-            or "releve de votre ccp" in marker
-        )
-
     def _filename_markers(self) -> tuple[str, ...]:
         return ("labanquepostale", "releve_ccp", "ccp")
 

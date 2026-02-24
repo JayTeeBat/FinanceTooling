@@ -17,10 +17,6 @@ class _DummyParser(BaseStatementParser):
     def __init__(self, payload: ValidationPayload) -> None:
         self._payload = payload
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        del file_path, first_page_text
-        return True
-
     def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
         del full_text
         return (
@@ -142,6 +138,30 @@ def test_infer_signed_amount_debit_default_positive_hints() -> None:
         mode="debit_default_with_positive_hints",
         positive_hints=("SALARY",),
         negative_hints=(),
+    ) == Decimal("-10.00")
+
+
+def test_infer_signed_amount_hint_priority_default_debit_mode() -> None:
+    assert infer_signed_amount(
+        Decimal("10.00"),
+        description="payment from employer",
+        mode="hint_priority_with_default_debit",
+        positive_hints=("PAYMENT FROM",),
+        negative_hints=("TO ",),
+    ) == Decimal("10.00")
+    assert infer_signed_amount(
+        Decimal("10.00"),
+        description="transfer to john",
+        mode="hint_priority_with_default_debit",
+        positive_hints=("PAYMENT FROM",),
+        negative_hints=("TO ",),
+    ) == Decimal("-10.00")
+    assert infer_signed_amount(
+        Decimal("10.00"),
+        description="neutral description",
+        mode="hint_priority_with_default_debit",
+        positive_hints=("PAYMENT FROM",),
+        negative_hints=("TO ",),
     ) == Decimal("-10.00")
 
 
