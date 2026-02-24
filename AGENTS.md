@@ -78,6 +78,40 @@ Use this template:
 
 ## Hand-Off Log
 
+### 2026-02-24 - codex
+- Branch: `fix/parser-hardening`
+- Completed:
+  - Removed legacy parser routing API (`can_handle`) and standardized selection
+    on confidence scoring (`match_score`) with deterministic threshold/tie
+    behavior.
+  - Added parser routing diagnostics (`ParserSelection` /
+    `ParserScoreItem`) and integrated per-file selection diagnostics plus
+    low-confidence counts into workflow warnings and `run_summary.json`.
+  - Harmonized parser row normalization flow across bank parsers and improved
+    Revolut sign inference with hint-priority default-debit behavior.
+  - Added/updated tests for parser scoring, routing diagnostics, sign inference,
+    and pipeline diagnostics integration.
+  - Ran full ingestion pipeline against real corpus and reviewed resulting
+    completeness/reconciliation diagnostics.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+  - `uv run python -m finance_tooling`: pass
+- Open items:
+  - Reconciliation quality remains poor in real run: `83` failed / `85`
+    checkable statements (pass ratio `0.024`), concentrated in HSBC and Revolut.
+  - Statement coverage gaps remain (`16` statement PDFs with zero parsed rows):
+    mostly HSBC (`14`) plus two Boursobank files.
+  - One low-confidence parser route detected:
+    `Boursobank Marion Releve-compte-30-09-2022.pdf` selected as Revolut
+    (score `2`, threshold `2`).
+- Next action:
+  - Implement fixture-driven HSBC parser hardening for the identified missing/
+    failing years first, then re-run full pipeline and verify reconciliation
+    deltas.
+
 ### 2026-02-23 - codex
 - Branch: `fix/lbp-fx-dated-rates`
 - Completed:

@@ -30,14 +30,11 @@ uv run pre-commit run --all-files
 
 ## Statement Workflow
 
-By default, the workflow scans:
-
-`/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw`
-
-You can override all paths with environment variables:
+The workflow requires environment variables for input and output data paths:
 
 ```bash
 export FINANCE_STATEMENTS_PATH="/path/to/statements"
+export FINANCE_PROCESSED_PATH="/path/to/processed"
 export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
 export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
 export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"
@@ -48,6 +45,10 @@ export FINANCE_FX_AUTO_FETCH="true"
 
 uv run python -m finance_tooling
 ```
+
+`FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required.
+Per-file output env vars remain optional; when omitted, artifacts are written under
+`FINANCE_PROCESSED_PATH`.
 
 The workflow recursively scans statement PDFs, uses bank-specific parsers
 (LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies

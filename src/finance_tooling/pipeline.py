@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
+
+from tqdm import tqdm
 
 from finance_tooling.classify import classify_transactions
 from finance_tooling.completeness import build_completeness_report
@@ -92,7 +95,13 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     parser_low_confidence_file_count = 0
 
     files = discover_statement_pdfs(settings.input_path)
-    for pdf_path in files:
+    progress = tqdm(
+        files,
+        desc="Processing statements",
+        unit="file",
+        disable=not sys.stderr.isatty(),
+    )
+    for pdf_path in progress:
         try:
             extracted_text = extract_text_from_pdf(pdf_path)
             selection = select_parser_with_diagnostics(pdf_path, extracted_text.first_page_text)

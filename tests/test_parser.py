@@ -141,3 +141,69 @@ def test_hsbc_parser_marks_uncheckable_as_info_when_balances_missing() -> None:
     assert result.validation.status == "uncheckable"
     assert result.validation.severity == "info"
     assert result.warnings == []
+
+
+def test_hsbc_parser_supports_balance_brought_forward_markers() -> None:
+    parser = HsbcParser()
+    text = """
+    Balance Brought Forward 100.00
+    02 Mar 2024 CARD SHOP 10.00 90.00
+    Balance Carried Forward 90.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+    assert result.validation.severity == "none"
+
+
+def test_hsbc_parser_supports_multiline_descriptions() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 200.00
+    02 Mar 2024 CARD PAYMENT RETAILER
+    LONDON 10.00 190.00
+    Closing Balance 190.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert "RETAILER LONDON" in result.transactions[0].description
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_respects_cr_dr_markers_for_sign_inference() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 100.00
+    02 Mar 2024 CASH WITHDRAWAL 5.00DR 95.00
+    03 Mar 2024 MISC ENTRY 10.00CR 105.00
+    Closing Balance 105.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert result.transactions[0].amount_native == Decimal("-5.00")
+    assert result.transactions[1].amount_native == Decimal("10.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_warns_when_balances_exist_but_no_rows_parsed() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 100.00
+    Some section with no transaction rows
+    Closing Balance 100.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+    assert len(result.transactions) == 0
+    assert len(result.warnings) == 1
