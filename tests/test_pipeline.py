@@ -135,6 +135,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["statement_reconciliation_fail_count"] == 0
     assert summary_payload["statement_reconciliation_uncheckable_file_count"] == 0
     assert summary_payload["statement_reconciliation_pass_ratio"] is None
+    assert summary_payload["statement_reconciliation_median_abs_difference"] is None
+    assert summary_payload["statement_reconciliation_hsbc_median_abs_difference"] is None
     assert summary_payload["parser_low_confidence_file_count"] == 2
     assert len(summary_payload["parser_selection_diagnostics"]) == 2
 

@@ -151,6 +151,18 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     reconciliation_fail_count = cast(int, reconciliation["fail_count"])
     reconciliation_uncheckable_count = cast(int, reconciliation["uncheckable_file_count"])
     reconciliation_pass_ratio = cast(float | None, reconciliation["pass_ratio"])
+    reconciliation_median_abs_difference = cast(
+        float | None, reconciliation["median_abs_difference"]
+    )
+    by_bank_abs_difference = cast(list[dict[str, object]], reconciliation["by_bank_abs_difference"])
+    hsbc_abs_difference = next(
+        (
+            cast(float | None, item.get("median_abs_difference"))
+            for item in by_bank_abs_difference
+            if cast(str, item.get("bank")) == "HSBC"
+        ),
+        None,
+    )
     _write_json(settings.completeness_json_path, completeness_report)
 
     upsert = upsert_transactions(settings.master_parquet_path, enriched)
@@ -188,6 +200,8 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "statement_reconciliation_fail_count": reconciliation_fail_count,
             "statement_reconciliation_uncheckable_file_count": reconciliation_uncheckable_count,
             "statement_reconciliation_pass_ratio": reconciliation_pass_ratio,
+            "statement_reconciliation_median_abs_difference": reconciliation_median_abs_difference,
+            "statement_reconciliation_hsbc_median_abs_difference": hsbc_abs_difference,
             "parser_low_confidence_file_count": parser_low_confidence_file_count,
             "parser_selection_diagnostics": parser_selection_diagnostics,
             "fx_cache_path": str(settings.fx_cache_path),

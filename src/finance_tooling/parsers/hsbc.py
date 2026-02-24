@@ -69,6 +69,17 @@ _NON_TXN_BALANCE_MARKERS = (
     "BALANCEBROUGHTFORWARD",
     "BALANCECARRIEDFORWARD",
 )
+_TXN_PREFIXES = ("VIS", "DD", "ATM", "BP", "SO", "CR", "DR", ")))")
+_TXN_CONTEXT_HINTS = (
+    "CARD",
+    "PAYMENT",
+    "TRANSFER",
+    "WITHDRAWAL",
+    "CASH",
+    "PURCHASE",
+    "DIRECT DEBIT",
+    "DEBIT",
+)
 
 
 @dataclass(frozen=True)
@@ -200,21 +211,33 @@ def _extract_balance(full_text: str, patterns: tuple[re.Pattern[str], ...]) -> D
 def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
     rows: list[ParsedRow] = []
     pending_context_parts: list[str] = []
+    pending_has_txn_prefix = False
 
     header_row = _parse_statement_row(block.raw_date, block.header_text)
     header_context: str | None = None
+    header_has_txn_context = False
     if header_row is not None:
         rows.append(header_row)
     elif not _is_non_transaction_line(block.header_text):
         header_context = block.header_text
+        header_has_txn_context = _has_transaction_context(block.header_text)
 
     for line in block.continuation_lines:
         if _is_non_transaction_line(line):
             pending_context_parts = []
+            pending_has_txn_prefix = False
             continue
 
         if not _contains_amount(line):
             pending_context_parts.append(line)
+            if _has_transaction_context(line):
+                pending_has_txn_prefix = True
+            continue
+
+        line_is_txn = _starts_with_transaction_prefix(line)
+        if not line_is_txn and not pending_has_txn_prefix and not header_has_txn_context:
+            pending_context_parts = []
+            pending_has_txn_prefix = False
             continue
 
         line_context = " ".join(pending_context_parts).strip() if pending_context_parts else None
@@ -229,6 +252,7 @@ def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
         if row is not None:
             rows.append(row)
         pending_context_parts = []
+        pending_has_txn_prefix = False
 
     return rows
 
@@ -296,6 +320,18 @@ def _select_transaction_match(line: str, matches: list[re.Match[str]]) -> re.Mat
         return matches[0]
     # Most HSBC rows end with running balance; transaction amount is penultimate token.
     return matches[-2]
+
+
+def _starts_with_transaction_prefix(line: str) -> bool:
+    upper = line.strip().upper()
+    return any(upper.startswith(prefix) for prefix in _TXN_PREFIXES)
+
+
+def _has_transaction_context(line: str) -> bool:
+    upper = line.strip().upper()
+    if _starts_with_transaction_prefix(upper):
+        return True
+    return any(hint in upper for hint in _TXN_CONTEXT_HINTS)
 
 
 def _parse_amount_token(token: str) -> Decimal | None:
