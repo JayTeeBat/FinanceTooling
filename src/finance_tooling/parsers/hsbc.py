@@ -42,6 +42,12 @@ class HsbcParser(BaseStatementParser):
         marker = f"{file_path.name} {first_page_text}".lower()
         return "hsbc" in marker or "your statement" in marker
 
+    def _filename_markers(self) -> tuple[str, ...]:
+        return ("hsbc",)
+
+    def _content_markers(self) -> tuple[str, ...]:
+        return ("hsbc", "your statement")
+
     def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
         del file_path
         rows: list[ParsedRow] = []

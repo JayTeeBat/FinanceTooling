@@ -167,3 +167,40 @@ def test_normalize_row_to_transaction_uses_defaults() -> None:
     assert tx.description == "Unknown transaction"
     assert tx.currency == "EUR"
     assert tx.amount_native == Decimal("1200.50")
+
+
+class _MarkerParser(_DummyParser):
+    def _filename_markers(self) -> tuple[str, ...]:
+        return ("alpha",)
+
+    def _content_markers(self) -> tuple[str, ...]:
+        return ("beta",)
+
+    def _negative_markers(self) -> tuple[str, ...]:
+        return ("forbidden",)
+
+
+def test_base_parser_match_score_counts_marker_hits() -> None:
+    parser = _MarkerParser(
+        ValidationPayload(
+            mode="uncheckable",
+            opening_balance=None,
+            closing_balance=None,
+        )
+    )
+
+    score = parser.match_score(Path("alpha_statement.pdf"), "beta marker")
+    assert score == 5
+
+
+def test_base_parser_match_score_applies_negative_penalty() -> None:
+    parser = _MarkerParser(
+        ValidationPayload(
+            mode="uncheckable",
+            opening_balance=None,
+            closing_balance=None,
+        )
+    )
+
+    score = parser.match_score(Path("alpha_statement.pdf"), "beta marker forbidden")
+    assert score == 1

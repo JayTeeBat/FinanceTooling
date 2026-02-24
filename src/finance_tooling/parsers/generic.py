@@ -26,6 +26,10 @@ class GenericParser(BaseStatementParser):
     def can_handle(self, file_path: Path, first_page_text: str) -> bool:
         return True
 
+    def match_score(self, file_path: Path, first_page_text: str) -> int:
+        del file_path, first_page_text
+        return 0
+
     def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
         del file_path
         rows: list[ParsedRow] = []

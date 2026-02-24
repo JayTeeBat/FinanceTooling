@@ -43,6 +43,24 @@ def test_registry_prefers_revolut_when_text_mentions_boursorama() -> None:
     assert parser.name == "revolut"
 
 
+def test_registry_uses_stable_order_for_score_ties() -> None:
+    parser = select_parser(
+        Path("combined_hsbc_boursorama_statement.pdf"),
+        "HSBC and Boursorama markers both present",
+    )
+
+    assert parser.name == "boursobank"
+
+
+def test_registry_falls_back_to_generic_when_no_parser_matches_threshold() -> None:
+    parser = select_parser(
+        Path("misc_document.pdf"),
+        "Completely unrelated content with no bank markers",
+    )
+
+    assert parser.name == "generic"
+
+
 def test_revolut_parser_parses_currency_symbol_amounts() -> None:
     parser = RevolutParser()
     text = """

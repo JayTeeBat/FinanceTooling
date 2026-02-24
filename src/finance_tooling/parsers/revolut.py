@@ -39,6 +39,12 @@ class RevolutParser(BaseStatementParser):
         marker = f"{file_path.name} {first_page_text}".lower()
         return "revolut" in marker and "account-statement" in marker
 
+    def _filename_markers(self) -> tuple[str, ...]:
+        return ("revolut", "account-statement")
+
+    def _content_markers(self) -> tuple[str, ...]:
+        return ("revolut", "account-statement")
+
     def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
         del file_path
         rows: list[ParsedRow] = []

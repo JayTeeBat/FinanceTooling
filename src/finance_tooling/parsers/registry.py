@@ -19,10 +19,17 @@ PARSERS: tuple[StatementParser, ...] = (
     GenericParser(),
 )
 
+_MIN_MATCH_SCORE = 2
+
 
 def select_parser(file_path: Path, first_page_text: str) -> StatementParser:
     """Select the most appropriate parser for the given statement."""
-    for parser in PARSERS:
-        if parser.can_handle(file_path, first_page_text):
-            return parser
+    scored: list[tuple[int, int, StatementParser]] = []
+    for index, parser in enumerate(PARSERS):
+        score = parser.match_score(file_path, first_page_text)
+        scored.append((score, -index, parser))
+
+    best_score, _, best_parser = max(scored, key=lambda item: (item[0], item[1]))
+    if best_score >= _MIN_MATCH_SCORE:
+        return best_parser
     return GenericParser()

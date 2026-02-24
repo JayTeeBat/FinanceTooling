@@ -56,6 +56,12 @@ class LaBanquePostaleParser(BaseStatementParser):
             or "releve de votre ccp" in marker
         )
 
+    def _filename_markers(self) -> tuple[str, ...]:
+        return ("labanquepostale", "releve_ccp", "ccp")
+
+    def _content_markers(self) -> tuple[str, ...]:
+        return ("la banque postale", "releve de votre ccp")
+
     def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
         year = self._resolve_year(file_path.name)
         rows: list[ParsedRow] = []

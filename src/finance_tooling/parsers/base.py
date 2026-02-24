@@ -45,6 +45,8 @@ class StatementParser(Protocol):
     name: str
     bank: str
 
+    def match_score(self, file_path: Path, first_page_text: str) -> int: ...
+
     def can_handle(self, file_path: Path, first_page_text: str) -> bool: ...
 
     def parse(self, file_path: Path, full_text: str) -> ParserOutput: ...
@@ -91,6 +93,21 @@ class BaseStatementParser(ABC):
 
     name: str
     bank: str
+
+    def match_score(self, file_path: Path, first_page_text: str) -> int:
+        marker_filename = file_path.name.lower()
+        marker_content = first_page_text.lower()
+        marker_all = f"{marker_filename} {marker_content}"
+
+        score = 0
+        score += 3 * sum(
+            1 for marker in self._filename_markers() if marker.lower() in marker_filename
+        )
+        score += 2 * sum(
+            1 for marker in self._content_markers() if marker.lower() in marker_content
+        )
+        score -= 4 * sum(1 for marker in self._negative_markers() if marker.lower() in marker_all)
+        return score
 
     def parse(self, file_path: Path, full_text: str) -> ParserOutput:
         rows, warnings = self._extract_rows(file_path, full_text)
@@ -166,6 +183,15 @@ class BaseStatementParser(ABC):
     ) -> list[str]:
         del file_path, full_text, transactions
         return []
+
+    def _filename_markers(self) -> tuple[str, ...]:
+        return ()
+
+    def _content_markers(self) -> tuple[str, ...]:
+        return ()
+
+    def _negative_markers(self) -> tuple[str, ...]:
+        return ()
 
     def _validation_uncheckable(
         self,
