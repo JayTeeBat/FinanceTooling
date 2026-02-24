@@ -1,0 +1,3 @@
+Opening Balance 500.00
+11 Mar 2024 ONLINE PAYMENT REF 123456 45.67 454.33
+Closing Balance 454.33

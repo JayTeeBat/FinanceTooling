@@ -1,0 +1,4 @@
+Balance Brought Forward 100.00
+07 Mar 2024 CARD SHOP 10.00 90.00
+08 Mar 2024 TRANSFER FROM SAVINGS 20.00 110.00
+Balance Carried Forward 110.00

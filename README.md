@@ -30,11 +30,19 @@ uv run pre-commit run --all-files
 
 ## Statement Workflow
 
-The workflow requires environment variables for input and output data paths:
+The workflow reads environment variables from `.env` in the repository root (if present),
+and falls back to process environment variables.
+
+Minimum required variables:
 
 ```bash
 export FINANCE_STATEMENTS_PATH="/path/to/statements"
 export FINANCE_PROCESSED_PATH="/path/to/processed"
+```
+
+Optional overrides:
+
+```bash
 export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
 export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
 export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"

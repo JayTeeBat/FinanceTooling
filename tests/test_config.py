@@ -75,7 +75,8 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.fx_auto_fetch is False
 
 
-def test_load_settings_requires_input_and_processed_env(monkeypatch) -> None:
+def test_load_settings_requires_input_and_processed_env(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv(INPUT_PATH_ENV, raising=False)
     monkeypatch.delenv(PROCESSED_PATH_ENV, raising=False)
 
@@ -85,3 +86,36 @@ def test_load_settings_requires_input_and_processed_env(monkeypatch) -> None:
         assert INPUT_PATH_ENV in str(exc)
     else:
         raise AssertionError("Expected ValueError when required env vars are missing")
+
+
+def test_load_settings_reads_required_paths_from_dotenv(monkeypatch, tmp_path: Path) -> None:
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+
+    dotenv_path = tmp_path / ".env"
+    dotenv_path.write_text(
+        "\n".join(
+            [
+                f"{INPUT_PATH_ENV}={raw_dir}",
+                f"{PROCESSED_PATH_ENV}={processed_dir}",
+                f"{BASE_CURRENCY_ENV}=usd",
+                f"{FX_AUTO_FETCH_ENV}=false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv(INPUT_PATH_ENV, raising=False)
+    monkeypatch.delenv(PROCESSED_PATH_ENV, raising=False)
+    monkeypatch.delenv(BASE_CURRENCY_ENV, raising=False)
+    monkeypatch.delenv(FX_AUTO_FETCH_ENV, raising=False)
+
+    settings = load_settings_from_env()
+
+    assert settings.input_path == raw_dir.resolve()
+    assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
+    assert settings.base_currency == "USD"
+    assert settings.fx_auto_fetch is False

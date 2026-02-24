@@ -31,7 +31,7 @@ _SKIP_HINTS = (
 _OPENING_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"Opening\s*Balance\s+([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)", re.IGNORECASE),
     re.compile(
-        r"Balance\s*Brought\s*Forward\s+([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)",
+        r"Balance\s*Brought\s*Forward\s*(?:\.\s*)?([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)",
         re.IGNORECASE,
     ),
     re.compile(r"Previous\s*Balance\s+([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)", re.IGNORECASE),
@@ -39,11 +39,12 @@ _OPENING_PATTERNS: tuple[re.Pattern[str], ...] = (
 _CLOSING_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"Closing\s*Balance\s+([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)", re.IGNORECASE),
     re.compile(
-        r"Balance\s*Carried\s*Forward\s+([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)",
+        r"Balance\s*Carried\s*Forward\s*(?:\.\s*)?([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)",
         re.IGNORECASE,
     ),
     re.compile(r"New\s*Balance\s+([+-]?\d[\d,.]*(?:\s?(?:CR|DR))?)", re.IGNORECASE),
 )
+_DESCRIPTION_SIGN_PATTERN = re.compile(r"^(?P<marker>CR|DR)\b", re.IGNORECASE)
 
 
 class HsbcParser(BaseStatementParser):
@@ -175,7 +176,9 @@ def _parse_statement_row(raw_date: str, rest: str) -> ParsedRow | None:
     description_upper = description.upper()
     if any(skip in description_upper for skip in _SKIP_HINTS):
         return None
-    indicator_marker = _token_sign_marker(transaction_token)
+    indicator_marker = _token_sign_marker(transaction_token) or _description_sign_marker(
+        description
+    )
     amount = _parse_amount_token(transaction_token)
     if amount is None:
         return None
@@ -206,5 +209,17 @@ def _token_sign_marker(token: str) -> str | None:
     if upper.endswith("CR"):
         return "CR_MARKER"
     if upper.endswith("DR"):
+        return "DR_MARKER"
+    return None
+
+
+def _description_sign_marker(description: str) -> str | None:
+    match = _DESCRIPTION_SIGN_PATTERN.match(description.strip())
+    if match is None:
+        return None
+    marker = match.group("marker").upper()
+    if marker == "CR":
+        return "CR_MARKER"
+    if marker == "DR":
         return "DR_MARKER"
     return None

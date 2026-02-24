@@ -1,0 +1,4 @@
+Opening Balance 200.00
+06 Mar 2024 CARD PAYMENT RETAILER
+LONDON 10.00 190.00
+Closing Balance 190.00

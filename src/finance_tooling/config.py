@@ -15,6 +15,7 @@ EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
+DOTENV_PATH = Path(".env")
 
 
 @dataclass(frozen=True)
@@ -53,8 +54,34 @@ def _parse_bool(raw_value: str | None, *, default: bool) -> bool:
     raise ValueError(f"Invalid boolean value: {raw_value}")
 
 
+def _load_dotenv(path: Path = DOTENV_PATH) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", maxsplit=1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if (value.startswith('"') and value.endswith('"')) or (
+            value.startswith("'") and value.endswith("'")
+        ):
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
 def load_settings_from_env() -> Settings:
     """Load workflow settings from environment variables."""
+    _load_dotenv()
     input_path = _resolve_path_from_env(INPUT_PATH_ENV)
     if input_path is None:
         raise ValueError(f"Missing required environment variable: {INPUT_PATH_ENV}")
