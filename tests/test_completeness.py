@@ -184,7 +184,6 @@ def test_build_completeness_report_includes_reconciliation_kpis() -> None:
         }
     ]
 
-
 def test_build_completeness_report_excludes_files_without_validation_record() -> None:
     source_files = [
         Path("/data/LaBanquePostale releve_CCP_20241224.pdf"),
@@ -219,3 +218,85 @@ def test_build_completeness_report_excludes_files_without_validation_record() ->
     assert reconciliation["checkable_file_count"] == 1
     assert reconciliation["pass_count"] == 1
     assert reconciliation["uncheckable_file_count"] == 0
+
+
+def test_build_completeness_report_counts_validation_backed_zero_movement_as_covered() -> None:
+    source_file = Path("/data/Boursobank_statement_2025.pdf")
+    validations = [
+        StatementValidation(
+            source_file=source_file,
+            bank="Boursobank",
+            parser="boursobank",
+            statement_type="statement",
+            opening_balance=Decimal("12821.20"),
+            closing_balance=Decimal("12821.20"),
+            transaction_sum=Decimal("0.00"),
+            expected_closing_balance=Decimal("12821.20"),
+            difference=Decimal("0.00"),
+            status="pass",
+            reason=None,
+            severity="none",
+        )
+    ]
+
+    report = build_completeness_report(
+        source_files=[source_file],
+        parsed_transactions=[],
+        validations=validations,
+    )
+
+    assert report["parsed_unique_statement_source_file_count"] == 0
+    assert report["covered_unique_statement_source_file_count"] == 1
+    assert report["validation_unique_statement_source_file_count"] == 1
+    assert report["missing_source_file_count"] == 0
+    assert report["file_coverage_ratio"] == 1.0
+    assert report["status"] == "pass"
+
+
+def test_build_completeness_report_excludes_non_statement_validations_from_reconciliation() -> None:
+    source_file = Path("/data/Boursobank_statement_2025.pdf")
+    com_file = Path("/data/Boursobank Jacques COM-20-01-2025.pdf")
+    parsed = [_tx(source_file, "Boursobank")]
+    validations = [
+        StatementValidation(
+            source_file=source_file,
+            bank="Boursobank",
+            parser="boursobank",
+            statement_type="statement",
+            opening_balance=Decimal("100.00"),
+            closing_balance=Decimal("99.00"),
+            transaction_sum=Decimal("-1.00"),
+            expected_closing_balance=Decimal("99.00"),
+            difference=Decimal("0.00"),
+            status="pass",
+            reason=None,
+            severity="none",
+        ),
+        StatementValidation(
+            source_file=com_file,
+            bank="Boursobank",
+            parser="boursobank",
+            statement_type="non_statement",
+            opening_balance=None,
+            closing_balance=None,
+            transaction_sum=Decimal("0.00"),
+            expected_closing_balance=None,
+            difference=None,
+            status="uncheckable",
+            reason="missing_opening_or_closing",
+            severity="info",
+        ),
+    ]
+
+    report = build_completeness_report(
+        source_files=[source_file, com_file],
+        parsed_transactions=parsed,
+        validations=validations,
+    )
+    reconciliation = cast(dict[str, Any], report["statement_reconciliation"])
+
+    assert reconciliation["files_with_validation_record_count"] == 1
+    assert reconciliation["checkable_file_count"] == 1
+    assert reconciliation["pass_count"] == 1
+    assert reconciliation["uncheckable_file_count"] == 0
+    assert reconciliation["counts_by_status"] == {"pass": 1}

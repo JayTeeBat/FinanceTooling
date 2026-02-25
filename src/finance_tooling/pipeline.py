@@ -14,7 +14,7 @@ from typing import cast
 from tqdm import tqdm
 
 from finance_tooling.classify import classify_transactions
-from finance_tooling.completeness import build_completeness_report
+from finance_tooling.completeness import build_completeness_report, classify_statement_type
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
@@ -222,7 +222,12 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             extracted.extend(output.transactions)
             warnings.extend(output.warnings)
             if output.validation is not None:
-                validations.append(output.validation)
+                validations.append(
+                    replace(
+                        output.validation,
+                        statement_type=classify_statement_type(pdf_path),
+                    )
+                )
         except Exception as exc:
             files_failed += 1
             warnings.append(f"Failed to process {pdf_path}: {exc}")

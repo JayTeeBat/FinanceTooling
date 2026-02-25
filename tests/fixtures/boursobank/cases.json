@@ -1,0 +1,95 @@
+[
+  {
+    "id": "boursobank_compact_balances_column_sign_pass",
+    "description": "Compact balance markers and debit/credit columns should reconcile.",
+    "file_name": "Boursobank_statement_2023-01.pdf",
+    "text_file": "case_compact_balances_column_sign_pass.txt",
+    "expected_transaction_amounts": [
+      "-19.99",
+      "1200.00"
+    ],
+    "expected_transaction_count": 2,
+    "expected_transaction_sum": "1180.01",
+    "expected_opening_balance": "1000.00",
+    "expected_closing_balance": "2180.01",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "boursobank_spaced_balances_refund_override_pass",
+    "description": "Spaced balance markers and refund keyword override should keep credit positive.",
+    "file_name": "Boursobank_statement_2023-02.pdf",
+    "text_file": "case_spaced_balances_refund_override_pass.txt",
+    "expected_transaction_amounts": [
+      "-180.01",
+      "15.00"
+    ],
+    "expected_transaction_count": 2,
+    "expected_transaction_sum": "-165.01",
+    "expected_opening_balance": "2180.01",
+    "expected_closing_balance": "2015.00",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "boursobank_zero_movement_with_balances_pass",
+    "description": "Zero-movement statement with opening/closing balances should reconcile as pass.",
+    "file_name": "Boursobank_LDDS_2025-12.pdf",
+    "text_file": "case_zero_movement_with_balances_pass.txt",
+    "expected_transaction_amounts": [],
+    "expected_transaction_count": 0,
+    "expected_transaction_sum": "0.00",
+    "expected_opening_balance": "12821.20",
+    "expected_closing_balance": "12821.20",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "boursobank_debit_virsepa_stays_negative",
+    "description": "Debit-column VIRSEPA rows should remain negative despite transfer keywords.",
+    "file_name": "Boursobank_statement_2025-09.pdf",
+    "text_file": "case_debit_virsepa_stays_negative.txt",
+    "expected_transaction_amounts": [
+      "-3000.00",
+      "-450.00",
+      "-100.00"
+    ],
+    "expected_transaction_count": 3,
+    "expected_transaction_sum": "-3550.00",
+    "expected_opening_balance": "10000.00",
+    "expected_closing_balance": "6450.00",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "boursobank_debit_virinst_stays_negative_100_signature",
+    "description": "Debit-column VIRINST should parse as negative to avoid recurring +100 mismatch signature.",
+    "file_name": "Boursobank_statement_2024-10.pdf",
+    "text_file": "case_debit_virinst_stays_negative_100_signature.txt",
+    "expected_transaction_amounts": [
+      "-50.00",
+      "-20.00"
+    ],
+    "expected_transaction_count": 2,
+    "expected_transaction_sum": "-70.00",
+    "expected_opening_balance": "500.00",
+    "expected_closing_balance": "430.00",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  }
+]
