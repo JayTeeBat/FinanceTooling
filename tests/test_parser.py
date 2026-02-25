@@ -391,3 +391,39 @@ def test_hsbc_parser_inherits_header_cr_marker_for_non_prefixed_continuation_amo
     assert result.transactions[0].amount_native == Decimal("10.00")
     assert result.validation is not None
     assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_deduplicates_repeated_continuation_rows() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 1000.00
+    25 Jun 19 VIS REVOLUT*
+    REVOLUT.COM 500.00
+    VIS REVOLUT*
+    REVOLUT.COM 500.00 500.00
+    Closing Balance 500.00
+    """
+
+    result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-500.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_uses_running_balance_delta_to_override_ambiguous_sign_hint() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 1000.00
+    02 Mar 2024 VIS SHOP 50.00 950.00
+    BP FRIEND salary 100.00 850.00
+    Closing Balance 850.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert result.transactions[1].amount_native == Decimal("-100.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"

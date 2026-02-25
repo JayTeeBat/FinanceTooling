@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -98,6 +98,14 @@ class _ParsedBlock:
     raw_date: str
     header_text: str
     continuation_lines: list[str]
+
+
+@dataclass(frozen=True)
+class _ParsedRowCandidate:
+    row: ParsedRow
+    amount_absolute: Decimal
+    running_balance: Decimal | None
+    marker_source: str | None
 
 
 class HsbcParser(BaseStatementParser):
@@ -220,14 +228,21 @@ def _extract_balance(full_text: str, patterns: tuple[re.Pattern[str], ...]) -> D
 
 
 def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
-    rows: list[ParsedRow] = []
+    rows: list[_ParsedRowCandidate] = []
     pending_context_parts: list[str] = []
     pending_has_txn_prefix = False
     pending_sign_marker: str | None = None
+    previous_running_balance: Decimal | None = None
 
-    header_row = _parse_statement_row(block.raw_date, block.header_text)
+    header_row = _parse_statement_row_candidate(block.raw_date, block.header_text)
     if header_row is not None:
-        rows.append(header_row)
+        header_row, previous_running_balance = _apply_running_balance_sign_override(
+            header_row,
+            previous_running_balance,
+        )
+        rows = _append_or_merge_duplicate_candidate(rows, header_row)
+        if header_row.running_balance is not None:
+            previous_running_balance = header_row.running_balance
     elif not _is_non_transaction_line(block.header_text):
         pending_context_parts = [block.header_text]
         pending_has_txn_prefix = _has_transaction_context(block.header_text)
@@ -261,28 +276,34 @@ def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
             continue
 
         fallback_context = " ".join(part for part in pending_context_parts if part).strip()
-        row = _parse_statement_row(
+        row = _parse_statement_row_candidate(
             block.raw_date,
             line,
             fallback_context=fallback_context if fallback_context else None,
             inherited_sign_marker=pending_sign_marker if not line_is_txn else None,
         )
         if row is not None:
-            rows.append(row)
+            row, previous_running_balance = _apply_running_balance_sign_override(
+                row,
+                previous_running_balance,
+            )
+            rows = _append_or_merge_duplicate_candidate(rows, row)
+            if row.running_balance is not None:
+                previous_running_balance = row.running_balance
         pending_context_parts = []
         pending_has_txn_prefix = False
         pending_sign_marker = None
 
-    return rows
+    return [candidate.row for candidate in rows]
 
 
-def _parse_statement_row(
+def _parse_statement_row_candidate(
     raw_date: str,
     rest: str,
     *,
     fallback_context: str | None = None,
     inherited_sign_marker: str | None = None,
-) -> ParsedRow | None:
+) -> _ParsedRowCandidate | None:
     if _is_non_transaction_line(rest):
         return None
 
@@ -305,21 +326,37 @@ def _parse_statement_row(
         return None
     # Fallback context can carry unrelated CR/DR text from previous lines; infer
     # description marker only from the transaction line lead itself.
-    indicator_marker = _token_sign_marker(transaction_token) or _description_sign_marker(
-        description_lead
-    )
+    token_marker = _token_sign_marker(transaction_token)
+    description_marker = _description_sign_marker(description_lead)
+    indicator_marker = token_marker or description_marker
     if indicator_marker is None:
         indicator_marker = inherited_sign_marker
+    marker_source: str | None = None
+    if token_marker is not None:
+        marker_source = "token"
+    elif description_marker is not None:
+        marker_source = "description"
+    elif inherited_sign_marker is not None:
+        marker_source = "inherited"
     amount = _parse_amount_token(transaction_token)
     if amount is None:
         return None
+    running_balance: Decimal | None = None
+    if len(matches) > 1:
+        running_balance = _parse_amount_token(matches[-1].group("amount"))
     if indicator_marker is not None:
         description = f"{description} {indicator_marker}"
-    return ParsedRow(
+    row = ParsedRow(
         raw_date=_normalize_compact_date(raw_date),
         raw_description=description,
         raw_amount=str(abs(amount)),
         raw_currency_hint="GBP",
+    )
+    return _ParsedRowCandidate(
+        row=row,
+        amount_absolute=abs(amount),
+        running_balance=running_balance,
+        marker_source=marker_source,
     )
 
 
@@ -398,3 +435,60 @@ def _description_sign_marker(description: str) -> str | None:
     if marker == "DR":
         return "DR_MARKER"
     return None
+
+
+def _dedupe_description(description: str) -> str:
+    normalized = " ".join(description.upper().split())
+    normalized = normalized.removesuffix(" CR_MARKER")
+    normalized = normalized.removesuffix(" DR_MARKER")
+    return normalized
+
+
+def _append_or_merge_duplicate_candidate(
+    existing: list[_ParsedRowCandidate],
+    candidate: _ParsedRowCandidate,
+) -> list[_ParsedRowCandidate]:
+    if not existing:
+        return [candidate]
+
+    last = existing[-1]
+    same_key = (
+        candidate.row.raw_date == last.row.raw_date
+        and candidate.row.raw_amount == last.row.raw_amount
+        and _dedupe_description(candidate.row.raw_description)
+        == _dedupe_description(last.row.raw_description)
+    )
+    if not same_key:
+        return [*existing, candidate]
+
+    if last.running_balance is None and candidate.running_balance is not None:
+        return [*existing[:-1], candidate]
+    if last.running_balance is not None and candidate.running_balance is None:
+        return existing
+    if last.running_balance is None and candidate.running_balance is None:
+        return [*existing, candidate]
+    if last.running_balance == candidate.running_balance:
+        return existing
+    return [*existing, candidate]
+
+
+def _apply_running_balance_sign_override(
+    candidate: _ParsedRowCandidate,
+    previous_running_balance: Decimal | None,
+) -> tuple[_ParsedRowCandidate, Decimal | None]:
+    if candidate.running_balance is None or previous_running_balance is None:
+        return candidate, previous_running_balance
+    if candidate.marker_source is not None:
+        return candidate, previous_running_balance
+
+    delta = candidate.running_balance - previous_running_balance
+    if delta == 0:
+        return candidate, previous_running_balance
+    if abs(abs(delta) - candidate.amount_absolute) > Decimal("0.02"):
+        return candidate, previous_running_balance
+
+    inferred_marker = "CR_MARKER" if delta > 0 else "DR_MARKER"
+    description_without_markers = _dedupe_description(candidate.row.raw_description)
+    updated_description = f"{description_without_markers} {inferred_marker}"
+    updated_row = replace(candidate.row, raw_description=updated_description)
+    return replace(candidate, row=updated_row), previous_running_balance
