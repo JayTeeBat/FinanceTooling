@@ -79,97 +79,85 @@ Use this template:
   - <single highest priority next step>
 ```
 
+## Next Agent Recommendations
+
+Prioritized recommendations from latest repo assessment:
+
+1. Decompose workflow orchestration in `src/finance_tooling/pipeline.py`
+- Split into focused units (`ingest`, `hsbc_merge`, `enrichment`, `reporting`) while preserving behavior.
+- Benefit: lower maintenance risk, simpler reasoning, smaller test surfaces.
+
+2. Tighten typed boundaries for report payloads
+- Replace broad `dict[str, object]` payload construction/casts with typed dataclasses or `TypedDict` for summary and completeness outputs.
+- Benefit: safer refactors and clearer internal APIs.
+
+3. Preserve monetary precision through storage/reporting paths
+- Reduce `Decimal -> float` conversions where not strictly required; keep decimal-safe representation until final presentation.
+- Benefit: better reconciliation accuracy and less rounding drift.
+
+4. Replace broad exception handling with targeted error categories
+- Narrow `except Exception` blocks in workflow/FX paths and emit structured warning context.
+- Benefit: improved observability and faster debugging of real failures.
+
+5. Improve parser/importer extensibility model
+- Move from static registry tuple toward explicit plugin registration/discovery pattern.
+- Benefit: easier onboarding of additional bank formats with cleaner boundaries.
+
+6. Keep quality gates mandatory
+- Continue enforcing:
+  - `uv run ruff check .`
+  - `uv run ruff format .`
+  - `uv run ty check src/finance_tooling tests`
+  - `uv run pytest`
+- Benefit: protects reliability during refactors of parser and pipeline internals.
+
 ## Hand-Off Log
 
 ### 2026-02-25 - codex
-- Branch: `fix/parser-hardening-hsbc`
+- Branch: `main`
 - Completed:
-  - Implemented HSBC period-window remapping for CSV transactions using parsed
-    PDF statement periods (`start -> end`) before adaptive source selection.
-  - Added statement-period parsing from HSBC PDF text and integrated period
-    metadata into month selection diagnostics.
-  - Added remap diagnostics/counters in `run_summary.json` for applied periods,
-    reassigned CSV rows, and unassigned CSV rows.
-  - Added tests for statement-period parsing and CSV boundary-day reassignment.
-  - Updated README to document period-window remapping behavior.
+  - Added `## Next Agent Recommendations` section before `## Hand-Off Log`.
+  - Documented prioritized architecture and maintainability improvements for the next agent session.
 - Checks:
-  - `uv run pytest tests/test_pipeline.py tests/test_hsbc_csv_import.py`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-remap FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
+  - `sed -n '1,280p' AGENTS.md`: pass
 - Open items:
-  - HSBC failures remain at `30` checkable statements; largest residual outlier
-    is still 2019-03 (`|diff|=3903.76`), indicating a specific parser/sign
-    issue beyond period alignment.
-  - Five HSBC statements still lack parsed period windows (`statement_period_*`
-    absent in diagnostics), limiting remap precision for those months.
+  - Recommendations are documented; implementation work is still pending in code modules.
 - Next action:
-  - Add fixture-driven parser hardening for the remaining high-diff months
-    (especially 2019-03 and 2021-04) and improve period parsing coverage for
-    the missing-window HSBC layouts.
+  - Start with pipeline decomposition plan for `src/finance_tooling/pipeline.py`.
 
 ### 2026-02-25 - codex
-- Branch: `fix/parser-hardening-hsbc`
+- Branch: `main`
 - Completed:
-  - Implemented adaptive HSBC month-level source selection in pipeline:
-    for overlap months with both CSV and PDF rows, choose the source with
-    lower PDF-balance reconciliation absolute difference.
-  - Added HSBC adaptive diagnostics and metrics in `run_summary.json`,
-    including policy marker, adaptive switch count, selected CSV/PDF month
-    counts, and per-month selection diagnostics.
-  - Extended HSBC reconciliation warning payload to include candidate absolute
-    differences for CSV and PDF sums.
-  - Updated pipeline tests to assert adaptive selection behavior (including
-    overlap switch to PDF when PDF reconciles better) and new summary fields.
-  - Updated README HSBC merge policy to document adaptive overlap selection.
+  - Removed local-only branches:
+    `develop`, `fix/hsbc-csv-import`, and `parser-hardening-revolut`.
+  - Preserved `fix/hsbc-parser-metrics` because it is currently checked out in
+    linked worktree `/home/thomazo/dev/FinanceTooling-hsbc-parser`.
 - Checks:
-  - `uv run pytest tests/test_pipeline.py tests/test_hsbc_csv_import.py`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-adaptive FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
+  - `git for-each-ref --format='%(refname:short) %(upstream:short)' refs/heads`: pass
+  - `git branch -D <local-only-branch>`: pass (except linked-worktree branch)
+  - `git branch -vv`: pass
 - Open items:
-  - HSBC reconciliation still has `59` failed / `85` checkable statements,
-    with most failures still on HSBC-selected months.
-  - HSBC balance-validation fail count remains high (`59`) despite much lower
-    median absolute difference.
+  - `fix/hsbc-parser-metrics` remains and can only be deleted after removing or
+    switching that external worktree branch.
 - Next action:
-  - Add fixture-driven month-level guardrails for the top residual outliers
-    (`|diff| > 1000`) and codify deterministic fallback rules for those
-    specific layouts.
+  - If desired, clean the linked worktree branch and then delete
+    `fix/hsbc-parser-metrics`.
 
 ### 2026-02-25 - codex
-- Branch: `fix/parser-hardening-hsbc`
+- Branch: `main`
 - Completed:
-  - Hardened HSBC CSV importer date parsing to support raw monthly export
-    formats (`%d %b %Y`, `%d %B %Y`, and `%d/%m/%Y`), enabling ingestion from
-    raw HSBC CSV files.
-  - Replaced HSBC PDF/CSV overlap heuristics with statement-date source
-    selection: CSV replaces PDF for matching months, PDF fallback is kept when
-    CSV is missing, and CSV-only months are retained.
-  - Added HSBC PDF-balance-driven validation recomputation so selected monthly
-    data (CSV or PDF fallback) is reconciled against PDF opening/closing
-    balances, with explicit warnings on reconciliation mismatches.
-  - Added HSBC merge/validation counters to `run_summary.json` and updated
-    README to document monthly CSV-first merge and PDF-balance validation
-    behavior.
-  - Updated HSBC CSV importer and pipeline tests for date parsing, monthly
-    source selection, fallback handling, and PDF-balance validation warnings.
+  - Fetched and pruned remote refs from `origin` to refresh available branch
+    state.
+  - Removed stale local branches after pruning where upstream was deleted:
+    `fix/hsbc-csv-import-main` and `fix/parser-hardening`.
 - Checks:
-  - `uv run pytest tests/test_hsbc_csv_import.py tests/test_pipeline.py`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-post-impl FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
+  - `git fetch --prune --all`: pass
+  - `git branch -r`: pass
+  - `git branch -vv`: pass
+  - `git branch --merged origin/main`: pass
 - Open items:
-  - HSBC reconciliation remains imperfect at `61` failed / `85` checkable
-    statements on the real corpus.
-  - HSBC median absolute reconciliation difference increased to `453.07`,
-    indicating remaining month-specific parsing/sign issues.
+  - Remaining local branches without upstream tracking were preserved pending
+    explicit retention/deletion choice.
 - Next action:
-  - Add fixture-driven month-level diagnostics for the largest remaining HSBC
-    outliers and refine row/sign rules for those statement layouts.
+  - Decide retention policy for remaining untracked local branches and delete
+    those no longer needed.
