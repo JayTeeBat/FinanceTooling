@@ -11,7 +11,7 @@ from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.importers.hsbc_csv import HsbcCsvImportResult
 from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import ParserOutput, StatementParser
+from finance_tooling.parsers.base import ParserOutput, StatementParser, StatementValidation
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
 from finance_tooling.pipeline import run_workflow
 from finance_tooling.store import UpsertResult
@@ -41,6 +41,36 @@ class _DummyParser:
             parser=self.name,
         )
         return ParserOutput(transactions=[tx], warnings=[])
+
+
+@dataclass
+class _ValidationDummyParser:
+    name: str = "dummy"
+    bank: str = "DummyBank"
+
+    def match_score(self, file_path: Path, first_page_text: str) -> int:
+        del file_path, first_page_text
+        return 2
+
+    def parse(self, file_path: Path, _full_text: str) -> ParserOutput:
+        return ParserOutput(
+            transactions=[],
+            warnings=[],
+            validation=StatementValidation(
+                source_file=file_path,
+                bank=self.bank,
+                parser=self.name,
+                statement_type="statement",
+                opening_balance=None,
+                closing_balance=None,
+                transaction_sum=Decimal("0.00"),
+                expected_closing_balance=None,
+                difference=None,
+                status="uncheckable",
+                reason="missing_opening_or_closing",
+                severity="info",
+            ),
+        )
 
 
 def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_path: Path) -> None:
@@ -376,3 +406,66 @@ def test_run_workflow_drops_cross_source_duplicates(monkeypatch, tmp_path: Path)
     summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
     assert summary_payload["cross_source_duplicate_drop_count"] == 1
     assert summary_payload["cross_source_clash_drop_count"] == 0
+
+
+def test_run_workflow_excludes_com_validations_from_reconciliation(
+    monkeypatch, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    com_pdf = input_dir / "Boursobank Jacques COM-20-01-2025.pdf"
+    com_pdf.write_text("fake", encoding="utf-8")
+
+    settings = Settings(
+        input_path=input_dir,
+        output_path=input_dir / "dashboard.html",
+        master_parquet_path=input_dir / "transactions_master.parquet",
+        export_csv_path=input_dir / "transactions_normalized.csv",
+        export_json_path=input_dir / "transactions_normalized.json",
+        summary_json_path=input_dir / "run_summary.json",
+        completeness_json_path=input_dir / "completeness_report.json",
+        base_currency="EUR",
+        fx_cache_path=input_dir / "fx.parquet",
+        fx_auto_fetch=False,
+        hsbc_csv_path=None,
+    )
+
+    monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [com_pdf])
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.extract_text_from_pdf",
+        lambda _: ExtractedPdfText(first_page_text="", full_text=""),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.select_parser_with_diagnostics",
+        lambda *_: ParserSelection(
+            parser=cast(StatementParser, _ValidationDummyParser()),
+            score=3,
+            threshold=2,
+            candidates=(
+                ParserScoreItem(parser_name="dummy", score=3),
+                ParserScoreItem(parser_name="generic", score=0),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.render_dashboard_html",
+        lambda *args, **kwargs: settings.output_path,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.upsert_transactions",
+        lambda *_: UpsertResult(
+            parquet_path=settings.master_parquet_path,
+            dataframe=pd.DataFrame(columns=["transaction_id"]),
+            new_rows=0,
+            total_rows=0,
+        ),
+    )
+
+    result = run_workflow(settings)
+
+    summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
+    assert summary_payload["statement_reconciliation_checkable_file_count"] == 0
+    assert summary_payload["statement_reconciliation_fail_count"] == 0
+    assert summary_payload["statement_reconciliation_uncheckable_file_count"] == 0
+    assert result.reconciliation_uncheckable_file_count == 0

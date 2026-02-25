@@ -77,6 +77,7 @@ def build_completeness_report(
     fail_coverage_ratio: float = _DEFAULT_FAIL_COVERAGE_RATIO,
 ) -> dict[str, object]:
     """Build a machine-readable parsing completeness report."""
+    validations_list = validations or []
     source_unique = sorted({Path(str(path)) for path in source_files}, key=lambda path: str(path))
     source_statement_unique = [
         path for path in source_unique if classify_statement_type(path) == "statement"
@@ -95,9 +96,23 @@ def build_completeness_report(
     ]
 
     parsed_source_set = set(parsed_source_unique)
+    source_statement_set = set(source_statement_unique)
+    validated_statement_source_unique = sorted(
+        {
+            Path(str(validation.source_file))
+            for validation in validations_list
+            if validation.statement_type == "statement"
+            and Path(str(validation.source_file)) in source_statement_set
+        },
+        key=lambda path: str(path),
+    )
+    covered_statement_source_set = set(parsed_statement_source_unique) | set(
+        validated_statement_source_unique
+    )
+
     missing_files_all = [path for path in source_unique if path not in parsed_source_set]
     missing_statement_files = [
-        path for path in source_statement_unique if path not in parsed_source_set
+        path for path in source_statement_unique if path not in covered_statement_source_set
     ]
     missing_non_statement_files = [
         path for path in source_non_statement_unique if path not in parsed_source_set
@@ -110,7 +125,9 @@ def build_completeness_report(
     parsed_statement_unique_count = len(parsed_statement_source_unique)
     parsed_non_statement_unique_count = len(parsed_non_statement_source_unique)
     coverage_ratio = (
-        (parsed_statement_unique_count / source_statement_count) if source_statement_count else 1.0
+        (len(covered_statement_source_set) / source_statement_count)
+        if source_statement_count
+        else 1.0
     )
     overall_coverage_ratio = (parsed_unique_count / source_count) if source_count else 1.0
 
@@ -158,7 +175,7 @@ def build_completeness_report(
     if missing_statement_files:
         reasons.append(f"{len(missing_statement_files)} statement PDFs have zero parsed rows")
 
-    reconciliation = _build_reconciliation_summary(validations or [])
+    reconciliation = _build_reconciliation_summary(validations_list)
     reconciliation_fail_count = cast(int, reconciliation["fail_count"])
     reconciliation_uncheckable_count = cast(int, reconciliation["uncheckable_file_count"])
     if reconciliation_fail_count > 0:
@@ -182,6 +199,8 @@ def build_completeness_report(
         "parsed_unique_source_file_count": parsed_unique_count,
         "parsed_unique_statement_source_file_count": parsed_statement_unique_count,
         "parsed_unique_non_statement_source_file_count": parsed_non_statement_unique_count,
+        "covered_unique_statement_source_file_count": len(covered_statement_source_set),
+        "validation_unique_statement_source_file_count": len(validated_statement_source_unique),
         "file_coverage_ratio": coverage_ratio,
         "overall_file_coverage_ratio": overall_coverage_ratio,
         "missing_source_file_count": len(missing_statement_files),
@@ -212,8 +231,11 @@ def build_completeness_report(
 
 
 def _build_reconciliation_summary(validations: list[StatementValidation]) -> dict[str, object]:
+    statement_validations = [
+        validation for validation in validations if validation.statement_type == "statement"
+    ]
     file_validations: dict[str, StatementValidation] = {}
-    for validation in validations:
+    for validation in statement_validations:
         file_validations[str(validation.source_file)] = validation
 
     unique_validations = list(file_validations.values())

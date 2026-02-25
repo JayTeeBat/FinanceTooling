@@ -82,6 +82,24 @@ Use this template:
 ## Hand-Off Log
 
 ### 2026-02-25 - codex
+- Branch: `fix/parser-hardening-boursobank`
+- Completed:
+  - Marked non-statement PDFs in pipeline validation metadata (`statement_type`) using `classify_statement_type`, then excluded non-statement validations from reconciliation rollups.
+  - Tightened Boursobank sign inference to strict column-first behavior (removed transfer keyword positive fallback), kept explicit refund overrides, and added skip-warning path for ambiguous amount positioning.
+  - Added targeted regression coverage for COM exclusion and Boursobank transfer-sign edge cases (`VIRSEPA`/`VIRINST`) that previously drove large reconciliation deltas.
+  - Re-ran full corpus benchmark and reduced Boursobank from `83` uncheckable to `79` pass / `2` fail with `0` COM files present in reconciliation info items.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/finance-boursobank-final-kg5xSH FINANCE_FX_AUTO_FETCH=false FINANCE_FX_CACHE_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/fx_rates_history.parquet .venv/bin/python -m finance_tooling`: pass
+- Open items:
+  - Two Boursobank files still fail reconciliation with small `2.00` diffs (`2020-10` and `2020-11`), likely from minor OCR/rounding or one-row sign ambiguity in legacy layout.
+  - HSBC remains the dominant unresolved reconciliation source (`69` fail / `2` pass) and now drives most remaining warning volume.
+- Next action:
+  - Add fixture-backed handling for the two residual 2020 Boursobank `2.00`-diff statements, then shift focus to HSBC outlier reduction.
+
+### 2026-02-25 - codex
 - Branch: `fix/parser-hardening-labanquepostale`
 - Completed:
   - Investigated and fixed two LaBanquePostale 2025 reconciliation failures by hardening sign inference for `REMBOURSEMENT` credits and removing inline/continuation `Virement depuis La Banque Postale` hint noise from descriptions.
@@ -114,21 +132,3 @@ Use this template:
   - LBP continuation filtering currently uses heuristic noise markers; if new statement layouts introduce additional headers/footers, marker tuning may be needed.
 - Next action:
   - Re-run full real-corpus ingestion and review `completeness_report.json` to confirm LaBanquePostale CCP files move from uncheckable to pass while fee statements are excluded from reconciliation counts.
-
-### 2026-02-25 - codex
-- Branch: `fix/hsbc-csv-import-main`
-- Completed:
-  - Added optional HSBC CSV source support via `FINANCE_HSBC_CSV_PATH` and CSV discovery for file/folder inputs.
-  - Implemented typed HSBC CSV importer (`hsbc_csv`) that normalizes transactions into the canonical model and emits parse warnings for malformed input rows.
-  - Integrated cross-source conflict handling in pipeline to prevent duplicate insertion between PDF and CSV extracts and to deterministically prefer CSV rows on clashes.
-  - Added summary diagnostics for CSV ingestion and cross-source resolution (`hsbc_csv_files_scanned`, duplicate/clash drop counts).
-  - Updated README and added tests for config wiring, CSV importer behavior, and PDF-vs-CSV duplicate/clash resolution.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - HSBC CSV conflict resolution currently uses a heuristic description similarity threshold; edge-case tuning may be needed against additional real-world samples.
-  - Cross-source resolution currently prefers CSV for HSBC rows only; if additional bank CSV imports are added, policy should be generalized.
-- Next action:
-  - Run full real-corpus ingestion with `FINANCE_HSBC_CSV_PATH` enabled and review clash warnings to calibrate the similarity heuristic.

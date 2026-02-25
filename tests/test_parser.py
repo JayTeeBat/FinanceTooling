@@ -183,13 +183,43 @@ def test_hsbc_parser_parses_compact_date_rows() -> None:
 def test_boursobank_parser_parses_lines_without_space_after_date() -> None:
     parser = BoursobankParser()
     text = """
-    17/09/2020VIR INST JACQUES THOMAZO 17/09/2020 800,00
+    17/09/2020VIR INST JACQUES THOMAZO 17/09/2020          800,00
     """
 
     result = parser.parse(Path("Releve-compte-30-09-2020.pdf"), text)
 
     assert len(result.transactions) == 1
-    assert result.transactions[0].amount_native > 0
+    assert result.transactions[0].amount_native < 0
+
+
+def test_boursobank_parser_uses_column_position_for_sign_and_balance_markers() -> None:
+    parser = BoursobankParser()
+    text = """
+    MOUVEMENTS EN EUR
+    SOLDEAU: 31/12/2022 1.000,00
+    02/01/2023 PRLVSEPAOrangeSA                   02/01/2023 19,99
+    03/01/2023 VIRSEPAEMPLOYEUR                   03/01/2023          1.200,00
+    NouveausoldeenEUR: 2.180,01
+    """
+
+    result = parser.parse(Path("Boursobank_statement_2023.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-19.99"),
+        Decimal("1200.00"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_registry_selects_boursobank_when_statement_mentions_revolut_counterparty() -> None:
+    parser = select_parser(
+        Path("Boursobank Marion Releve-compte-30-09-2022.pdf"),
+        "BOURSORAMA BANQUE ... CARTE31/08/22Revolut**3056* ... MOUVEMENTS EN EUR",
+    )
+
+    assert parser.name == "boursobank"
 
 
 def test_hsbc_parser_emits_warning_for_reconciliation_mismatch() -> None:
