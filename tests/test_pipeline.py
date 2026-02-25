@@ -144,6 +144,7 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["statement_reconciliation_pass_ratio"] is None
     assert summary_payload["statement_reconciliation_median_abs_difference"] is None
     assert summary_payload["statement_reconciliation_hsbc_median_abs_difference"] is None
+    assert summary_payload["hsbc_period_parse_variant_match_count"] == 0
     assert summary_payload["parser_low_confidence_file_count"] == 2
     assert len(summary_payload["parser_selection_diagnostics"]) == 2
 
@@ -165,6 +166,26 @@ def test_parse_hsbc_statement_period_parses_inclusive_window() -> None:
     assert period is not None
     assert period[0] == date(2017, 3, 30)
     assert period[1] == date(2017, 4, 29)
+
+
+def test_parse_hsbc_statement_period_parses_compact_to_spacing_variant() -> None:
+    full_text = "Account Summary 30 Januaryto 28 February 2017 Branch Identifier Code"
+
+    period = _parse_hsbc_statement_period(full_text)
+
+    assert period is not None
+    assert period[0] == date(2017, 1, 30)
+    assert period[1] == date(2017, 2, 28)
+
+
+def test_parse_hsbc_statement_period_parses_start_year_and_compact_end_year() -> None:
+    full_text = "Account Summary 30 December 2016 to 29 January2017 Branch Identifier Code"
+
+    period = _parse_hsbc_statement_period(full_text)
+
+    assert period is not None
+    assert period[0] == date(2016, 12, 30)
+    assert period[1] == date(2017, 1, 29)
 
 
 def test_assign_hsbc_csv_transactions_reassigns_boundary_day() -> None:
