@@ -1,0 +1,3 @@
+Opening Balance 100.00
+09 Mar 2024 CARD SHOP 10.00 90.00
+Closing Balance 95.00

@@ -30,14 +30,19 @@ uv run pre-commit run --all-files
 
 ## Statement Workflow
 
-By default, the workflow scans:
+The workflow reads environment variables from `.env` in the repository root (if present),
+and falls back to process environment variables.
 
-`/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw`
-
-You can override all paths with environment variables:
+Minimum required variables:
 
 ```bash
 export FINANCE_STATEMENTS_PATH="/path/to/statements"
+export FINANCE_PROCESSED_PATH="/path/to/processed"
+```
+
+Optional overrides:
+
+```bash
 export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
 export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
 export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"
@@ -48,6 +53,10 @@ export FINANCE_FX_AUTO_FETCH="true"
 
 uv run python -m finance_tooling
 ```
+
+`FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required.
+Per-file output env vars remain optional; when omitted, artifacts are written under
+`FINANCE_PROCESSED_PATH`.
 
 The workflow recursively scans statement PDFs, uses bank-specific parsers
 (LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies
@@ -70,3 +79,17 @@ src/
   finance_tooling/      # package modules and parser plugins
 tests/
 ```
+
+## Parser Conformance Fixtures
+
+Parser conformance samples live under:
+
+`tests/fixtures/parser_samples/synthetic_cases.json`
+
+The conformance harness (`tests/test_parser_conformance.py`) validates parser-level
+transaction count, sign distribution, and reconciliation status from fixture cases.
+Add new entries as parser behavior is expanded or when snapshot text extracted from
+real PDFs is available.
+
+Parser routing uses score-based selection (`match_score`) with diagnostics captured
+in `run_summary.json` under `parser_selection_diagnostics`.

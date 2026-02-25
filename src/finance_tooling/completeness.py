@@ -254,6 +254,18 @@ def _build_reconciliation_summary(validations: list[StatementValidation]) -> dic
         if validation.severity == "info"
     ]
     checkable_count = len(checkable)
+    abs_differences = [
+        abs(validation.difference) for validation in checkable if validation.difference is not None
+    ]
+    abs_difference_buckets = _abs_difference_buckets(abs_differences)
+    median_abs_difference = _median_decimal(abs_differences)
+    mean_abs_difference = (
+        (sum(abs_differences, start=Decimal("0")) / Decimal(len(abs_differences)))
+        if abs_differences
+        else None
+    )
+
+    by_bank_abs_difference = _by_bank_abs_difference(checkable)
 
     return {
         "files_with_validation_record_count": len(unique_validations),
@@ -280,6 +292,10 @@ def _build_reconciliation_summary(validations: list[StatementValidation]) -> dic
         "warning_items": warning_items,
         "info_items": info_items,
         "uncheckable_reasons": dict(sorted(uncheckable_reasons.items())),
+        "abs_difference_buckets": abs_difference_buckets,
+        "median_abs_difference": _decimal_or_none(median_abs_difference),
+        "mean_abs_difference": _decimal_or_none(mean_abs_difference),
+        "by_bank_abs_difference": by_bank_abs_difference,
     }
 
 
@@ -303,3 +319,60 @@ def _decimal_or_none(value: Decimal | None) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _abs_difference_buckets(differences: list[Decimal]) -> dict[str, int]:
+    buckets: Counter[str] = Counter()
+    for value in differences:
+        abs_value = abs(value)
+        if abs_value <= Decimal("0.01"):
+            buckets["le_0_01"] += 1
+        elif abs_value <= Decimal("10"):
+            buckets["gt_0_01_le_10"] += 1
+        elif abs_value <= Decimal("100"):
+            buckets["gt_10_le_100"] += 1
+        elif abs_value <= Decimal("1000"):
+            buckets["gt_100_le_1000"] += 1
+        else:
+            buckets["gt_1000"] += 1
+
+    ordered = (
+        "le_0_01",
+        "gt_0_01_le_10",
+        "gt_10_le_100",
+        "gt_100_le_1000",
+        "gt_1000",
+    )
+    return {bucket: buckets.get(bucket, 0) for bucket in ordered}
+
+
+def _median_decimal(values: list[Decimal]) -> Decimal | None:
+    if not values:
+        return None
+    sorted_values = sorted(values)
+    mid = len(sorted_values) // 2
+    if len(sorted_values) % 2 == 1:
+        return sorted_values[mid]
+    return (sorted_values[mid - 1] + sorted_values[mid]) / Decimal("2")
+
+
+def _by_bank_abs_difference(checkable: list[StatementValidation]) -> list[dict[str, object]]:
+    grouped: dict[str, list[Decimal]] = {}
+    for validation in checkable:
+        if validation.difference is None:
+            continue
+        grouped.setdefault(validation.bank, []).append(abs(validation.difference))
+
+    rows: list[dict[str, object]] = []
+    for bank, differences in sorted(grouped.items()):
+        mean_abs_difference = sum(differences, start=Decimal("0")) / Decimal(len(differences))
+        rows.append(
+            {
+                "bank": bank,
+                "checkable_count": len(differences),
+                "median_abs_difference": _decimal_or_none(_median_decimal(differences)),
+                "mean_abs_difference": _decimal_or_none(mean_abs_difference),
+                "abs_difference_buckets": _abs_difference_buckets(differences),
+            }
+        )
+    return rows

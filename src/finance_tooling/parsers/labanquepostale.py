@@ -8,7 +8,12 @@ from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import ParserOutput, StatementValidation
+from finance_tooling.parsers.base import (
+    BaseStatementParser,
+    NormalizeConfig,
+    ParsedRow,
+    ValidationPayload,
+)
 from finance_tooling.parsers.common import parse_decimal
 
 _DAY_MONTH_PATTERN = re.compile(r"(0[1-9]|[12][0-9]|3[01])[/\-](0[1-9]|1[012])")
@@ -36,54 +41,69 @@ _CREDIT_HINTS = (
 )
 
 
-class LaBanquePostaleParser:
+class LaBanquePostaleParser(BaseStatementParser):
     """Parser for La Banque Postale monthly account statements."""
 
     name = "labanquepostale"
     bank = "LaBanquePostale"
 
-    def can_handle(self, file_path: Path, first_page_text: str) -> bool:
-        marker = f"{file_path.name} {first_page_text}".lower()
-        return (
-            "labanquepostale" in marker
-            or "la banque postale" in marker
-            or "releve_ccp" in marker
-            or "releve de votre ccp" in marker
-        )
+    def _filename_markers(self) -> tuple[str, ...]:
+        return ("labanquepostale", "releve_ccp", "ccp")
 
-    def parse(self, file_path: Path, full_text: str) -> ParserOutput:
+    def _content_markers(self) -> tuple[str, ...]:
+        return ("la banque postale", "releve de votre ccp")
+
+    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
         year = self._resolve_year(file_path.name)
-        warnings: list[str] = []
-        transactions: list[Transaction] = []
+        rows: list[ParsedRow] = []
 
         matches = _TRANSACTION_PATTERN.findall(f"\n{full_text}")
         for match in matches:
             day, month = _DAY_MONTH_PATTERN.findall(match[0])[0]
-            amount = parse_decimal(match[2])
-            if amount is None:
-                continue
-
-            # By legacy behavior, operation amounts are spending by default.
-            amount = amount * Decimal("-1")
-            if any(hint.lower() in match[1].lower() for hint in _CREDIT_HINTS):
-                amount = amount * Decimal("-1")
-
             details = match[3] if len(match) > 3 else ""
             description = " ".join([match[1].strip(), details.strip()]).strip()
-
-            transactions.append(
-                Transaction(
-                    booking_date=date(year, int(month), int(day)),
-                    description=description or "Unknown transaction",
-                    amount_native=amount,
-                    currency="EUR",
-                    source_file=file_path,
-                    bank=self.bank,
-                    parser=self.name,
+            rows.append(
+                ParsedRow(
+                    raw_date=f"{day}/{month}/{year}",
+                    raw_description=description,
+                    raw_amount=match[2],
+                    raw_currency_hint="EUR",
                 )
             )
 
+        return rows, []
+
+    def _normalize_config(self) -> NormalizeConfig:
+        return NormalizeConfig(
+            sign_mode="debit_default_with_positive_hints",
+            default_currency="EUR",
+            positive_hints=_CREDIT_HINTS,
+            description_fallback="Unknown transaction",
+        )
+
+    def _build_validation_payload(
+        self,
+        file_path: Path,
+        full_text: str,
+        transaction_sum: Decimal,
+    ) -> ValidationPayload:
+        del file_path, full_text, transaction_sum
+        return ValidationPayload(
+            mode="uncheckable",
+            opening_balance=None,
+            closing_balance=None,
+            reason="missing_opening_or_closing",
+            severity="info",
+        )
+
+    def _post_normalization_warnings(
+        self,
+        file_path: Path,
+        full_text: str,
+        transactions: list[Transaction],
+    ) -> list[str]:
         transaction_sum = sum((tx.amount_native for tx in transactions), start=Decimal("0"))
+        warnings: list[str] = []
         total_matches = _TOTAL_PATTERN.findall(full_text)
         if total_matches and transactions:
             debit = parse_decimal(total_matches[-1][0])
@@ -95,22 +115,7 @@ class LaBanquePostaleParser:
                         f"{file_path.name}: totals mismatch expected {expected} "
                         f"but parsed {transaction_sum}"
                     )
-
-        validation = StatementValidation(
-            source_file=file_path,
-            bank=self.bank,
-            parser=self.name,
-            statement_type="statement",
-            opening_balance=None,
-            closing_balance=None,
-            transaction_sum=transaction_sum,
-            expected_closing_balance=None,
-            difference=None,
-            status="uncheckable",
-            reason="missing_opening_or_closing",
-            severity="info",
-        )
-        return ParserOutput(transactions=transactions, warnings=warnings, validation=validation)
+        return warnings
 
     @staticmethod
     def _resolve_year(filename: str) -> int:

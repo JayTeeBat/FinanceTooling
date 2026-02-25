@@ -158,3 +158,28 @@ def test_build_completeness_report_includes_reconciliation_kpis() -> None:
     assert reconciliation["counts_by_severity"] == {"info": 1, "warning": 1}
     assert len(reconciliation["warning_items"]) == 1
     assert len(reconciliation["info_items"]) == 1
+    assert reconciliation["abs_difference_buckets"] == {
+        "le_0_01": 0,
+        "gt_0_01_le_10": 1,
+        "gt_10_le_100": 0,
+        "gt_100_le_1000": 0,
+        "gt_1000": 0,
+    }
+    assert reconciliation["median_abs_difference"] == 1.0
+    assert reconciliation["mean_abs_difference"] == 1.0
+    bank_rows = cast(list[dict[str, Any]], reconciliation["by_bank_abs_difference"])
+    assert bank_rows == [
+        {
+            "bank": "HSBC",
+            "checkable_count": 1,
+            "median_abs_difference": 1.0,
+            "mean_abs_difference": 1.0,
+            "abs_difference_buckets": {
+                "le_0_01": 0,
+                "gt_0_01_le_10": 1,
+                "gt_10_le_100": 0,
+                "gt_100_le_1000": 0,
+                "gt_1000": 0,
+            },
+        }
+    ]

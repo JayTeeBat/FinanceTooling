@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 INPUT_PATH_ENV = "FINANCE_STATEMENTS_PATH"
+PROCESSED_PATH_ENV = "FINANCE_PROCESSED_PATH"
 OUTPUT_PATH_ENV = "FINANCE_DASHBOARD_PATH"
 MASTER_PARQUET_ENV = "FINANCE_MASTER_PARQUET_PATH"
 BASE_CURRENCY_ENV = "FINANCE_BASE_CURRENCY"
@@ -14,8 +15,7 @@ EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
-
-DEFAULT_INPUT_PATH = Path("/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw")
+DOTENV_PATH = Path(".env")
 
 
 @dataclass(frozen=True)
@@ -54,28 +54,61 @@ def _parse_bool(raw_value: str | None, *, default: bool) -> bool:
     raise ValueError(f"Invalid boolean value: {raw_value}")
 
 
+def _load_dotenv(path: Path = DOTENV_PATH) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", maxsplit=1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if (value.startswith('"') and value.endswith('"')) or (
+            value.startswith("'") and value.endswith("'")
+        ):
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
 def load_settings_from_env() -> Settings:
     """Load workflow settings from environment variables."""
-    input_path = _resolve_path_from_env(INPUT_PATH_ENV) or DEFAULT_INPUT_PATH
+    _load_dotenv()
+    input_path = _resolve_path_from_env(INPUT_PATH_ENV)
+    if input_path is None:
+        raise ValueError(f"Missing required environment variable: {INPUT_PATH_ENV}")
     if not input_path.exists() or not input_path.is_dir():
         raise ValueError(f"Input path does not exist or is not a directory: {input_path}")
 
-    output_path = _resolve_path_from_env(OUTPUT_PATH_ENV) or (input_path / "finance_dashboard.html")
+    processed_dir = _resolve_path_from_env(PROCESSED_PATH_ENV)
+    if processed_dir is None:
+        raise ValueError(f"Missing required environment variable: {PROCESSED_PATH_ENV}")
+    output_path = _resolve_path_from_env(OUTPUT_PATH_ENV) or (
+        processed_dir / "finance_dashboard.html"
+    )
     master_parquet_path = _resolve_path_from_env(MASTER_PARQUET_ENV) or (
-        input_path / "transactions_master.parquet"
+        processed_dir / "transactions_master.parquet"
     )
     export_csv_path = _resolve_path_from_env(EXPORT_CSV_PATH_ENV) or (
-        input_path / "transactions_normalized.csv"
+        processed_dir / "transactions_normalized.csv"
     )
     export_json_path = _resolve_path_from_env(EXPORT_JSON_PATH_ENV) or (
-        input_path / "transactions_normalized.json"
+        processed_dir / "transactions_normalized.json"
     )
-    summary_json_path = input_path / "run_summary.json"
-    completeness_json_path = input_path / "completeness_report.json"
+    summary_json_path = processed_dir / "run_summary.json"
+    completeness_json_path = processed_dir / "completeness_report.json"
 
     base_currency = os.environ.get(BASE_CURRENCY_ENV, "EUR").strip().upper() or "EUR"
     fx_cache_path = _resolve_path_from_env(FX_CACHE_PATH_ENV) or (
-        input_path / "fx_rates_history.parquet"
+        processed_dir / "fx_rates_history.parquet"
     )
     fx_auto_fetch = _parse_bool(os.environ.get(FX_AUTO_FETCH_ENV), default=True)
 

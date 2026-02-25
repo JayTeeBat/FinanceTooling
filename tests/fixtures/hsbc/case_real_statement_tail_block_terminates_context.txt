@@ -1,0 +1,8 @@
+Opening Balance 100.00
+02 Mar 24 VIS RETAILER NAME
+LONDON 10.00 90.00
+02 Mar 24 BALANCECARRIEDFORWARD 90.00
+Information about the Financial Services Compensation Scheme
+Credit Interest is calculated daily on the cleared credit 2.75
+Monthly cap on unarranged overdraft charges 19.90
+Closing Balance 90.00
