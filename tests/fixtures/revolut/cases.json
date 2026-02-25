@@ -1,0 +1,50 @@
+[
+  {
+    "id": "revolut_balance_delta_signs_pass",
+    "description": "Running-balance deltas control sign inference even when description hints would disagree.",
+    "file_name": "Revolut account-statement_2025.pdf",
+    "text_file": "case_balance_delta_signs_pass.txt",
+    "expected_transaction_amounts": ["1.00", "20.00", "-30.00"],
+    "expected_transaction_count": 3,
+    "expected_transaction_sum": "-9.00",
+    "expected_opening_balance": "100.00",
+    "expected_closing_balance": "91.00",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "revolut_sept_and_section_boundaries_pass",
+    "description": "Parser accepts Sept month token and excludes reverted/pockets sections.",
+    "file_name": "Revolut account-statement_2025.pdf",
+    "text_file": "case_sept_and_section_boundaries_pass.txt",
+    "expected_transaction_amounts": ["206.00"],
+    "expected_transaction_count": 1,
+    "expected_transaction_sum": "206.00",
+    "expected_opening_balance": "583.46",
+    "expected_closing_balance": "789.46",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "revolut_missing_summary_uncheckable",
+    "description": "When opening/closing balances are absent, parser still emits rows but marks reconciliation uncheckable.",
+    "file_name": "Revolut account-statement_2019.pdf",
+    "text_file": "case_missing_summary_uncheckable.txt",
+    "expected_transaction_amounts": ["-4.90", "20.00"],
+    "expected_transaction_count": 2,
+    "expected_transaction_sum": "15.10",
+    "expected_opening_balance": null,
+    "expected_closing_balance": null,
+    "expected_validation_status": "uncheckable",
+    "expected_validation_severity": "info",
+    "expected_validation_reason": "missing_opening_or_closing",
+    "expected_difference": null,
+    "expected_warning_substrings": []
+  }
+]

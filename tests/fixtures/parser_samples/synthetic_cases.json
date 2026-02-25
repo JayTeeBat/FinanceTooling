@@ -33,11 +33,11 @@
     "name": "revolut_basic",
     "parser": "revolut",
     "file_name": "account-statement_2019.pdf",
-    "input_text": "19 Jun 2019 PayPlug €4.90 €4.90\n24 Nov 2019 International Transfer to John €90.00 €0.45",
+    "input_text": "Account transactions from 1 January 2019 to 31 December 2019\n19 Jun 2019 PayPlug €4.90 €95.10\n24 Jun 2019 Payment from John €20.00 €115.10",
     "expected_transaction_count": 2,
     "expected_validation_status": "uncheckable",
-    "expected_positive_count": 0,
-    "expected_negative_count": 2
+    "expected_positive_count": 1,
+    "expected_negative_count": 1
   },
   {
     "name": "labanquepostale_basic",

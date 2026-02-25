@@ -60,6 +60,9 @@ When ending a session, update `## Hand-Off Log` with one new entry containing:
 - Known issues / TODOs
 - Recommended next action
 
+Retention rule: keep only the latest 3 entries in `## Hand-Off Log`. When
+adding a new entry, remove older entries beyond the newest three.
+
 Use this template:
 
 ```text
@@ -97,6 +100,35 @@ Use this template:
   - Run full real-corpus ingestion with `FINANCE_HSBC_CSV_PATH` enabled and review clash warnings to calibrate the similarity heuristic.
 
 ### 2026-02-25 - codex
+- Branch: `FinanceTooling-parser-hardening-revolut`
+- Completed:
+  - Hardened `RevolutParser` to scope extraction to `Account transactions`
+    sections, excluding `Reverted` and `Personal and Group Pockets` sections.
+  - Switched Revolut sign inference to running-balance delta logic with fallback
+    behavior, and added Revolut-specific date normalization for `Sept` tokens.
+  - Added fixture-driven Revolut regression coverage under
+    `tests/fixtures/revolut/` and `tests/test_revolut_fixtures.py` for balance
+    delta signs, section boundaries, and missing-summary behavior.
+  - Updated existing Revolut synthetic/parser tests to align with
+    balance-driven sign expectations.
+  - Re-ran full workflow on real corpus and confirmed reconciliation deltas:
+    Revolut moved to `14` pass (checkable) with `median_abs_difference: 0.0`
+    and no Revolut reconciliation warnings.
+- Checks:
+  - `uv run ruff format .`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed uv run python -m finance_tooling`: pass
+- Open items:
+  - One low-confidence routing case remains where
+    `Boursobank Marion Releve-compte-30-09-2022.pdf` is selected as `revolut`
+    and recorded as uncheckable under Revolut status buckets.
+- Next action:
+  - Tighten parser scoring/routing tie-break behavior to prevent known
+    Boursobank-vs-Revolut misclassification on low-confidence files.
+
+### 2026-02-25 - codex
 - Branch: `fix/parser-hardening`
 - Completed:
   - Hardened HSBC non-transaction filtering with explicit legal/footer noise
@@ -128,70 +160,3 @@ Use this template:
   - Add fixture-driven HSBC rules for salary/transfer/reversal block semantics
     in 2017/2019/2021 outlier layouts, then rerun pipeline and target HSBC
     severe fail reduction below `10` in the next pass.
-
-### 2026-02-25 - codex
-- Branch: `fix/parser-hardening`
-- Completed:
-  - Hardened HSBC continuation parsing to avoid sticky header-context
-    carry-over and prevent amount-bearing footer/noise lines from being parsed
-    as transactions.
-  - Refined HSBC sign inference so CR/DR markers from fallback context no
-    longer override prefixed continuation rows; added controlled inherited
-    marker support for non-prefixed wrapped continuation lines.
-  - Added HSBC parser regressions in `tests/test_parser.py` covering:
-    CR-header marker bleed prevention, post-block amount-noise rejection, and
-    wrapped CR marker inheritance behavior.
-  - Ran full ingestion pipeline twice against real corpus and measured
-    reconciliation deltas.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `uv run python -m finance_tooling`: pass
-- Open items:
-  - HSBC severe reconciliation failures (`|diff| > 1000`) improved but remain:
-    `15` (down from `17`); total severe failures now `26` (down from `28`).
-  - HSBC reconciliation remains broadly poor (`71` failed / `71` checkable for
-    HSBC; overall run still `83` failed / `85` checkable), with largest
-    remaining outliers including 2019-03 and 2021-05 statements.
-  - One low-confidence parser route persists:
-    `Boursobank Marion Releve-compte-30-09-2022.pdf` selected as Revolut.
-- Next action:
-  - Add fixture-driven HSBC handling for large outlier layouts (notably
-    2019-03/2021-05) with line-pattern rules for wrapped reversal/transfer
-    blocks, then rerun full pipeline and target HSBC severe fail count to zero.
-
-### 2026-02-24 - codex
-- Branch: `fix/parser-hardening`
-- Completed:
-  - Removed legacy parser routing API (`can_handle`) and standardized selection
-    on confidence scoring (`match_score`) with deterministic threshold/tie
-    behavior.
-  - Added parser routing diagnostics (`ParserSelection` /
-    `ParserScoreItem`) and integrated per-file selection diagnostics plus
-    low-confidence counts into workflow warnings and `run_summary.json`.
-  - Harmonized parser row normalization flow across bank parsers and improved
-    Revolut sign inference with hint-priority default-debit behavior.
-  - Added/updated tests for parser scoring, routing diagnostics, sign inference,
-    and pipeline diagnostics integration.
-  - Ran full ingestion pipeline against real corpus and reviewed resulting
-    completeness/reconciliation diagnostics.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `uv run python -m finance_tooling`: pass
-- Open items:
-  - Reconciliation quality remains poor in real run: `83` failed / `85`
-    checkable statements (pass ratio `0.024`), concentrated in HSBC and Revolut.
-  - Statement coverage gaps remain (`16` statement PDFs with zero parsed rows):
-    mostly HSBC (`14`) plus two Boursobank files.
-  - One low-confidence parser route detected:
-    `Boursobank Marion Releve-compte-30-09-2022.pdf` selected as Revolut
-    (score `2`, threshold `2`).
-- Next action:
-  - Implement fixture-driven HSBC parser hardening for the identified missing/
-    failing years first, then re-run full pipeline and verify reconciliation
-    deltas.

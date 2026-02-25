@@ -1,0 +1,9 @@
+Balance summary
+Product Opening balance Money out Money in Closing balance
+Account (E-Money) £100.00 £30.00 £21.00 £91.00
+
+Account transactions from 1 January 2025 to 31 December 2025
+Date Description Money out Money in Balance
+4 Jan 2025 Withdrawing savings £1.00 £101.00
+5 Jan 2025 From GBP LCL savings £20.00 £121.00
+6 Jan 2025 To GBP LCL savings £30.00 £91.00

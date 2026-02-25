@@ -1,0 +1,15 @@
+Balance summary
+Product Opening balance Money out Money in Closing balance
+Account (E-Money) €583.46 €0.00 €206.00 €789.46
+
+Account transactions from 1 January 2025 to 31 December 2025
+Date Description Money out Money in Balance
+1 Sept 2025 Payment from ALICE EXAMPLE €206.00 €789.46
+
+Reverted from 1 January 2025 to 31 December 2025
+Start date Description Money out Money in
+20 Feb 2025 To Michel Letellier €14.00
+
+Personal and Group Pockets transactions from 1 January 2025 to 31 December 2025
+Date Description Money out Money in Balance
+12 Mar 2025 To pocket EUR Epargne from EUR €1,000.00 €1,000.00
