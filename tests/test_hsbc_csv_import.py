@@ -10,7 +10,7 @@ def test_load_hsbc_csv_transactions_parses_rows_and_skips_zero_amount(tmp_path: 
         "\n".join(
             [
                 "Date,Payee,Memo,Amount,Account number",
-                "21/03/2022,Salary,Monthly payroll,1200.00,40-22-30 31492861",
+                "21 Mar 2022,Salary,Monthly payroll,1200.00,40-22-30 31492861",
                 "22/03/2022,Opening  this month,,0,40-22-30 31492861",
                 "23/03/2022,Card Payment,, -12.34,40-22-30 31492861",
             ]
@@ -54,3 +54,22 @@ def test_load_hsbc_csv_transactions_warns_for_missing_columns(tmp_path: Path) ->
     assert result.transactions == []
     assert len(result.warnings) == 1
     assert "missing required columns" in result.warnings[0]
+
+
+def test_load_hsbc_csv_transactions_accepts_slash_date_format(tmp_path: Path) -> None:
+    csv_path = tmp_path / "hsbc_slash.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "Date,Payee,Memo,Amount",
+                "21/03/2022,Salary,Monthly payroll,1200.00",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = load_hsbc_csv_transactions([csv_path])
+
+    assert result.warnings == []
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("1200.00")

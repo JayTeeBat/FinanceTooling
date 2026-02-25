@@ -184,6 +184,7 @@ def test_build_completeness_report_includes_reconciliation_kpis() -> None:
         }
     ]
 
+
 def test_build_completeness_report_excludes_files_without_validation_record() -> None:
     source_files = [
         Path("/data/LaBanquePostale releve_CCP_20241224.pdf"),

@@ -66,9 +66,20 @@ using transaction booking dates (with previous business-day fallback), upserts i
 a canonical parquet store, and generates dashboard + exports.
 
 When `FINANCE_HSBC_CSV_PATH` is set, the workflow also imports HSBC CSV files and
-resolves PDF-vs-CSV overlap before upsert. Resolution policy is deterministic:
-for matching date/amount/currency/account tuples, HSBC CSV rows take precedence.
-Potential clashes are dropped from PDF side and logged in run warnings/summary.
+merges HSBC sources by statement month (`YYYY-MM-DD` in file names). For months where
+both HSBC CSV and PDF transactions exist, source selection is adaptive: the pipeline
+compares reconciliation error against PDF opening/closing balances and keeps the source
+with lower absolute mismatch. HSBC PDF parsing is used as fallback when no monthly CSV
+is available, and a CSV-only month is retained when no matching PDF exists.
+
+Before overlap selection, HSBC CSV transactions are remapped to statement months using
+PDF statement periods (booking date in statement `start -> end` window). This prevents
+month-boundary spillover from CSV export file boundaries.
+
+For each HSBC month with a matching PDF statement, opening/closing balances extracted
+from the PDF are used to validate the selected transaction set (CSV or PDF fallback).
+Balance mismatches are emitted as warnings and included in run summary reconciliation
+metrics.
 
 ## Outputs
 
