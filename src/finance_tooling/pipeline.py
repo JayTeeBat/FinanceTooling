@@ -29,9 +29,16 @@ from finance_tooling.store import upsert_transactions
 
 _HSBC_STATEMENT_DATE_PATTERN = re.compile(r"(?:19|20)\d{2}-\d{2}-\d{2}")
 _HSBC_STATEMENT_PERIOD_PATTERN = re.compile(
-    r"(\d{1,2}\s+[A-Za-z]+)\s+to\s+(\d{1,2}\s+[A-Za-z]+)\s+(\d{4})",
+    r"(?P<start_day>\d{1,2})\s+"
+    r"(?P<start_month>[A-Za-z]+)"
+    r"(?:\s*(?P<start_year>\d{4}))?"
+    r"\s*to\s*"
+    r"(?P<end_day>\d{1,2})\s+"
+    r"(?P<end_month>[A-Za-z]+)"
+    r"\s*(?P<end_year>\d{4})",
     re.IGNORECASE,
 )
+_HSBC_STATEMENT_PERIOD_VARIANT_PATTERN = re.compile(r"[A-Za-z]+to|[A-Za-z]+\d{4}")
 
 
 def _apply_fx_and_mtime(
@@ -107,14 +114,17 @@ def _parse_hsbc_statement_period(full_text: str) -> tuple[date, date] | None:
     if match is None:
         return None
 
-    start_day_month = match.group(1)
-    end_day_month = match.group(2)
-    end_year = int(match.group(3))
+    start_day = match.group("start_day")
+    start_month = match.group("start_month")
+    start_year = match.group("start_year")
+    end_day = match.group("end_day")
+    end_month = match.group("end_month")
+    end_year = int(match.group("end_year"))
 
     end_date: date | None = None
     for fmt in ("%d %B %Y", "%d %b %Y"):
         try:
-            end_date = datetime.strptime(f"{end_day_month} {end_year}", fmt).date()
+            end_date = datetime.strptime(f"{end_day} {end_month} {end_year}", fmt).date()
             break
         except ValueError:
             continue
@@ -122,11 +132,12 @@ def _parse_hsbc_statement_period(full_text: str) -> tuple[date, date] | None:
         return None
 
     start_date: date | None = None
-    for candidate_year in (end_year, end_year - 1):
+    candidate_years = [int(start_year)] if start_year is not None else [end_year, end_year - 1]
+    for candidate_year in candidate_years:
         for fmt in ("%d %B %Y", "%d %b %Y"):
             try:
                 candidate = datetime.strptime(
-                    f"{start_day_month} {candidate_year}",
+                    f"{start_day} {start_month} {candidate_year}",
                     fmt,
                 ).date()
             except ValueError:
@@ -140,6 +151,11 @@ def _parse_hsbc_statement_period(full_text: str) -> tuple[date, date] | None:
     if start_date is None:
         return None
     return start_date, end_date
+
+
+def _hsbc_statement_period_uses_spacing_variant(full_text: str) -> bool:
+    flattened = " ".join(full_text.split())
+    return _HSBC_STATEMENT_PERIOD_VARIANT_PATTERN.search(flattened) is not None
 
 
 def _hsbc_pdf_paths_by_date(source_files: list[Path]) -> dict[str, Path]:
@@ -537,6 +553,7 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     parser_selection_diagnostics: list[dict[str, object]] = []
     parser_low_confidence_file_count = 0
     hsbc_csv_files_scanned = 0
+    hsbc_period_parse_variant_match_count = 0
     hsbc_statement_periods_by_date: dict[str, tuple[date, date]] = {}
     hsbc_merge_metrics = {
         "hsbc_csv_statement_replaced_count": 0,
@@ -599,6 +616,8 @@ def run_workflow(settings: Settings) -> WorkflowResult:
                 statement_period = _parse_hsbc_statement_period(extracted_text.full_text)
                 if statement_date is not None and statement_period is not None:
                     hsbc_statement_periods_by_date[statement_date] = statement_period
+                    if _hsbc_statement_period_uses_spacing_variant(extracted_text.full_text):
+                        hsbc_period_parse_variant_match_count += 1
         except Exception as exc:
             files_failed += 1
             warnings.append(f"Failed to process {pdf_path}: {exc}")
@@ -713,6 +732,7 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "hsbc_period_remap_unassigned_csv_tx_count": hsbc_merge_metrics[
                 "hsbc_period_remap_unassigned_csv_tx_count"
             ],
+            "hsbc_period_parse_variant_match_count": hsbc_period_parse_variant_match_count,
             "hsbc_selection_diagnostics": hsbc_selection_diagnostics,
             "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
