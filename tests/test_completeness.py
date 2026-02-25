@@ -183,3 +183,39 @@ def test_build_completeness_report_includes_reconciliation_kpis() -> None:
             },
         }
     ]
+
+
+def test_build_completeness_report_excludes_files_without_validation_record() -> None:
+    source_files = [
+        Path("/data/LaBanquePostale releve_CCP_20241224.pdf"),
+        Path("/data/LaBanquePostale Relevé de frais_20250102.pdf"),
+    ]
+    parsed = [_tx(source_files[0], "LaBanquePostale")]
+    validations = [
+        StatementValidation(
+            source_file=source_files[0],
+            bank="LaBanquePostale",
+            parser="labanquepostale",
+            statement_type="statement",
+            opening_balance=Decimal("100.00"),
+            closing_balance=Decimal("110.00"),
+            transaction_sum=Decimal("10.00"),
+            expected_closing_balance=Decimal("110.00"),
+            difference=Decimal("0.00"),
+            status="pass",
+            reason=None,
+            severity="none",
+        )
+    ]
+
+    report = build_completeness_report(
+        source_files=source_files,
+        parsed_transactions=parsed,
+        validations=validations,
+    )
+    reconciliation = cast(dict[str, Any], report["statement_reconciliation"])
+
+    assert reconciliation["files_with_validation_record_count"] == 1
+    assert reconciliation["checkable_file_count"] == 1
+    assert reconciliation["pass_count"] == 1
+    assert reconciliation["uncheckable_file_count"] == 0

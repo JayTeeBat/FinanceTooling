@@ -23,6 +23,84 @@ def test_labanquepostale_parser_extracts_rows() -> None:
     assert result.transactions[0].amount_native > 0
     assert result.transactions[1].amount_native > 0
     assert result.transactions[2].amount_native < 0
+    assert result.validation is not None
+    assert result.validation.status == "uncheckable"
+
+
+def test_labanquepostale_parser_builds_balance_validation_when_balances_present() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    Votre nouveau solde au 24/12/2024 + 1 200,00
+    Vos operations
+    Date Operation Debit Credit
+    800,00
+    Ancien solde au 22/11/2024
+    25/11 CREDIT CARTE BANCAIRE 50,00
+    26/11 ACHAT CB SUPERMARCHE 20,00
+    Nouveau solde au 24/12/2024 830,00
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20241224.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+    assert result.validation.opening_balance == Decimal("800.00")
+    assert result.validation.closing_balance == Decimal("830.00")
+
+
+def test_labanquepostale_parser_captures_multiline_continuations() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    25/09 VIREMENT INSTANTANE A                           400,00
+         PHILIPPE PENICAUT SUPERB Thomazo Location Fev 24
+    27/09 ACHAT CB AJC-ISM 26.09.23                       17,80
+         EUR 17,80 CARTE NO 885 SAMSUNG PAY
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20241224.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert "PHILIPPE PENICAUT SUPERB" in result.transactions[0].description
+    assert "EUR 17,80 CARTE NO 885 SAMSUNG PAY" in result.transactions[1].description
+
+
+def test_labanquepostale_parser_excludes_fee_statements_from_reconciliation() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    Relevé de frais
+    Periode Du 01/01/2024 au 31/12/2024
+    Total des frais payes 279,94
+    """
+
+    result = parser.parse(Path("LaBanquePostale Jacques Relevé de frais_20250102.pdf"), text)
+
+    assert result.transactions == []
+    assert result.validation is None
+
+
+def test_labanquepostale_parser_marks_remboursement_as_credit() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    20/01 4REMBOURSEMENT DE LA COTISATION FORMULE DE COMPTE 63,90
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20250124.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("63.90")
+
+
+def test_labanquepostale_parser_keeps_virement_a_negative() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    12/06 VIREMENT INSTANTANE A BOURSORAMA JACQUES Virement depuis La Banque Postale 200,00
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20250624.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-200.00")
 
 
 def test_registry_selects_lbp_parser() -> None:
