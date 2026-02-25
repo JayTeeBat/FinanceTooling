@@ -1,0 +1,241 @@
+version: 1
+defaults:
+  fallback_category: Uncategorized
+  fallback_subcategory: null
+
+taxonomy:
+  Transfers:
+    - Savings Transfer
+    - FX Exchange
+    - Wallet Transfer
+    - Bank Transfer
+  Shopping:
+    - General Retail
+    - Marketplace
+  Groceries:
+    - Supermarket
+  Dining:
+    - Restaurants
+  Fees:
+    - Bank Fees
+  Income:
+    - Salary
+    - Refunds & Interest
+    - Merchant Settlement
+  Housing:
+    - Housing Costs
+    - Council Tax
+  Transport:
+    - Mobility
+  Utilities:
+    - Telecom
+  Family:
+    - Childcare
+  Memberships:
+    - Charity & Membership
+
+rules:
+  - id: transfers.savings.to_gbp
+    priority: 220
+    category: Transfers
+    subcategory: Savings Transfer
+    match: contains
+    patterns:
+      - to gbp savings
+      - depositing savings
+      - new bike savings
+
+  - id: transfers.fx.exchange_to_gbp
+    priority: 210
+    category: Transfers
+    subcategory: FX Exchange
+    match: contains
+    patterns:
+      - exchanged to gbp
+      - exchange to gbp
+      - to gbp
+
+  - id: transfers.sepa.bank_transfer
+    priority: 205
+    category: Transfers
+    subcategory: Bank Transfer
+    match: regex
+    patterns:
+      - "\\bvirsepa\\b"
+      - "\\bvirsepac\\b"
+      - "\\bprlvsepa\\b"
+
+  - id: groceries.ocado
+    priority: 200
+    category: Groceries
+    subcategory: Supermarket
+    match: contains
+    expense_only: true
+    patterns:
+      - ocado
+      - co op group
+      - coop
+      - co-op
+      - co op
+      - tesco
+
+  - id: shopping.tkmaxx
+    priority: 195
+    category: Shopping
+    subcategory: General Retail
+    match: contains
+    expense_only: true
+    patterns:
+      - t k maxx
+      - tk maxx
+      - tkmaxx
+      - marks spencer
+      - marks&spencer
+
+  - id: income.mars_settlement
+    priority: 192
+    category: Income
+    subcategory: Merchant Settlement
+    match: contains
+    income_only: true
+    patterns:
+      - mars chocolate uk
+      - mars chocolate uk slough
+
+  - id: shopping.mars_chocolate_expense
+    priority: 191
+    category: Shopping
+    subcategory: General Retail
+    match: contains
+    expense_only: true
+    patterns:
+      - mars chocolate
+
+  - id: transfers.paypal
+    priority: 185
+    category: Transfers
+    subcategory: Wallet Transfer
+    match: contains
+    patterns:
+      - paypal payment
+      - paypal
+
+  - id: transport.tfl
+    priority: 182
+    category: Transport
+    subcategory: Mobility
+    match: contains
+    expense_only: true
+    patterns:
+      - transport for london
+      - tfl travel ch
+      - tfl gov uk
+
+  - id: housing.council_tax
+    priority: 178
+    category: Housing
+    subcategory: Council Tax
+    match: contains
+    expense_only: true
+    patterns:
+      - lb ealing
+      - ealing broadway ss
+      - ealing broadway ce
+
+  - id: utilities.telecom
+    priority: 176
+    category: Utilities
+    subcategory: Telecom
+    match: contains
+    expense_only: true
+    patterns:
+      - vodafone
+      - h3g
+      - orange sa
+      - orange
+
+  - id: memberships.charity_membership
+    priority: 174
+    category: Memberships
+    subcategory: Charity & Membership
+    match: contains
+    expense_only: true
+    patterns:
+      - national trust mem
+      - fidesco
+
+  - id: family.childcare
+    priority: 172
+    category: Family
+    subcategory: Childcare
+    match: contains
+    expense_only: true
+    patterns:
+      - tax free childcare
+
+  - id: shopping.general
+    priority: 120
+    category: Shopping
+    subcategory: General Retail
+    match: contains
+    patterns:
+      - amazon
+      - shop
+      - store
+      - mall
+      - ecommerce
+
+  - id: groceries.general
+    priority: 115
+    category: Groceries
+    subcategory: Supermarket
+    match: contains
+    patterns:
+      - supermarket
+      - grocery
+      - carrefour
+      - market
+
+  - id: dining.restaurants
+    priority: 110
+    category: Dining
+    subcategory: Restaurants
+    match: contains
+    patterns:
+      - restaurant
+      - cafe
+      - coffee
+      - bar
+
+  - id: fees.bank_fees
+    priority: 105
+    category: Fees
+    subcategory: Bank Fees
+    match: contains
+    patterns:
+      - fee
+      - commission
+      - charge
+      - penalty
+      - ail hsbc
+      - ail - hsbc
+
+  - id: income.salary
+    priority: 100
+    category: Income
+    subcategory: Salary
+    match: contains
+    income_only: true
+    patterns:
+      - salary
+      - payroll
+      - bonus
+
+  - id: income.refunds
+    priority: 95
+    category: Income
+    subcategory: Refunds & Interest
+    match: contains
+    patterns:
+      - refund
+      - interest

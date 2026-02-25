@@ -68,6 +68,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
         hsbc_csv_path=None,
+        category_rules_path=input_dir / "category_rules.json",
+        category_overrides_path=input_dir / "category_overrides.json",
     )
 
     monkeypatch.setattr(
@@ -147,6 +149,10 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["hsbc_period_parse_variant_match_count"] == 0
     assert summary_payload["parser_low_confidence_file_count"] == 2
     assert len(summary_payload["parser_selection_diagnostics"]) == 2
+    assert summary_payload["categorized_count"] == 1
+    assert summary_payload["uncategorized_count"] == 0
+    assert summary_payload["uncategorized_ratio"] == 0.0
+    assert summary_payload["category_source_counts"]["rule"] == 1
 
     assert result.completeness_path == settings.completeness_json_path
     assert result.completeness_status == "fail"
@@ -250,6 +256,8 @@ def test_run_workflow_prefers_hsbc_csv_for_same_statement_month(
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
         hsbc_csv_path=hsbc_csv,
+        category_rules_path=input_dir / "category_rules.json",
+        category_overrides_path=input_dir / "category_overrides.json",
     )
 
     monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
@@ -371,6 +379,8 @@ def test_run_workflow_keeps_pdf_fallback_and_csv_only_statements(
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
         hsbc_csv_path=hsbc_csv,
+        category_rules_path=input_dir / "category_rules.json",
+        category_overrides_path=input_dir / "category_overrides.json",
     )
 
     monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
@@ -491,6 +501,8 @@ def test_run_workflow_uses_pdf_balances_to_adaptively_select_source(
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
         hsbc_csv_path=hsbc_csv,
+        category_rules_path=input_dir / "category_rules.json",
+        category_overrides_path=input_dir / "category_overrides.json",
     )
 
     class _ValidatingHsbcParser:

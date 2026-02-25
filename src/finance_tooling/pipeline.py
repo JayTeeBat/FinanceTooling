@@ -14,7 +14,11 @@ from typing import cast
 
 from tqdm import tqdm
 
-from finance_tooling.classify import classify_transactions
+from finance_tooling.classify import (
+    classify_transactions_with_diagnostics,
+    load_classification_rules,
+    load_override_store,
+)
 from finance_tooling.completeness import build_completeness_report
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
@@ -638,7 +642,17 @@ def run_workflow(settings: Settings) -> WorkflowResult:
         )
     )
     warnings.extend(hsbc_merge_warnings)
-    classified = classify_transactions(extracted)
+    category_rules, category_rule_warnings = load_classification_rules(settings.category_rules_path)
+    category_overrides, category_override_warnings = load_override_store(
+        settings.category_overrides_path
+    )
+    warnings.extend(category_rule_warnings)
+    warnings.extend(category_override_warnings)
+    classified, classification_diagnostics = classify_transactions_with_diagnostics(
+        extracted,
+        rules=category_rules,
+        overrides=category_overrides,
+    )
     enriched, fx_warnings = _apply_fx_and_mtime(classified, settings)
     warnings.extend(fx_warnings)
     completeness_report = build_completeness_report(files, enriched, validations=validations)
@@ -734,6 +748,16 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             ],
             "hsbc_period_parse_variant_match_count": hsbc_period_parse_variant_match_count,
             "hsbc_selection_diagnostics": hsbc_selection_diagnostics,
+            "categorized_count": classification_diagnostics.categorized_count,
+            "uncategorized_count": classification_diagnostics.uncategorized_count,
+            "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
+            "category_source_counts": classification_diagnostics.category_source_counts,
+            "top_uncategorized_descriptions": (
+                classification_diagnostics.top_uncategorized_descriptions
+            ),
+            "top_rules_by_hits": classification_diagnostics.top_rules_by_hits,
+            "category_rules_path": str(settings.category_rules_path),
+            "category_overrides_path": str(settings.category_overrides_path),
             "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
         },

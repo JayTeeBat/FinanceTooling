@@ -93,75 +93,82 @@ Use this template:
   - <single highest priority next step>
 ```
 
+
 ## Hand-Off Log
 
 ### 2026-02-25 - codex
-- Branch: `fix/hsbc-parser-metrics`
+- Branch: `feature/automated-categorization`
 - Completed:
-  - Hardened HSBC period parsing to handle OCR spacing variants
-    (`Januaryto`, `January2017`, optional start-year).
-  - Added HSBC parser safeguards for running-balance-backed continuation
-    dedupe and in-block running-balance sign override for ambiguous rows.
-  - Added regression tests for period parsing variants, continuation dedupe,
-    and running-balance sign override behavior.
-  - Re-ran full corpus pipeline against processed path and refreshed current
-    HSBC residual-failure snapshot metrics.
+  - Applied expanded categorization YAML rules and overrides (SEPA transfer
+    patterns, TFL transport, telecom, council tax, memberships, childcare,
+    and merchant-settlement handling for `MARS CHOCOLATE UK`).
+  - Snapshotted nominal processed artifacts before rerun to
+    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed_snapshots/2026-02-26-005537-categorization-pre`
+    with checksum manifest.
+  - Re-ran pipeline against nominal processed path with explicit YAML rule and
+    override env vars.
+  - Verified categorization improvement versus prior YAML benchmark:
+    `categorized_count` `2989 -> 4213` (`+1224`) and
+    `uncategorized_ratio` `0.7571 -> 0.6576` (`-0.0995`).
+- Checks:
+  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false FINANCE_CATEGORY_RULES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_rules.yaml FINANCE_CATEGORY_OVERRIDES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_overrides.yaml uv run python -m finance_tooling`: pass
+- Open items:
+  - The pre-run nominal snapshot summary predates categorization metrics, so
+    direct nominal pre/post category fields were unavailable.
+- Next action:
+  - Add a second-pass rule/override batch for new residual leaders (for
+    example `virement de mars wrigley ...`, `exchanged to eur`, and `sky digital`).
+
+### 2026-02-25 - codex
+- Branch: `feature/automated-categorization`
+- Completed:
+  - Added YAML categorization config support (`.yaml`/`.yml`) while retaining
+    JSON compatibility for rules and overrides.
+  - Added schema aliases for human-friendly rule keys (`id`/`match`) mapped to
+    classifier internals (`rule_id`/`match_type`).
+  - Switched default categorization config paths to
+    `<processed>/category_rules.yaml` and
+    `<processed>/category_overrides.yaml`.
+  - Added starter config templates under `config/`:
+    `category_rules.yaml` and `category_overrides.yaml`.
+  - Updated README examples to YAML and added tests for YAML rule/override
+    parsing and schema alias behavior.
+- Checks:
+  - `uv sync --all-groups`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Override writeback workflow from reviewed/corrected exports is still not
+    implemented.
+- Next action:
+  - Add a CLI command to upsert override entries from corrected category data.
+
+### 2026-02-25 - codex
+- Branch: `feature/automated-categorization`
+- Completed:
+  - Implemented rules-first automated categorization with configurable JSON
+    rule and override stores, including robust description normalization and
+    deterministic precedence (`override -> rule -> fallback`).
+  - Extended normalized transaction schema and parquet columns with
+    categorization metadata (`subcategory`, `category_confidence`,
+    `category_source`, `category_rule_id`).
+  - Integrated categorization diagnostics into `run_summary.json` including
+    categorized/uncategorized counts and ratios, source breakdown, top
+    uncategorized descriptions, and top matched rules.
+  - Added settings/env support for
+    `FINANCE_CATEGORY_RULES_PATH` and `FINANCE_CATEGORY_OVERRIDES_PATH`.
+  - Added tests for override precedence and categorization diagnostics, and
+    updated config/pipeline tests for new settings and summary fields.
 - Checks:
   - `uv run ruff check .`: pass
   - `uv run ruff format --check .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
 - Open items:
-  - HSBC residual failures remain concentrated in `2017-08` (`|diff|=754.70`)
-    and `2016-12` (`|diff|=547.29`), plus moderate outliers in `2019-05`
-    through `2019-07`.
-  - One HSBC statement month still has missing parsed period-window metadata.
+  - Override persistence writeback workflow (capturing manual edits into
+    `category_overrides.json`) is not yet implemented.
 - Next action:
-  - Add fixture-driven parser hardening for remaining top outliers,
-    prioritizing `2017-08` duplicate/continuation layout behavior.
-
-### 2026-02-25 - codex
-- Branch: `fix/hsbc-parser-metrics`
-- Completed:
-  - Created dedicated worktree at `/home/thomazo/dev/FinanceTooling-hsbc-parser`
-    for HSBC parser work.
-  - Added top-level HSBC parser performance snapshot metrics for quick
-    agent/session orientation.
-- Checks:
-  - `git worktree list`: pass
-- Open items:
-  - Parser snapshot values are based on latest logged full-corpus run and
-    should be refreshed after the next reconciliation run.
-- Next action:
-  - Re-run full HSBC corpus pipeline and update snapshot metrics with fresh
-    counts/deltas.
-
-### 2026-02-25 - codex
-- Branch: `fix/parser-hardening-hsbc`
-- Completed:
-  - Implemented HSBC period-window remapping for CSV transactions using parsed
-    PDF statement periods (`start -> end`) before adaptive source selection.
-  - Added statement-period parsing from HSBC PDF text and integrated period
-    metadata into month selection diagnostics.
-  - Added remap diagnostics/counters in `run_summary.json` for applied periods,
-    reassigned CSV rows, and unassigned CSV rows.
-  - Added tests for statement-period parsing and CSV boundary-day reassignment.
-  - Updated README to document period-window remapping behavior.
-- Checks:
-  - `uv run pytest tests/test_pipeline.py tests/test_hsbc_csv_import.py`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-remap FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
-- Open items:
-  - HSBC failures remain at `30` checkable statements; largest residual outlier
-    is still 2019-03 (`|diff|=3903.76`), indicating a specific parser/sign
-    issue beyond period alignment.
-  - Five HSBC statements still lack parsed period windows (`statement_period_*`
-    absent in diagnostics), limiting remap precision for those months.
-- Next action:
-  - Add fixture-driven parser hardening for the remaining high-diff months
-    (especially 2019-03 and 2021-04) and improve period parsing coverage for
-    the missing-window HSBC layouts.
+  - Add a small CLI utility to ingest corrected category exports and upsert
+    override entries for future runs.
