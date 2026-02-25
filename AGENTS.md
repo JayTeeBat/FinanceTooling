@@ -48,26 +48,10 @@ categorization, and reporting.
 - Branch naming:
   - `feature/<topic>` for features
   - `fix/<topic>` for bug fixes
-  - `refactor/<topic>` for refactors
   - `chore/<topic>` for maintenance/tooling
-- No work happens directly on `main`; always use the standard work branch ->
-  PR -> merge process.
 - Keep pull requests focused and small enough to review quickly.
 - Do not rewrite history on shared branches.
 - Do not remove or rewrite legacy scripts unless a migration plan is included.
-
-### Standard Workflow
-
-1. Do not work on `main`; implement changes on a dedicated
-   `feature/<topic>`, `fix/<topic>`, or `refactor/<topic>` branch.
-2. Before proposing merge, ensure work is user-validated and all mandatory
-   quality gates pass:
-   - `uv run ruff check .`
-   - `uv run ruff format .`
-   - `uv run ty check src/finance_tooling tests`
-   - `uv run pytest`
-3. Once validated and green, commit on the working branch, push to `origin`,
-   and open a PR targeting `main` (do not merge directly from local state).
 
 ## Legacy and Migration Policy
 
@@ -109,115 +93,82 @@ Use this template:
   - <single highest priority next step>
 ```
 
-## Next Agent Recommendations
-
-Prioritized recommendations from latest repo assessment:
-
-1. Decompose workflow orchestration in `src/finance_tooling/pipeline.py`
-- Split into focused units (`ingest`, `hsbc_merge`, `enrichment`, `reporting`) while preserving behavior.
-- Benefit: lower maintenance risk, simpler reasoning, smaller test surfaces.
-
-2. Tighten typed boundaries for report payloads
-- Replace broad `dict[str, object]` payload construction/casts with typed dataclasses or `TypedDict` for summary and completeness outputs.
-- Benefit: safer refactors and clearer internal APIs.
-
-3. Preserve monetary precision through storage/reporting paths
-- Reduce `Decimal -> float` conversions where not strictly required; keep decimal-safe representation until final presentation.
-- Benefit: better reconciliation accuracy and less rounding drift.
-
-4. Replace broad exception handling with targeted error categories
-- Narrow `except Exception` blocks in workflow/FX paths and emit structured warning context.
-- Benefit: improved observability and faster debugging of real failures.
-
-5. Improve parser/importer extensibility model
-- Move from static registry tuple toward explicit plugin registration/discovery pattern.
-- Benefit: easier onboarding of additional bank formats with cleaner boundaries.
-
-6. Keep quality gates mandatory
-- Continue enforcing:
-  - `uv run ruff check .`
-  - `uv run ruff format .`
-  - `uv run ty check src/finance_tooling tests`
-  - `uv run pytest`
-- Benefit: protects reliability during refactors of parser and pipeline internals.
 
 ## Hand-Off Log
 
-### 2026-02-26 - codex
-- Branch: `feature/pipeline-decomposition`
+### 2026-02-25 - codex
+- Branch: `feature/automated-categorization`
 - Completed:
-  - Changed default ingest text cache location to live beside raw statements
-    under the same parent directory:
-    `<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet`.
-  - Kept explicit override support via `FINANCE_INGEST_TEXT_CACHE_PATH`.
-  - Updated README documentation to reflect encrypted-vault-aligned default
-    cache placement.
-  - Updated config tests for the new default cache path behavior.
+  - Applied expanded categorization YAML rules and overrides (SEPA transfer
+    patterns, TFL transport, telecom, council tax, memberships, childcare,
+    and merchant-settlement handling for `MARS CHOCOLATE UK`).
+  - Snapshotted nominal processed artifacts before rerun to
+    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed_snapshots/2026-02-26-005537-categorization-pre`
+    with checksum manifest.
+  - Re-ran pipeline against nominal processed path with explicit YAML rule and
+    override env vars.
+  - Verified categorization improvement versus prior YAML benchmark:
+    `categorized_count` `2989 -> 4213` (`+1224`) and
+    `uncategorized_ratio` `0.7571 -> 0.6576` (`-0.0995`).
 - Checks:
-  - `uv run ruff check src/finance_tooling/config.py tests/test_config.py README.md`: pass
-  - `uv run pytest tests/test_config.py`: pass
+  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false FINANCE_CATEGORY_RULES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_rules.yaml FINANCE_CATEGORY_OVERRIDES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_overrides.yaml uv run python -m finance_tooling`: pass
 - Open items:
-  - Existing hand-off entries still reference the prior `<processed>` default
-    path for cache location.
+  - The pre-run nominal snapshot summary predates categorization metrics, so
+    direct nominal pre/post category fields were unavailable.
 - Next action:
-  - Align historical performance notes/examples to the new sibling-of-raw cache
-    default wherever needed.
+  - Add a second-pass rule/override batch for new residual leaders (for
+    example `virement de mars wrigley ...`, `exchanged to eur`, and `sky digital`).
 
-### 2026-02-26 - codex
-- Branch: `feature/pipeline-decomposition`
+### 2026-02-25 - codex
+- Branch: `feature/automated-categorization`
 - Completed:
-  - Added persistent ingest text cache module
-    (`src/finance_tooling/workflow/ingest_cache.py`) with parquet-backed
-    load/upsert and keying by `(resolved_path, mtime_ns, file_size)`.
-  - Added cache settings:
-    `FINANCE_INGEST_TEXT_CACHE_ENABLED` (default `false`) and
-    `FINANCE_INGEST_TEXT_CACHE_PATH` (default
-    `<processed>/ingest_text_cache.parquet`).
-  - Integrated cache hit/miss/write flow into ingestion prep and propagated
-    cache diagnostics into `run_summary.json` and `performance_summary.json`.
-  - Added/updated tests for cache behavior and config coverage in
-    `tests/test_ingest.py`, `tests/test_config.py`,
-    `tests/test_pipeline.py`, and `tests/test_perf_check.py`.
-  - Validated cache behavior on full corpus in isolated path:
-    `/tmp/finance_tooling_processed_perf_cache_20260226-224820`
-    (run 2: ingest `2.709s`, cache hits `199`).
+  - Added YAML categorization config support (`.yaml`/`.yml`) while retaining
+    JSON compatibility for rules and overrides.
+  - Added schema aliases for human-friendly rule keys (`id`/`match`) mapped to
+    classifier internals (`rule_id`/`match_type`).
+  - Switched default categorization config paths to
+    `<processed>/category_rules.yaml` and
+    `<processed>/category_overrides.yaml`.
+  - Added starter config templates under `config/`:
+    `category_rules.yaml` and `category_overrides.yaml`.
+  - Updated README examples to YAML and added tests for YAML rule/override
+    parsing and schema alias behavior.
 - Checks:
-  - `uv run ruff check src/finance_tooling tests`: pass
+  - `uv sync --all-groups`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest tests/test_config.py tests/test_ingest.py tests/test_pipeline.py tests/test_perf_check.py`: pass
-  - `FINANCE_PROCESSED_PATH=/tmp/finance_tooling_processed_perf_cache_20260226-224820 FINANCE_FX_AUTO_FETCH=false FINANCE_INGEST_WORKERS=4 FINANCE_INGEST_TEXT_CACHE_ENABLED=true FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw uv run python -m finance_tooling.perf_check`: pass
+  - `uv run pytest`: pass
 - Open items:
-  - Cache currently has no pruning/retention policy for very long-lived runs.
-  - Ingest parser/bank timing aggregates still exclude extraction-time
-    attribution.
+  - Override writeback workflow from reviewed/corrected exports is still not
+    implemented.
 - Next action:
-  - Add cache pruning policy (for example, max-age or max-rows) and extend
-    ingest timing diagnostics to separate extraction vs parser time.
+  - Add a CLI command to upsert override entries from corrected category data.
 
-### 2026-02-26 - codex
-- Branch: `feature/pipeline-decomposition`
+### 2026-02-25 - codex
+- Branch: `feature/automated-categorization`
 - Completed:
-  - Added opt-in ingestion worker config (`FINANCE_INGEST_WORKERS`) and
-    parallelized ingest preparation in `src/finance_tooling/workflow/ingest.py`
-    while preserving default single-process behavior.
-  - Added ingest timing aggregates by parser and bank to workflow contracts and
-    summary artifacts (`run_summary.json`, `performance_summary.json`).
-  - Reduced repeated HSBC full-text flattening by introducing shared flattened
-    parsing helpers in ingest stage.
-  - Added ingest-focused tests in `tests/test_ingest.py` and expanded config
-    and pipeline/perf coverage for new settings and summary fields.
-  - Ran an isolated full-corpus perf check with workers:
-    `/tmp/finance_tooling_processed_perf_workers4_20260226-223247`.
+  - Implemented rules-first automated categorization with configurable JSON
+    rule and override stores, including robust description normalization and
+    deterministic precedence (`override -> rule -> fallback`).
+  - Extended normalized transaction schema and parquet columns with
+    categorization metadata (`subcategory`, `category_confidence`,
+    `category_source`, `category_rule_id`).
+  - Integrated categorization diagnostics into `run_summary.json` including
+    categorized/uncategorized counts and ratios, source breakdown, top
+    uncategorized descriptions, and top matched rules.
+  - Added settings/env support for
+    `FINANCE_CATEGORY_RULES_PATH` and `FINANCE_CATEGORY_OVERRIDES_PATH`.
+  - Added tests for override precedence and categorization diagnostics, and
+    updated config/pipeline tests for new settings and summary fields.
 - Checks:
-  - `uv run ruff check src/finance_tooling tests`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest tests/test_config.py tests/test_ingest.py tests/test_pipeline.py tests/test_perf_check.py`: pass
-  - `FINANCE_PROCESSED_PATH=/tmp/finance_tooling_processed_perf_workers4_20260226-223247 FINANCE_FX_AUTO_FETCH=false FINANCE_INGEST_WORKERS=4 FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw uv run python -m finance_tooling.perf_check`: pass
+  - `uv run pytest`: pass
 - Open items:
-  - Ingest timing aggregates currently cover parser parse time, not extraction
-    time per parser/bank.
-  - Font descriptor warnings from PDF extraction remain noisy in full-corpus
-    runs.
+  - Override persistence writeback workflow (capturing manual edits into
+    `category_overrides.json`) is not yet implemented.
 - Next action:
-  - Add extraction-time attribution in ingest diagnostics and evaluate optional
-    warning suppression for known pdfplumber FontBBox noise.
+  - Add a small CLI utility to ingest corrected category exports and upsert
+    override entries for future runs.
