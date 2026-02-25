@@ -93,6 +93,38 @@ Use this template:
   - <single highest priority next step>
 ```
 
+## Next Agent Recommendations
+
+Prioritized recommendations from latest repo assessment:
+
+1. Decompose workflow orchestration in `src/finance_tooling/pipeline.py`
+- Split into focused units (`ingest`, `hsbc_merge`, `enrichment`, `reporting`) while preserving behavior.
+- Benefit: lower maintenance risk, simpler reasoning, smaller test surfaces.
+
+2. Tighten typed boundaries for report payloads
+- Replace broad `dict[str, object]` payload construction/casts with typed dataclasses or `TypedDict` for summary and completeness outputs.
+- Benefit: safer refactors and clearer internal APIs.
+
+3. Preserve monetary precision through storage/reporting paths
+- Reduce `Decimal -> float` conversions where not strictly required; keep decimal-safe representation until final presentation.
+- Benefit: better reconciliation accuracy and less rounding drift.
+
+4. Replace broad exception handling with targeted error categories
+- Narrow `except Exception` blocks in workflow/FX paths and emit structured warning context.
+- Benefit: improved observability and faster debugging of real failures.
+
+5. Improve parser/importer extensibility model
+- Move from static registry tuple toward explicit plugin registration/discovery pattern.
+- Benefit: easier onboarding of additional bank formats with cleaner boundaries.
+
+6. Keep quality gates mandatory
+- Continue enforcing:
+  - `uv run ruff check .`
+  - `uv run ruff format .`
+  - `uv run ty check src/finance_tooling tests`
+  - `uv run pytest`
+- Benefit: protects reliability during refactors of parser and pipeline internals.
+
 ## Hand-Off Log
 
 ### 2026-02-25 - codex
@@ -140,27 +172,12 @@ Use this template:
 ### 2026-02-25 - codex
 - Branch: `fix/parser-hardening-hsbc`
 - Completed:
-  - Implemented HSBC period-window remapping for CSV transactions using parsed
-    PDF statement periods (`start -> end`) before adaptive source selection.
-  - Added statement-period parsing from HSBC PDF text and integrated period
-    metadata into month selection diagnostics.
-  - Added remap diagnostics/counters in `run_summary.json` for applied periods,
-    reassigned CSV rows, and unassigned CSV rows.
-  - Added tests for statement-period parsing and CSV boundary-day reassignment.
-  - Updated README to document period-window remapping behavior.
+  - Added `## Next Agent Recommendations` section before `## Hand-Off Log`.
+  - Documented prioritized architecture and maintainability improvements for the next agent session.
 - Checks:
-  - `uv run pytest tests/test_pipeline.py tests/test_hsbc_csv_import.py`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-remap FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
+  - `sed -n '1,280p' AGENTS.md`: pass
 - Open items:
-  - HSBC failures remain at `30` checkable statements; largest residual outlier
-    is still 2019-03 (`|diff|=3903.76`), indicating a specific parser/sign
-    issue beyond period alignment.
-  - Five HSBC statements still lack parsed period windows (`statement_period_*`
-    absent in diagnostics), limiting remap precision for those months.
+  - Recommendations are documented; implementation work is still pending in code modules.
 - Next action:
   - Add fixture-driven parser hardening for the remaining high-diff months
     (especially 2019-03 and 2021-04) and improve period parsing coverage for
