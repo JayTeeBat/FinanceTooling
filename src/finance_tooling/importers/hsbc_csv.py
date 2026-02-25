@@ -10,7 +10,7 @@ from pathlib import Path
 
 from finance_tooling.models import Transaction
 
-_DATE_FORMAT = "%d/%m/%Y"
+_DATE_FORMATS = ("%d/%m/%Y", "%d %b %Y", "%d %B %Y")
 _REQUIRED_COLUMNS = ("Date", "Payee", "Amount")
 
 
@@ -28,6 +28,15 @@ def _compose_description(payee: str, memo: str) -> str:
     return " ".join(part for part in parts if part).strip()
 
 
+def _parse_booking_date(date_raw: str) -> datetime | None:
+    for date_format in _DATE_FORMATS:
+        try:
+            return datetime.strptime(date_raw, date_format)
+        except ValueError:
+            continue
+    return None
+
+
 def _parse_row(
     *,
     row: dict[str, str],
@@ -40,12 +49,13 @@ def _parse_row(
     amount_raw = (row.get("Amount") or "").strip()
     account_raw = (row.get("Account number") or "").strip() or None
 
-    try:
-        booking_date = datetime.strptime(date_raw, _DATE_FORMAT).date()
-    except ValueError:
+    parsed_date = _parse_booking_date(date_raw)
+    if parsed_date is None:
         return None, (
-            f"HSBC CSV parse warning ({source_file.name}:{row_number}): invalid date {date_raw!r}"
+            f"HSBC CSV parse warning ({source_file.name}:{row_number}): invalid date {date_raw!r} "
+            f"(expected one of {_DATE_FORMATS})"
         )
+    booking_date = parsed_date.date()
 
     try:
         amount_native = Decimal(amount_raw)

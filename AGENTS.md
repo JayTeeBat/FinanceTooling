@@ -82,53 +82,94 @@ Use this template:
 ## Hand-Off Log
 
 ### 2026-02-25 - codex
-- Branch: `fix/parser-hardening-boursobank`
+- Branch: `fix/parser-hardening-hsbc`
 - Completed:
-  - Marked non-statement PDFs in pipeline validation metadata (`statement_type`) using `classify_statement_type`, then excluded non-statement validations from reconciliation rollups.
-  - Tightened Boursobank sign inference to strict column-first behavior (removed transfer keyword positive fallback), kept explicit refund overrides, and added skip-warning path for ambiguous amount positioning.
-  - Added targeted regression coverage for COM exclusion and Boursobank transfer-sign edge cases (`VIRSEPA`/`VIRINST`) that previously drove large reconciliation deltas.
-  - Re-ran full corpus benchmark and reduced Boursobank from `83` uncheckable to `79` pass / `2` fail with `0` COM files present in reconciliation info items.
+  - Implemented HSBC period-window remapping for CSV transactions using parsed
+    PDF statement periods (`start -> end`) before adaptive source selection.
+  - Added statement-period parsing from HSBC PDF text and integrated period
+    metadata into month selection diagnostics.
+  - Added remap diagnostics/counters in `run_summary.json` for applied periods,
+    reassigned CSV rows, and unassigned CSV rows.
+  - Added tests for statement-period parsing and CSV boundary-day reassignment.
+  - Updated README to document period-window remapping behavior.
 - Checks:
+  - `uv run pytest tests/test_pipeline.py tests/test_hsbc_csv_import.py`: pass
   - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/finance-boursobank-final-kg5xSH FINANCE_FX_AUTO_FETCH=false FINANCE_FX_CACHE_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/fx_rates_history.parquet .venv/bin/python -m finance_tooling`: pass
+  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-remap FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
 - Open items:
-  - Two Boursobank files still fail reconciliation with small `2.00` diffs (`2020-10` and `2020-11`), likely from minor OCR/rounding or one-row sign ambiguity in legacy layout.
-  - HSBC remains the dominant unresolved reconciliation source (`69` fail / `2` pass) and now drives most remaining warning volume.
+  - HSBC failures remain at `30` checkable statements; largest residual outlier
+    is still 2019-03 (`|diff|=3903.76`), indicating a specific parser/sign
+    issue beyond period alignment.
+  - Five HSBC statements still lack parsed period windows (`statement_period_*`
+    absent in diagnostics), limiting remap precision for those months.
 - Next action:
-  - Add fixture-backed handling for the two residual 2020 Boursobank `2.00`-diff statements, then shift focus to HSBC outlier reduction.
+  - Add fixture-driven parser hardening for the remaining high-diff months
+    (especially 2019-03 and 2021-04) and improve period parsing coverage for
+    the missing-window HSBC layouts.
 
 ### 2026-02-25 - codex
-- Branch: `fix/parser-hardening-labanquepostale`
+- Branch: `fix/parser-hardening-hsbc`
 - Completed:
-  - Investigated and fixed two LaBanquePostale 2025 reconciliation failures by hardening sign inference for `REMBOURSEMENT` credits and removing inline/continuation `Virement depuis La Banque Postale` hint noise from descriptions.
-  - Added two targeted LBP regression tests covering remboursement credit sign handling and outgoing `VIREMENT INSTANTANE A` sign preservation when `virement depuis` text appears.
-  - Renamed 12 LaBanquePostale 2025 CCP files in raw corpus to include `.pdf`, re-ran full pipeline, and validated that all 27 LBP CCP statements now reconcile as pass.
+  - Implemented adaptive HSBC month-level source selection in pipeline:
+    for overlap months with both CSV and PDF rows, choose the source with
+    lower PDF-balance reconciliation absolute difference.
+  - Added HSBC adaptive diagnostics and metrics in `run_summary.json`,
+    including policy marker, adaptive switch count, selected CSV/PDF month
+    counts, and per-month selection diagnostics.
+  - Extended HSBC reconciliation warning payload to include candidate absolute
+    differences for CSV and PDF sums.
+  - Updated pipeline tests to assert adaptive selection behavior (including
+    overlap switch to PDF when PDF reconciles better) and new summary fields.
+  - Updated README HSBC merge policy to document adaptive overlap selection.
 - Checks:
+  - `uv run pytest tests/test_pipeline.py tests/test_hsbc_csv_import.py`: pass
   - `uv run ruff check .`: pass
+  - `uv run ruff format --check .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed uv run python -m finance_tooling`: pass
+  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-adaptive FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
 - Open items:
-  - Known low-confidence parser routing case remains for `Boursobank Marion Releve-compte-30-09-2022.pdf` selected as `revolut` at threshold.
+  - HSBC reconciliation still has `59` failed / `85` checkable statements,
+    with most failures still on HSBC-selected months.
+  - HSBC balance-validation fail count remains high (`59`) despite much lower
+    median absolute difference.
 - Next action:
-  - Tighten parser routing tie-break logic to eliminate the remaining Boursobank-vs-Revolut low-confidence misclassification.
+  - Add fixture-driven month-level guardrails for the top residual outliers
+    (`|diff| > 1000`) and codify deterministic fallback rules for those
+    specific layouts.
 
 ### 2026-02-25 - codex
-- Branch: `fix/parser-hardening-labanquepostale`
+- Branch: `fix/parser-hardening-hsbc`
 - Completed:
-  - Improved `LaBanquePostaleParser` to parse CCP statement opening/closing balances and emit checkable balance validations instead of always uncheckable.
-  - Reworked LBP transaction extraction to line-based parsing with robust multiline continuation capture and description cleanup for OCR-prefixed artifacts.
-  - Added fee-statement detection (`Relevé de frais`) in LBP parser to skip reconciliation records (`validation=None`) while still allowing parser routing.
-  - Added regression tests for LBP balance validation pass, multiline continuation capture, fee-statement reconciliation exclusion, and completeness reconciliation counting without a validation record.
+  - Hardened HSBC CSV importer date parsing to support raw monthly export
+    formats (`%d %b %Y`, `%d %B %Y`, and `%d/%m/%Y`), enabling ingestion from
+    raw HSBC CSV files.
+  - Replaced HSBC PDF/CSV overlap heuristics with statement-date source
+    selection: CSV replaces PDF for matching months, PDF fallback is kept when
+    CSV is missing, and CSV-only months are retained.
+  - Added HSBC PDF-balance-driven validation recomputation so selected monthly
+    data (CSV or PDF fallback) is reconciled against PDF opening/closing
+    balances, with explicit warnings on reconciliation mismatches.
+  - Added HSBC merge/validation counters to `run_summary.json` and updated
+    README to document monthly CSV-first merge and PDF-balance validation
+    behavior.
+  - Updated HSBC CSV importer and pipeline tests for date parsing, monthly
+    source selection, fallback handling, and PDF-balance validation warnings.
 - Checks:
-  - `uv run ruff check . --fix`: pass
+  - `uv run pytest tests/test_hsbc_csv_import.py tests/test_pipeline.py`: pass
   - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
+  - `uv run ruff format --check .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
+  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/tmp/ft-hsbc-post-impl FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
 - Open items:
-  - LBP continuation filtering currently uses heuristic noise markers; if new statement layouts introduce additional headers/footers, marker tuning may be needed.
+  - HSBC reconciliation remains imperfect at `61` failed / `85` checkable
+    statements on the real corpus.
+  - HSBC median absolute reconciliation difference increased to `453.07`,
+    indicating remaining month-specific parsing/sign issues.
 - Next action:
-  - Re-run full real-corpus ingestion and review `completeness_report.json` to confirm LaBanquePostale CCP files move from uncheckable to pass while fee statements are excluded from reconciliation counts.
+  - Add fixture-driven month-level diagnostics for the largest remaining HSBC
+    outliers and refine row/sign rules for those statement layouts.

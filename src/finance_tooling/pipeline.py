@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+from collections import defaultdict
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import cast
 
 from tqdm import tqdm
 
 from finance_tooling.classify import classify_transactions
-from finance_tooling.completeness import build_completeness_report, classify_statement_type
+from finance_tooling.completeness import build_completeness_report
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
@@ -25,6 +26,12 @@ from finance_tooling.parsers import select_parser_with_diagnostics
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.scanner import discover_csv_files, discover_statement_pdfs
 from finance_tooling.store import upsert_transactions
+
+_HSBC_STATEMENT_DATE_PATTERN = re.compile(r"(?:19|20)\d{2}-\d{2}-\d{2}")
+_HSBC_STATEMENT_PERIOD_PATTERN = re.compile(
+    r"(\d{1,2}\s+[A-Za-z]+)\s+to\s+(\d{1,2}\s+[A-Za-z]+)\s+(\d{4})",
+    re.IGNORECASE,
+)
 
 
 def _apply_fx_and_mtime(
@@ -87,85 +94,438 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
-def _normalize_description(description: str) -> str:
-    normalized = " ".join(description.strip().lower().split())
-    return normalized
+def _extract_statement_date(path: Path) -> str | None:
+    match = _HSBC_STATEMENT_DATE_PATTERN.search(path.name)
+    if match is None:
+        return None
+    return match.group(0)
 
 
-def _source_priority(transaction: Transaction) -> int:
-    # Higher priority wins on cross-source clashes.
-    return 2 if transaction.parser == "hsbc_csv" else 1
+def _parse_hsbc_statement_period(full_text: str) -> tuple[date, date] | None:
+    flattened = " ".join(full_text.split())
+    match = _HSBC_STATEMENT_PERIOD_PATTERN.search(flattened)
+    if match is None:
+        return None
+
+    start_day_month = match.group(1)
+    end_day_month = match.group(2)
+    end_year = int(match.group(3))
+
+    end_date: date | None = None
+    for fmt in ("%d %B %Y", "%d %b %Y"):
+        try:
+            end_date = datetime.strptime(f"{end_day_month} {end_year}", fmt).date()
+            break
+        except ValueError:
+            continue
+    if end_date is None:
+        return None
+
+    start_date: date | None = None
+    for candidate_year in (end_year, end_year - 1):
+        for fmt in ("%d %B %Y", "%d %b %Y"):
+            try:
+                candidate = datetime.strptime(
+                    f"{start_day_month} {candidate_year}",
+                    fmt,
+                ).date()
+            except ValueError:
+                continue
+            if candidate <= end_date:
+                start_date = candidate
+                break
+        if start_date is not None:
+            break
+
+    if start_date is None:
+        return None
+    return start_date, end_date
 
 
-def _transaction_resolution_key(transaction: Transaction) -> tuple[str, str, str, str, str]:
-    account_label = (transaction.account_label or "").strip().lower()
+def _hsbc_pdf_paths_by_date(source_files: list[Path]) -> dict[str, Path]:
+    paths_by_date: dict[str, Path] = {}
+    for source_file in sorted(source_files):
+        if "hsbc" not in source_file.name.lower():
+            continue
+        statement_date = _extract_statement_date(source_file)
+        if statement_date is None:
+            continue
+        paths_by_date.setdefault(statement_date, source_file)
+    return paths_by_date
+
+
+def _hsbc_pdf_validations_by_date(
+    validations: list[StatementValidation],
+) -> dict[str, StatementValidation]:
+    by_date: dict[str, StatementValidation] = {}
+    for validation in validations:
+        if validation.bank.strip().upper() != "HSBC":
+            continue
+        statement_date = _extract_statement_date(validation.source_file)
+        if statement_date is None:
+            continue
+        by_date[statement_date] = validation
+    return by_date
+
+
+def _hsbc_balance_warning(
+    *,
+    source_file: Path,
+    selected_source: str,
+    opening_balance: Decimal,
+    transaction_sum: Decimal,
+    expected_closing_balance: Decimal,
+    closing_balance: Decimal,
+    difference: Decimal,
+    csv_abs_difference: Decimal | None = None,
+    pdf_abs_difference: Decimal | None = None,
+) -> str:
+    suffix = ""
+    if csv_abs_difference is not None and pdf_abs_difference is not None:
+        suffix = f"; candidate_abs_diff csv={csv_abs_difference} pdf={pdf_abs_difference}"
     return (
-        transaction.bank.strip().upper(),
-        transaction.currency.strip().upper(),
-        transaction.booking_date.isoformat(),
-        str(transaction.amount_native),
-        account_label,
+        f"{source_file.name}: HSBC {selected_source} reconciliation mismatch opening "
+        f"{opening_balance} + selected transactions {transaction_sum} = "
+        f"{expected_closing_balance} but closing is {closing_balance} (diff {difference}{suffix})"
     )
 
 
-def _descriptions_similar(left: str, right: str) -> bool:
-    left_normalized = _normalize_description(left)
-    right_normalized = _normalize_description(right)
-    if left_normalized == right_normalized:
-        return True
-    if left_normalized in right_normalized or right_normalized in left_normalized:
-        return True
-    similarity = SequenceMatcher(a=left_normalized, b=right_normalized).ratio()
-    return similarity >= 0.6
+def _assign_hsbc_csv_transactions_to_statement_dates(
+    csv_transactions: list[Transaction],
+    statement_periods_by_date: dict[str, tuple[date, date]],
+) -> tuple[dict[str, list[Transaction]], list[Transaction], dict[str, int]]:
+    assigned: dict[str, list[Transaction]] = defaultdict(list)
+    unassigned: list[Transaction] = []
+    metrics = {
+        "hsbc_period_remap_reassigned_tx_count": 0,
+        "hsbc_period_remap_unassigned_csv_tx_count": 0,
+    }
 
+    period_items = sorted(statement_periods_by_date.items(), key=lambda item: item[0])
+    for transaction in csv_transactions:
+        matching_dates: list[str] = []
+        for statement_date, (period_start, period_end) in period_items:
+            if period_start <= transaction.booking_date <= period_end:
+                matching_dates.append(statement_date)
 
-def _resolve_cross_source_conflicts(
-    transactions: list[Transaction],
-) -> tuple[list[Transaction], list[str], dict[str, int]]:
-    grouped: dict[tuple[str, str, str, str, str], list[Transaction]] = {}
-    for transaction in transactions:
-        grouped.setdefault(_transaction_resolution_key(transaction), []).append(transaction)
-
-    kept: list[Transaction] = []
-    warnings: list[str] = []
-    duplicate_drop_count = 0
-    clash_drop_count = 0
-
-    for key in sorted(grouped):
-        group = grouped[key]
-        csv_rows = [transaction for transaction in group if transaction.parser == "hsbc_csv"]
-        non_csv_rows = [transaction for transaction in group if transaction.parser != "hsbc_csv"]
-
-        if not csv_rows or not non_csv_rows:
-            kept.extend(group)
-            continue
-
-        kept.extend(csv_rows)
-
-        remaining_csv_indices = set(range(len(csv_rows)))
-        for transaction in non_csv_rows:
-            matched_index: int | None = None
-            for csv_index in sorted(remaining_csv_indices):
-                if _descriptions_similar(transaction.description, csv_rows[csv_index].description):
-                    matched_index = csv_index
-                    break
-
-            if matched_index is not None:
-                duplicate_drop_count += 1
-                continue
-
-            clash_drop_count += 1
-            warnings.append(
-                "Conflict resolved in favor of HSBC CSV for "
-                f"{transaction.booking_date} {transaction.amount_native} "
-                f"({transaction.description!r} from {transaction.source_file.name})"
+        target_statement_date: str | None = None
+        if len(matching_dates) == 1:
+            target_statement_date = matching_dates[0]
+        elif len(matching_dates) > 1:
+            target_statement_date = min(
+                matching_dates,
+                key=lambda statement_date: abs(
+                    (statement_periods_by_date[statement_date][1] - transaction.booking_date).days
+                ),
             )
 
+        if target_statement_date is None:
+            fallback_statement_date = _extract_statement_date(transaction.source_file)
+            if fallback_statement_date is not None:
+                target_statement_date = fallback_statement_date
+
+        if target_statement_date is None:
+            unassigned.append(transaction)
+            continue
+
+        if _extract_statement_date(transaction.source_file) != target_statement_date:
+            metrics["hsbc_period_remap_reassigned_tx_count"] += 1
+        assigned[target_statement_date].append(transaction)
+
+    metrics["hsbc_period_remap_unassigned_csv_tx_count"] = len(unassigned)
+    return dict(assigned), unassigned, metrics
+
+
+def _merge_hsbc_sources(
+    transactions: list[Transaction],
+    validations: list[StatementValidation],
+    source_files: list[Path],
+    hsbc_statement_periods_by_date: dict[str, tuple[date, date]],
+) -> tuple[
+    list[Transaction],
+    list[StatementValidation],
+    list[str],
+    dict[str, int],
+    list[dict[str, object]],
+]:
+    merged: list[Transaction] = []
+    warnings: list[str] = []
+    selection_diagnostics: list[dict[str, object]] = []
+
     metrics = {
-        "cross_source_duplicate_drop_count": duplicate_drop_count,
-        "cross_source_clash_drop_count": clash_drop_count,
+        "hsbc_csv_statement_replaced_count": 0,
+        "hsbc_pdf_fallback_statement_count": 0,
+        "hsbc_csv_only_statement_count": 0,
+        "hsbc_pdf_balance_validated_count": 0,
+        "hsbc_pdf_balance_validation_fail_count": 0,
+        "hsbc_adaptive_source_switch_count": 0,
+        "hsbc_selected_csv_month_count": 0,
+        "hsbc_selected_pdf_month_count": 0,
+        "hsbc_period_remap_applied_month_count": 0,
+        "hsbc_period_remap_reassigned_tx_count": 0,
+        "hsbc_period_remap_unassigned_csv_tx_count": 0,
     }
-    return kept, warnings, metrics
+
+    raw_hsbc_csv_transactions: list[Transaction] = []
+    hsbc_pdf_by_date: dict[str, list[Transaction]] = defaultdict(list)
+    hsbc_undated_transactions: list[Transaction] = []
+
+    for transaction in transactions:
+        if transaction.bank.strip().upper() != "HSBC":
+            merged.append(transaction)
+            continue
+
+        statement_date = _extract_statement_date(transaction.source_file)
+        if statement_date is None:
+            hsbc_undated_transactions.append(transaction)
+            continue
+
+        if transaction.parser == "hsbc_csv":
+            raw_hsbc_csv_transactions.append(transaction)
+        else:
+            hsbc_pdf_by_date[statement_date].append(transaction)
+
+    hsbc_csv_by_date, unassigned_hsbc_csv_transactions, remap_metrics = (
+        _assign_hsbc_csv_transactions_to_statement_dates(
+            raw_hsbc_csv_transactions,
+            hsbc_statement_periods_by_date,
+        )
+    )
+    metrics["hsbc_period_remap_applied_month_count"] = len(hsbc_statement_periods_by_date)
+    metrics["hsbc_period_remap_reassigned_tx_count"] = remap_metrics[
+        "hsbc_period_remap_reassigned_tx_count"
+    ]
+    metrics["hsbc_period_remap_unassigned_csv_tx_count"] = remap_metrics[
+        "hsbc_period_remap_unassigned_csv_tx_count"
+    ]
+    if unassigned_hsbc_csv_transactions:
+        merged.extend(unassigned_hsbc_csv_transactions)
+        warnings.append(
+            "HSBC period remap warning: "
+            f"{len(unassigned_hsbc_csv_transactions)} CSV transaction(s) could not be assigned to "
+            "a statement month and were kept unchanged"
+        )
+
+    hsbc_pdf_paths = _hsbc_pdf_paths_by_date(source_files)
+    hsbc_pdf_validations = _hsbc_pdf_validations_by_date(validations)
+
+    selected_by_date: dict[str, list[Transaction]] = {}
+    selected_source_by_date: dict[str, str] = {}
+    all_hsbc_statement_dates = sorted(
+        set(hsbc_csv_by_date) | set(hsbc_pdf_by_date) | set(hsbc_pdf_validations)
+    )
+
+    for statement_date in all_hsbc_statement_dates:
+        csv_rows = hsbc_csv_by_date.get(statement_date, [])
+        pdf_rows = hsbc_pdf_by_date.get(statement_date, [])
+        pdf_validation = hsbc_pdf_validations.get(statement_date)
+        has_pdf_balance_validation = (
+            pdf_validation is not None
+            and pdf_validation.opening_balance is not None
+            and pdf_validation.closing_balance is not None
+        )
+        csv_sum = sum((row.amount_native for row in csv_rows), start=Decimal("0"))
+        pdf_sum = sum((row.amount_native for row in pdf_rows), start=Decimal("0"))
+        csv_abs_difference: Decimal | None = None
+        pdf_abs_difference: Decimal | None = None
+        if has_pdf_balance_validation and pdf_validation is not None:
+            opening = pdf_validation.opening_balance
+            closing = pdf_validation.closing_balance
+            # Types narrowed by has_pdf_balance_validation.
+            if opening is not None and closing is not None:
+                csv_abs_difference = abs(opening + csv_sum - closing)
+                pdf_abs_difference = abs(opening + pdf_sum - closing)
+
+        if csv_rows and pdf_rows:
+            selected_source = "hsbc_csv"
+            if (
+                csv_abs_difference is not None
+                and pdf_abs_difference is not None
+                and pdf_abs_difference < csv_abs_difference
+            ):
+                selected_source = "hsbc"
+                metrics["hsbc_adaptive_source_switch_count"] += 1
+
+            if selected_source == "hsbc_csv":
+                source_file = hsbc_pdf_paths.get(statement_date)
+                if source_file is None and pdf_validation is not None:
+                    source_file = pdf_validation.source_file
+                if source_file is None:
+                    selected_rows = csv_rows
+                else:
+                    selected_rows = [
+                        replace(transaction, source_file=source_file) for transaction in csv_rows
+                    ]
+                metrics["hsbc_csv_statement_replaced_count"] += 1
+                metrics["hsbc_selected_csv_month_count"] += 1
+            else:
+                selected_rows = pdf_rows
+                metrics["hsbc_selected_pdf_month_count"] += 1
+            selected_source_by_date[statement_date] = selected_source
+            selected_by_date[statement_date] = selected_rows
+            merged.extend(selected_rows)
+        elif pdf_rows:
+            selected_source_by_date[statement_date] = "hsbc"
+            metrics["hsbc_pdf_fallback_statement_count"] += 1
+            metrics["hsbc_selected_pdf_month_count"] += 1
+            selected_by_date[statement_date] = pdf_rows
+            merged.extend(pdf_rows)
+        elif csv_rows:
+            selected_source_by_date[statement_date] = "hsbc_csv"
+            metrics["hsbc_csv_only_statement_count"] += 1
+            metrics["hsbc_selected_csv_month_count"] += 1
+            selected_by_date[statement_date] = csv_rows
+            merged.extend(csv_rows)
+
+        selected_rows_for_diag = selected_by_date.get(statement_date, [])
+        selected_sum = sum(
+            (row.amount_native for row in selected_rows_for_diag),
+            start=Decimal("0"),
+        )
+        selection_diagnostics.append(
+            {
+                "statement_date": statement_date,
+                "selected_source": selected_source_by_date.get(statement_date, "none"),
+                "csv_transaction_count": len(csv_rows),
+                "pdf_transaction_count": len(pdf_rows),
+                "csv_transaction_sum": str(csv_sum),
+                "pdf_transaction_sum": str(pdf_sum),
+                "selected_transaction_sum": str(selected_sum),
+                "csv_abs_difference": (
+                    float(csv_abs_difference) if csv_abs_difference is not None else None
+                ),
+                "pdf_abs_difference": (
+                    float(pdf_abs_difference) if pdf_abs_difference is not None else None
+                ),
+                "has_pdf_balance_validation": has_pdf_balance_validation,
+                "statement_period_start": (
+                    hsbc_statement_periods_by_date[statement_date][0].isoformat()
+                    if statement_date in hsbc_statement_periods_by_date
+                    else None
+                ),
+                "statement_period_end": (
+                    hsbc_statement_periods_by_date[statement_date][1].isoformat()
+                    if statement_date in hsbc_statement_periods_by_date
+                    else None
+                ),
+            }
+        )
+    if hsbc_undated_transactions:
+        merged.extend(hsbc_undated_transactions)
+        warnings.append(
+            "HSBC source merge warning: "
+            f"{len(hsbc_undated_transactions)} transaction(s) had no statement date in source file "
+            "name; kept unchanged"
+        )
+
+    non_hsbc_validations: list[StatementValidation] = []
+    hsbc_undated_validations: list[StatementValidation] = []
+    for validation in validations:
+        if validation.bank.strip().upper() != "HSBC":
+            non_hsbc_validations.append(validation)
+            continue
+        if _extract_statement_date(validation.source_file) is None:
+            hsbc_undated_validations.append(validation)
+
+    merged_validations: list[StatementValidation] = list(non_hsbc_validations)
+    merged_validations.extend(hsbc_undated_validations)
+    if hsbc_undated_validations:
+        warnings.append(
+            "HSBC source merge warning: "
+            f"{len(hsbc_undated_validations)} validation record(s) had no statement date and were "
+            "kept unchanged"
+        )
+
+    for statement_date in all_hsbc_statement_dates:
+        selected_rows = selected_by_date.get(statement_date, [])
+        selected_source = selected_source_by_date.get(statement_date, "hsbc")
+        transaction_sum = sum((row.amount_native for row in selected_rows), start=Decimal("0"))
+        pdf_validation = hsbc_pdf_validations.get(statement_date)
+        fallback_source_file = hsbc_pdf_paths.get(statement_date)
+        if fallback_source_file is None and selected_rows:
+            fallback_source_file = selected_rows[0].source_file
+        if fallback_source_file is None:
+            continue
+
+        if (
+            pdf_validation is None
+            or pdf_validation.opening_balance is None
+            or pdf_validation.closing_balance is None
+        ):
+            reason = (
+                "missing_pdf_balance_statement"
+                if pdf_validation is None
+                else (pdf_validation.reason or "missing_opening_or_closing")
+            )
+            merged_validations.append(
+                StatementValidation(
+                    source_file=fallback_source_file,
+                    bank="HSBC",
+                    parser=selected_source,
+                    statement_type="statement",
+                    opening_balance=pdf_validation.opening_balance if pdf_validation else None,
+                    closing_balance=pdf_validation.closing_balance if pdf_validation else None,
+                    transaction_sum=transaction_sum,
+                    expected_closing_balance=None,
+                    difference=None,
+                    status="uncheckable",
+                    reason=reason,
+                    severity="info",
+                )
+            )
+            continue
+
+        opening_balance = pdf_validation.opening_balance
+        closing_balance = pdf_validation.closing_balance
+        expected_closing_balance = opening_balance + transaction_sum
+        difference = expected_closing_balance - closing_balance
+        status = "pass"
+        reason: str | None = None
+        severity = "none"
+        metrics["hsbc_pdf_balance_validated_count"] += 1
+        if abs(difference) > Decimal("0.01"):
+            status = "fail"
+            reason = "balance_mismatch"
+            severity = "warning"
+            metrics["hsbc_pdf_balance_validation_fail_count"] += 1
+            csv_rows = hsbc_csv_by_date.get(statement_date, [])
+            pdf_rows = hsbc_pdf_by_date.get(statement_date, [])
+            csv_sum = sum((row.amount_native for row in csv_rows), start=Decimal("0"))
+            pdf_sum = sum((row.amount_native for row in pdf_rows), start=Decimal("0"))
+            csv_abs_difference = abs(opening_balance + csv_sum - closing_balance)
+            pdf_abs_difference = abs(opening_balance + pdf_sum - closing_balance)
+            warnings.append(
+                _hsbc_balance_warning(
+                    source_file=pdf_validation.source_file,
+                    selected_source=selected_source,
+                    opening_balance=opening_balance,
+                    transaction_sum=transaction_sum,
+                    expected_closing_balance=expected_closing_balance,
+                    closing_balance=closing_balance,
+                    difference=difference,
+                    csv_abs_difference=csv_abs_difference,
+                    pdf_abs_difference=pdf_abs_difference,
+                )
+            )
+
+        merged_validations.append(
+            StatementValidation(
+                source_file=pdf_validation.source_file,
+                bank="HSBC",
+                parser=selected_source,
+                statement_type=pdf_validation.statement_type,
+                opening_balance=opening_balance,
+                closing_balance=closing_balance,
+                transaction_sum=transaction_sum,
+                expected_closing_balance=expected_closing_balance,
+                difference=difference,
+                status=status,
+                reason=reason,
+                severity=severity,
+            )
+        )
+
+    return merged, merged_validations, warnings, metrics, selection_diagnostics
 
 
 def run_workflow(settings: Settings) -> WorkflowResult:
@@ -177,10 +537,21 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     parser_selection_diagnostics: list[dict[str, object]] = []
     parser_low_confidence_file_count = 0
     hsbc_csv_files_scanned = 0
-    cross_source_metrics = {
-        "cross_source_duplicate_drop_count": 0,
-        "cross_source_clash_drop_count": 0,
+    hsbc_statement_periods_by_date: dict[str, tuple[date, date]] = {}
+    hsbc_merge_metrics = {
+        "hsbc_csv_statement_replaced_count": 0,
+        "hsbc_pdf_fallback_statement_count": 0,
+        "hsbc_csv_only_statement_count": 0,
+        "hsbc_pdf_balance_validated_count": 0,
+        "hsbc_pdf_balance_validation_fail_count": 0,
+        "hsbc_adaptive_source_switch_count": 0,
+        "hsbc_selected_csv_month_count": 0,
+        "hsbc_selected_pdf_month_count": 0,
+        "hsbc_period_remap_applied_month_count": 0,
+        "hsbc_period_remap_reassigned_tx_count": 0,
+        "hsbc_period_remap_unassigned_csv_tx_count": 0,
     }
+    hsbc_selection_diagnostics: list[dict[str, object]] = []
 
     files = discover_statement_pdfs(settings.input_path)
     progress = tqdm(
@@ -222,12 +593,12 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             extracted.extend(output.transactions)
             warnings.extend(output.warnings)
             if output.validation is not None:
-                validations.append(
-                    replace(
-                        output.validation,
-                        statement_type=classify_statement_type(pdf_path),
-                    )
-                )
+                validations.append(output.validation)
+            if parser.name == "hsbc":
+                statement_date = _extract_statement_date(pdf_path)
+                statement_period = _parse_hsbc_statement_period(extracted_text.full_text)
+                if statement_date is not None and statement_period is not None:
+                    hsbc_statement_periods_by_date[statement_date] = statement_period
         except Exception as exc:
             files_failed += 1
             warnings.append(f"Failed to process {pdf_path}: {exc}")
@@ -239,8 +610,15 @@ def run_workflow(settings: Settings) -> WorkflowResult:
         extracted.extend(csv_import_result.transactions)
         warnings.extend(csv_import_result.warnings)
 
-    extracted, clash_warnings, cross_source_metrics = _resolve_cross_source_conflicts(extracted)
-    warnings.extend(clash_warnings)
+    extracted, validations, hsbc_merge_warnings, hsbc_merge_metrics, hsbc_selection_diagnostics = (
+        _merge_hsbc_sources(
+            extracted,
+            validations,
+            files,
+            hsbc_statement_periods_by_date,
+        )
+    )
+    warnings.extend(hsbc_merge_warnings)
     classified = classify_transactions(extracted)
     enriched, fx_warnings = _apply_fx_and_mtime(classified, settings)
     warnings.extend(fx_warnings)
@@ -307,10 +685,35 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "parser_low_confidence_file_count": parser_low_confidence_file_count,
             "parser_selection_diagnostics": parser_selection_diagnostics,
             "hsbc_csv_files_scanned": hsbc_csv_files_scanned,
-            "cross_source_duplicate_drop_count": cross_source_metrics[
-                "cross_source_duplicate_drop_count"
+            "hsbc_csv_statement_replaced_count": hsbc_merge_metrics[
+                "hsbc_csv_statement_replaced_count"
             ],
-            "cross_source_clash_drop_count": cross_source_metrics["cross_source_clash_drop_count"],
+            "hsbc_pdf_fallback_statement_count": hsbc_merge_metrics[
+                "hsbc_pdf_fallback_statement_count"
+            ],
+            "hsbc_csv_only_statement_count": hsbc_merge_metrics["hsbc_csv_only_statement_count"],
+            "hsbc_pdf_balance_validated_count": hsbc_merge_metrics[
+                "hsbc_pdf_balance_validated_count"
+            ],
+            "hsbc_pdf_balance_validation_fail_count": hsbc_merge_metrics[
+                "hsbc_pdf_balance_validation_fail_count"
+            ],
+            "hsbc_selection_policy": "adaptive_reconciliation",
+            "hsbc_adaptive_source_switch_count": hsbc_merge_metrics[
+                "hsbc_adaptive_source_switch_count"
+            ],
+            "hsbc_selected_csv_month_count": hsbc_merge_metrics["hsbc_selected_csv_month_count"],
+            "hsbc_selected_pdf_month_count": hsbc_merge_metrics["hsbc_selected_pdf_month_count"],
+            "hsbc_period_remap_applied_month_count": hsbc_merge_metrics[
+                "hsbc_period_remap_applied_month_count"
+            ],
+            "hsbc_period_remap_reassigned_tx_count": hsbc_merge_metrics[
+                "hsbc_period_remap_reassigned_tx_count"
+            ],
+            "hsbc_period_remap_unassigned_csv_tx_count": hsbc_merge_metrics[
+                "hsbc_period_remap_unassigned_csv_tx_count"
+            ],
+            "hsbc_selection_diagnostics": hsbc_selection_diagnostics,
             "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
         },
