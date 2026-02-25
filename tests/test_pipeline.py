@@ -9,6 +9,7 @@ import pandas as pd
 
 from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText
+from finance_tooling.importers.hsbc_csv import HsbcCsvImportResult
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import ParserOutput, StatementParser
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
@@ -20,6 +21,7 @@ from finance_tooling.store import UpsertResult
 class _DummyParser:
     name: str = "dummy"
     bank: str = "DummyBank"
+    currency: str = "EUR"
 
     def match_score(self, file_path: Path, first_page_text: str) -> int:
         del file_path, first_page_text
@@ -33,9 +35,9 @@ class _DummyParser:
             booking_date=date(2024, 5, 6),
             description="Salary",
             amount_native=Decimal("100.00"),
-            currency="EUR",
+            currency=self.currency,
             source_file=file_path,
-            bank="DummyBank",
+            bank=self.bank,
             parser=self.name,
         )
         return ParserOutput(transactions=[tx], warnings=[])
@@ -61,6 +63,7 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         base_currency="EUR",
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
+        hsbc_csv_path=None,
     )
 
     monkeypatch.setattr(
@@ -148,3 +151,228 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert result.reconciliation_fail_count == 0
     assert result.reconciliation_uncheckable_file_count == 0
     assert result.reconciliation_pass_ratio is None
+
+
+def test_run_workflow_prefers_hsbc_csv_on_cross_source_clash(monkeypatch, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    parsed_pdf = input_dir / "parsed_2024.pdf"
+    parsed_pdf.write_text("fake", encoding="utf-8")
+    hsbc_csv = input_dir / "hsbc.csv"
+    hsbc_csv.write_text("Date,Payee,Amount\n", encoding="utf-8")
+
+    settings = Settings(
+        input_path=input_dir,
+        output_path=input_dir / "dashboard.html",
+        master_parquet_path=input_dir / "transactions_master.parquet",
+        export_csv_path=input_dir / "transactions_normalized.csv",
+        export_json_path=input_dir / "transactions_normalized.json",
+        summary_json_path=input_dir / "run_summary.json",
+        completeness_json_path=input_dir / "completeness_report.json",
+        base_currency="GBP",
+        fx_cache_path=input_dir / "fx.parquet",
+        fx_auto_fetch=False,
+        hsbc_csv_path=hsbc_csv,
+    )
+
+    monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.extract_text_from_pdf",
+        lambda _: ExtractedPdfText(first_page_text="", full_text=""),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.select_parser_with_diagnostics",
+        lambda *_: ParserSelection(
+            parser=cast(StatementParser, _DummyParser(name="hsbc", bank="HSBC", currency="GBP")),
+            score=3,
+            threshold=2,
+            candidates=(
+                ParserScoreItem(parser_name="hsbc", score=3),
+                ParserScoreItem(parser_name="generic", score=0),
+            ),
+        ),
+    )
+    monkeypatch.setattr("finance_tooling.pipeline.discover_csv_files", lambda _: [hsbc_csv])
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.load_hsbc_csv_transactions",
+        lambda _: HsbcCsvImportResult(
+            transactions=[
+                Transaction(
+                    booking_date=date(2024, 5, 6),
+                    description="Card payment groceries",
+                    amount_native=Decimal("100.00"),
+                    currency="GBP",
+                    source_file=hsbc_csv,
+                    bank="HSBC",
+                    parser="hsbc_csv",
+                    account_label=None,
+                )
+            ],
+            warnings=[],
+            files_scanned=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.render_dashboard_html",
+        lambda *args, **kwargs: settings.output_path,
+    )
+
+    captured: dict[str, object] = {}
+
+    def _capture_upsert(_path: Path, transactions: list[Transaction]) -> UpsertResult:
+        captured["transactions"] = transactions
+        dataframe = pd.DataFrame(
+            [
+                {
+                    "transaction_id": "tx-1",
+                    "booking_date": tx.booking_date.isoformat(),
+                    "description": tx.description,
+                    "amount_native": float(tx.amount_native),
+                    "currency": tx.currency,
+                    "fx_rate_to_eur": 1.0,
+                    "fx_rate_date": tx.booking_date.isoformat(),
+                    "fx_source": "BASE",
+                    "amount_eur": float(tx.amount_native),
+                    "category": tx.category,
+                    "bank": tx.bank,
+                    "account_label": tx.account_label,
+                    "source_file": str(tx.source_file),
+                    "source_file_mtime": None,
+                    "parser": tx.parser,
+                    "ingested_at": "2026-02-23T00:00:00+00:00",
+                }
+                for tx in transactions
+            ]
+        )
+        return UpsertResult(
+            parquet_path=settings.master_parquet_path,
+            dataframe=dataframe,
+            new_rows=len(transactions),
+            total_rows=len(transactions),
+        )
+
+    monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)
+
+    run_workflow(settings)
+
+    kept_transactions = cast(list[Transaction], captured["transactions"])
+    assert len(kept_transactions) == 1
+    assert kept_transactions[0].parser == "hsbc_csv"
+
+    summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
+    assert summary_payload["hsbc_csv_files_scanned"] == 1
+    assert summary_payload["cross_source_duplicate_drop_count"] == 0
+    assert summary_payload["cross_source_clash_drop_count"] == 1
+
+
+def test_run_workflow_drops_cross_source_duplicates(monkeypatch, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    parsed_pdf = input_dir / "parsed_2024.pdf"
+    parsed_pdf.write_text("fake", encoding="utf-8")
+    hsbc_csv = input_dir / "hsbc.csv"
+    hsbc_csv.write_text("Date,Payee,Amount\n", encoding="utf-8")
+
+    settings = Settings(
+        input_path=input_dir,
+        output_path=input_dir / "dashboard.html",
+        master_parquet_path=input_dir / "transactions_master.parquet",
+        export_csv_path=input_dir / "transactions_normalized.csv",
+        export_json_path=input_dir / "transactions_normalized.json",
+        summary_json_path=input_dir / "run_summary.json",
+        completeness_json_path=input_dir / "completeness_report.json",
+        base_currency="GBP",
+        fx_cache_path=input_dir / "fx.parquet",
+        fx_auto_fetch=False,
+        hsbc_csv_path=hsbc_csv,
+    )
+
+    monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.extract_text_from_pdf",
+        lambda _: ExtractedPdfText(first_page_text="", full_text=""),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.select_parser_with_diagnostics",
+        lambda *_: ParserSelection(
+            parser=cast(StatementParser, _DummyParser(name="hsbc", bank="HSBC", currency="GBP")),
+            score=3,
+            threshold=2,
+            candidates=(
+                ParserScoreItem(parser_name="hsbc", score=3),
+                ParserScoreItem(parser_name="generic", score=0),
+            ),
+        ),
+    )
+    monkeypatch.setattr("finance_tooling.pipeline.discover_csv_files", lambda _: [hsbc_csv])
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.load_hsbc_csv_transactions",
+        lambda _: HsbcCsvImportResult(
+            transactions=[
+                Transaction(
+                    booking_date=date(2024, 5, 6),
+                    description="Salary April payroll",
+                    amount_native=Decimal("100.00"),
+                    currency="GBP",
+                    source_file=hsbc_csv,
+                    bank="HSBC",
+                    parser="hsbc_csv",
+                    account_label=None,
+                )
+            ],
+            warnings=[],
+            files_scanned=1,
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.render_dashboard_html",
+        lambda *args, **kwargs: settings.output_path,
+    )
+
+    captured: dict[str, object] = {}
+
+    def _capture_upsert(_path: Path, transactions: list[Transaction]) -> UpsertResult:
+        captured["transactions"] = transactions
+        dataframe = pd.DataFrame(
+            [
+                {
+                    "transaction_id": "tx-1",
+                    "booking_date": tx.booking_date.isoformat(),
+                    "description": tx.description,
+                    "amount_native": float(tx.amount_native),
+                    "currency": tx.currency,
+                    "fx_rate_to_eur": 1.0,
+                    "fx_rate_date": tx.booking_date.isoformat(),
+                    "fx_source": "BASE",
+                    "amount_eur": float(tx.amount_native),
+                    "category": tx.category,
+                    "bank": tx.bank,
+                    "account_label": tx.account_label,
+                    "source_file": str(tx.source_file),
+                    "source_file_mtime": None,
+                    "parser": tx.parser,
+                    "ingested_at": "2026-02-23T00:00:00+00:00",
+                }
+                for tx in transactions
+            ]
+        )
+        return UpsertResult(
+            parquet_path=settings.master_parquet_path,
+            dataframe=dataframe,
+            new_rows=len(transactions),
+            total_rows=len(transactions),
+        )
+
+    monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)
+
+    run_workflow(settings)
+
+    kept_transactions = cast(list[Transaction], captured["transactions"])
+    assert len(kept_transactions) == 1
+    assert kept_transactions[0].parser == "hsbc_csv"
+
+    summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
+    assert summary_payload["cross_source_duplicate_drop_count"] == 1
+    assert summary_payload["cross_source_clash_drop_count"] == 0

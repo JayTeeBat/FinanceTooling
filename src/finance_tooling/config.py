@@ -15,6 +15,7 @@ EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
+HSBC_CSV_PATH_ENV = "FINANCE_HSBC_CSV_PATH"
 DOTENV_PATH = Path(".env")
 
 
@@ -32,6 +33,7 @@ class Settings:
     base_currency: str
     fx_cache_path: Path
     fx_auto_fetch: bool
+    hsbc_csv_path: Path | None
 
 
 def _resolve_path_from_env(env_name: str) -> Path | None:
@@ -111,6 +113,9 @@ def load_settings_from_env() -> Settings:
         processed_dir / "fx_rates_history.parquet"
     )
     fx_auto_fetch = _parse_bool(os.environ.get(FX_AUTO_FETCH_ENV), default=True)
+    hsbc_csv_path = _resolve_path_from_env(HSBC_CSV_PATH_ENV)
+    if hsbc_csv_path is not None and not hsbc_csv_path.exists():
+        raise ValueError(f"HSBC CSV path does not exist: {hsbc_csv_path}")
 
     return Settings(
         input_path=input_path,
@@ -123,4 +128,5 @@ def load_settings_from_env() -> Settings:
         base_currency=base_currency,
         fx_cache_path=fx_cache_path,
         fx_auto_fetch=fx_auto_fetch,
+        hsbc_csv_path=hsbc_csv_path,
     )

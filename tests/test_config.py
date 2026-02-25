@@ -6,6 +6,7 @@ from finance_tooling.config import (
     EXPORT_JSON_PATH_ENV,
     FX_AUTO_FETCH_ENV,
     FX_CACHE_PATH_ENV,
+    HSBC_CSV_PATH_ENV,
     INPUT_PATH_ENV,
     MASTER_PARQUET_ENV,
     OUTPUT_PATH_ENV,
@@ -28,6 +29,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(EXPORT_JSON_PATH_ENV, raising=False)
     monkeypatch.delenv(FX_CACHE_PATH_ENV, raising=False)
     monkeypatch.delenv(FX_AUTO_FETCH_ENV, raising=False)
+    monkeypatch.delenv(HSBC_CSV_PATH_ENV, raising=False)
     monkeypatch.delenv(BASE_CURRENCY_ENV, raising=False)
 
     settings = load_settings_from_env()
@@ -42,6 +44,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.fx_cache_path == (processed_dir / "fx_rates_history.parquet").resolve()
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True
+    assert settings.hsbc_csv_path is None
 
 
 def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: Path) -> None:
@@ -60,7 +63,9 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     monkeypatch.setenv(EXPORT_JSON_PATH_ENV, str(custom_dir / "tx.json"))
     monkeypatch.setenv(FX_CACHE_PATH_ENV, str(custom_dir / "fx.parquet"))
     monkeypatch.setenv(FX_AUTO_FETCH_ENV, "false")
+    monkeypatch.setenv(HSBC_CSV_PATH_ENV, str(custom_dir / "hsbc.csv"))
     monkeypatch.setenv(BASE_CURRENCY_ENV, "gbp")
+    (custom_dir / "hsbc.csv").write_text("Date,Payee,Amount\n", encoding="utf-8")
 
     settings = load_settings_from_env()
 
@@ -73,6 +78,7 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.base_currency == "GBP"
     assert settings.fx_auto_fetch is False
+    assert settings.hsbc_csv_path == (custom_dir / "hsbc.csv").resolve()
 
 
 def test_load_settings_requires_input_and_processed_env(monkeypatch, tmp_path: Path) -> None:

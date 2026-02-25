@@ -50,6 +50,7 @@ export FINANCE_EXPORT_JSON_PATH="/path/to/output/transactions_normalized.json"
 export FINANCE_BASE_CURRENCY="EUR"
 export FINANCE_FX_CACHE_PATH="/path/to/output/fx_rates_history.parquet"
 export FINANCE_FX_AUTO_FETCH="true"
+export FINANCE_HSBC_CSV_PATH="/path/to/hsbc.csv_or_folder"
 
 uv run python -m finance_tooling
 ```
@@ -63,6 +64,11 @@ The workflow recursively scans statement PDFs, uses bank-specific parsers
 transactions, auto-fetches historical daily ECB FX rates and applies conversion
 using transaction booking dates (with previous business-day fallback), upserts into
 a canonical parquet store, and generates dashboard + exports.
+
+When `FINANCE_HSBC_CSV_PATH` is set, the workflow also imports HSBC CSV files and
+resolves PDF-vs-CSV overlap before upsert. Resolution policy is deterministic:
+for matching date/amount/currency/account tuples, HSBC CSV rows take precedence.
+Potential clashes are dropped from PDF side and logged in run warnings/summary.
 
 ## Outputs
 

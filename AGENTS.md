@@ -79,6 +79,24 @@ Use this template:
 ## Hand-Off Log
 
 ### 2026-02-25 - codex
+- Branch: `fix/hsbc-csv-import-main`
+- Completed:
+  - Added optional HSBC CSV source support via `FINANCE_HSBC_CSV_PATH` and CSV discovery for file/folder inputs.
+  - Implemented typed HSBC CSV importer (`hsbc_csv`) that normalizes transactions into the canonical model and emits parse warnings for malformed input rows.
+  - Integrated cross-source conflict handling in pipeline to prevent duplicate insertion between PDF and CSV extracts and to deterministically prefer CSV rows on clashes.
+  - Added summary diagnostics for CSV ingestion and cross-source resolution (`hsbc_csv_files_scanned`, duplicate/clash drop counts).
+  - Updated README and added tests for config wiring, CSV importer behavior, and PDF-vs-CSV duplicate/clash resolution.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - HSBC CSV conflict resolution currently uses a heuristic description similarity threshold; edge-case tuning may be needed against additional real-world samples.
+  - Cross-source resolution currently prefers CSV for HSBC rows only; if additional bank CSV imports are added, policy should be generalized.
+- Next action:
+  - Run full real-corpus ingestion with `FINANCE_HSBC_CSV_PATH` enabled and review clash warnings to calibrate the similarity heuristic.
+
+### 2026-02-25 - codex
 - Branch: `fix/parser-hardening`
 - Completed:
   - Hardened HSBC non-transaction filtering with explicit legal/footer noise
@@ -177,4 +195,3 @@ Use this template:
   - Implement fixture-driven HSBC parser hardening for the identified missing/
     failing years first, then re-run full pipeline and verify reconciliation
     deltas.
-
