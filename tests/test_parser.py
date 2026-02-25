@@ -230,3 +230,55 @@ def test_hsbc_parser_parses_multiple_continuation_transactions_in_single_date_bl
     ]
     assert result.validation is not None
     assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_does_not_apply_cr_header_marker_to_bp_continuation_rows() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 1000.00
+    01 Mar 2024 CR REVERSAL OF 25-08
+    BP MERCHANT PAYMENT 100.00 900.00
+    Closing Balance 900.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-100.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_ignores_amount_noise_after_block_transaction_rows() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 100.00
+    02 Mar 2024 VIS RETAILER NAME
+    LONDON 10.00 90.00
+    Interest rates information variable balance and cap details 19.90
+    Closing Balance 90.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-10.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_inherits_header_cr_marker_for_non_prefixed_continuation_amount() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 100.00
+    02 Mar 2024 CR PAYMENT REVERSAL
+    MERCHANT CREDIT 10.00 110.00
+    Closing Balance 110.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("10.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"

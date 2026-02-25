@@ -4,7 +4,9 @@
     "description": "Default HSBC sign handling should treat bare amount as debit",
     "file_name": "HSBC_sign_case_1.pdf",
     "text_file": "case_sign_debit_default.txt",
-    "expected_transaction_amounts": ["-25.00"],
+    "expected_transaction_amounts": [
+      "-25.00"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "-25.00",
     "expected_opening_balance": null,
@@ -20,7 +22,9 @@
     "description": "Salary/payment-in marker should force credit sign",
     "file_name": "HSBC_sign_case_2.pdf",
     "text_file": "case_sign_positive_hint_salary.txt",
-    "expected_transaction_amounts": ["1000.00"],
+    "expected_transaction_amounts": [
+      "1000.00"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "1000.00",
     "expected_opening_balance": null,
@@ -36,7 +40,10 @@
     "description": "CR/DR suffixes should override hint-driven defaults",
     "file_name": "HSBC_sign_case_3.pdf",
     "text_file": "case_sign_cr_dr_suffix_precedence.txt",
-    "expected_transaction_amounts": ["5.00", "-20.00"],
+    "expected_transaction_amounts": [
+      "5.00",
+      "-20.00"
+    ],
     "expected_transaction_count": 2,
     "expected_transaction_sum": "-15.00",
     "expected_opening_balance": "100.00",
@@ -52,7 +59,9 @@
     "description": "Continuation line should combine into one transaction description",
     "file_name": "HSBC_multiline_case_1.pdf",
     "text_file": "case_multiline_description_debit.txt",
-    "expected_transaction_amounts": ["-10.00"],
+    "expected_transaction_amounts": [
+      "-10.00"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "-10.00",
     "expected_opening_balance": "200.00",
@@ -68,7 +77,10 @@
     "description": "Balance brought/carried forward markers should reconcile",
     "file_name": "HSBC_balance_case_1.pdf",
     "text_file": "case_reconciliation_balance_markers_pass.txt",
-    "expected_transaction_amounts": ["-10.00", "20.00"],
+    "expected_transaction_amounts": [
+      "-10.00",
+      "20.00"
+    ],
     "expected_transaction_count": 2,
     "expected_transaction_sum": "10.00",
     "expected_opening_balance": "100.00",
@@ -84,7 +96,9 @@
     "description": "Mismatch between computed and closing balance should fail with warning",
     "file_name": "HSBC_balance_case_2.pdf",
     "text_file": "case_reconciliation_mismatch_warning.txt",
-    "expected_transaction_amounts": ["-10.00"],
+    "expected_transaction_amounts": [
+      "-10.00"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "-10.00",
     "expected_opening_balance": "100.00",
@@ -93,14 +107,18 @@
     "expected_validation_severity": "warning",
     "expected_validation_reason": "balance_mismatch",
     "expected_difference": "-5.00",
-    "expected_warning_substrings": ["reconciliation mismatch"]
+    "expected_warning_substrings": [
+      "reconciliation mismatch"
+    ]
   },
   {
     "id": "hsbc_reconciliation_uncheckable_missing_closing",
     "description": "Missing closing balance should mark statement uncheckable",
     "file_name": "HSBC_balance_case_3.pdf",
     "text_file": "case_reconciliation_uncheckable_missing_closing.txt",
-    "expected_transaction_amounts": ["-10.00"],
+    "expected_transaction_amounts": [
+      "-10.00"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "-10.00",
     "expected_opening_balance": "100.00",
@@ -125,14 +143,18 @@
     "expected_validation_severity": "none",
     "expected_validation_reason": null,
     "expected_difference": "0.00",
-    "expected_warning_substrings": ["balances were detected but no transactions were parsed"]
+    "expected_warning_substrings": [
+      "balances were detected but no transactions were parsed"
+    ]
   },
   {
     "id": "hsbc_running_balance_reference_noise",
     "description": "Reference ids without decimals must not be parsed as transaction amount",
     "file_name": "HSBC_balance_case_5.pdf",
     "text_file": "case_running_balance_reference_noise.txt",
-    "expected_transaction_amounts": ["-45.67"],
+    "expected_transaction_amounts": [
+      "-45.67"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "-45.67",
     "expected_opening_balance": "500.00",
@@ -148,7 +170,10 @@
     "description": "Real HSBC compact-date rows with carried-forward reconciliation mismatch",
     "file_name": "HSBC_2016-04-redacted.pdf",
     "text_file": "case_real_2016_compact_mismatch.txt",
-    "expected_transaction_amounts": ["-6.87", "-21.28"],
+    "expected_transaction_amounts": [
+      "-6.87",
+      "-21.28"
+    ],
     "expected_transaction_count": 2,
     "expected_transaction_sum": "-28.15",
     "expected_opening_balance": "6873.10",
@@ -157,14 +182,20 @@
     "expected_validation_severity": "warning",
     "expected_validation_reason": "balance_mismatch",
     "expected_difference": "107.64",
-    "expected_warning_substrings": ["reconciliation mismatch"]
+    "expected_warning_substrings": [
+      "reconciliation mismatch"
+    ]
   },
   {
     "id": "hsbc_real_2018_credit_prefix_mismatch",
     "description": "Real HSBC credit-prefix rows with running-balance column",
     "file_name": "HSBC_2018-06-redacted.pdf",
     "text_file": "case_real_2018_credit_prefix_mismatch.txt",
-    "expected_transaction_amounts": ["-6.99", "670.33", "669.92"],
+    "expected_transaction_amounts": [
+      "-6.99",
+      "670.33",
+      "669.92"
+    ],
     "expected_transaction_count": 3,
     "expected_transaction_sum": "1333.26",
     "expected_opening_balance": "12299.54",
@@ -173,14 +204,21 @@
     "expected_validation_severity": "warning",
     "expected_validation_reason": "balance_mismatch",
     "expected_difference": "-1736.44",
-    "expected_warning_substrings": ["reconciliation mismatch"]
+    "expected_warning_substrings": [
+      "reconciliation mismatch"
+    ]
   },
   {
     "id": "hsbc_real_2021_credit_prefix_mismatch",
     "description": "Real HSBC 2021 rows with DD and CR description prefixes",
     "file_name": "HSBC_2021-09-redacted.pdf",
     "text_file": "case_real_2021_credit_prefix_mismatch.txt",
-    "expected_transaction_amounts": ["-200.00", "-20.64", "-10.50", "44.04"],
+    "expected_transaction_amounts": [
+      "-200.00",
+      "-20.64",
+      "-10.50",
+      "44.04"
+    ],
     "expected_transaction_count": 4,
     "expected_transaction_sum": "-187.10",
     "expected_opening_balance": "4769.06",
@@ -189,14 +227,18 @@
     "expected_validation_severity": "warning",
     "expected_validation_reason": "balance_mismatch",
     "expected_difference": "3445.23",
-    "expected_warning_substrings": ["reconciliation mismatch"]
+    "expected_warning_substrings": [
+      "reconciliation mismatch"
+    ]
   },
   {
     "id": "hsbc_real_2016_wrapped_row_uncheckable",
     "description": "Real wrapped 2016 row fragment should parse available debit and remain uncheckable",
     "file_name": "HSBC_2016-04-wrapped-redacted.pdf",
     "text_file": "case_real_2016_wrapped_row_uncheckable.txt",
-    "expected_transaction_amounts": ["-207.00"],
+    "expected_transaction_amounts": [
+      "-207.00"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "-207.00",
     "expected_opening_balance": null,
@@ -212,7 +254,11 @@
     "description": "Date-anchored block should parse multiple continuation transactions",
     "file_name": "HSBC_2019-12-multiline-redacted.pdf",
     "text_file": "case_real_2019_multiline_block_pass.txt",
-    "expected_transaction_amounts": ["156.96", "-4.00", "-198.51"],
+    "expected_transaction_amounts": [
+      "156.96",
+      "-4.00",
+      "-198.51"
+    ],
     "expected_transaction_count": 3,
     "expected_transaction_sum": "-45.55",
     "expected_opening_balance": "1000.00",
@@ -228,7 +274,9 @@
     "description": "Continuation line with transaction and running balance should select transaction amount",
     "file_name": "HSBC_2019-12-cash-redacted.pdf",
     "text_file": "case_real_2019_cash_with_running_balance.txt",
-    "expected_transaction_amounts": ["-50.00"],
+    "expected_transaction_amounts": [
+      "-50.00"
+    ],
     "expected_transaction_count": 1,
     "expected_transaction_sum": "-50.00",
     "expected_opening_balance": "200.00",
@@ -244,7 +292,10 @@
     "description": "Wrapped merchant lines should resolve into separate debit continuation transaction",
     "file_name": "HSBC_2019-12-wrapped-redacted.pdf",
     "text_file": "case_real_2019_wrapped_merchants_uncheckable.txt",
-    "expected_transaction_amounts": ["156.96", "-10.46"],
+    "expected_transaction_amounts": [
+      "156.96",
+      "-10.46"
+    ],
     "expected_transaction_count": 2,
     "expected_transaction_sum": "146.50",
     "expected_opening_balance": null,
@@ -253,6 +304,131 @@
     "expected_validation_severity": "info",
     "expected_validation_reason": "missing_opening_or_closing",
     "expected_difference": null,
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_footer_rate_lines_ignored_2019_03",
+    "description": "Footer/legal lines with rate amounts must not parse as transactions (2019 variant)",
+    "file_name": "HSBC_2019-03-footer-redacted.pdf",
+    "text_file": "case_real_footer_rate_lines_ignored_2019_03.txt",
+    "expected_transaction_amounts": [],
+    "expected_transaction_count": 0,
+    "expected_transaction_sum": "0.00",
+    "expected_opening_balance": null,
+    "expected_closing_balance": "20735.78",
+    "expected_validation_status": "uncheckable",
+    "expected_validation_severity": "info",
+    "expected_validation_reason": "missing_opening_or_closing",
+    "expected_difference": null,
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_footer_rate_lines_ignored_2021_05",
+    "description": "Footer/legal lines with rate amounts must not parse as transactions (2021-05 variant)",
+    "file_name": "HSBC_2021-05-footer-redacted.pdf",
+    "text_file": "case_real_footer_rate_lines_ignored_2021_05.txt",
+    "expected_transaction_amounts": [],
+    "expected_transaction_count": 0,
+    "expected_transaction_sum": "0.00",
+    "expected_opening_balance": null,
+    "expected_closing_balance": "9699.62",
+    "expected_validation_status": "uncheckable",
+    "expected_validation_severity": "info",
+    "expected_validation_reason": "missing_opening_or_closing",
+    "expected_difference": null,
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_footer_rate_lines_ignored_2021_08",
+    "description": "Footer/legal lines with rate amounts must not parse as transactions (2021-08 variant)",
+    "file_name": "HSBC_2021-08-footer-redacted.pdf",
+    "text_file": "case_real_footer_rate_lines_ignored_2021_08.txt",
+    "expected_transaction_amounts": [],
+    "expected_transaction_count": 0,
+    "expected_transaction_sum": "0.00",
+    "expected_opening_balance": null,
+    "expected_closing_balance": "4769.06",
+    "expected_validation_status": "uncheckable",
+    "expected_validation_severity": "info",
+    "expected_validation_reason": "missing_opening_or_closing",
+    "expected_difference": null,
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_reversal_block_sign_isolation_2019_03",
+    "description": "CR reversal headers should not force credit sign on prefixed continuation rows",
+    "file_name": "HSBC_2019-03-reversal-redacted.pdf",
+    "text_file": "case_real_reversal_block_sign_isolation_2019_03.txt",
+    "expected_transaction_amounts": [
+      "100.00",
+      "-100.00"
+    ],
+    "expected_transaction_count": 2,
+    "expected_transaction_sum": "0.00",
+    "expected_opening_balance": "200.00",
+    "expected_closing_balance": "200.00",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_large_bp_transfer_sign_2021_05",
+    "description": "Large BP transfers should preserve debit sign while CR salary remains positive",
+    "file_name": "HSBC_2021-05-transfer-redacted.pdf",
+    "text_file": "case_real_large_bp_transfer_sign_2021_05.txt",
+    "expected_transaction_amounts": [
+      "-10000.00",
+      "-2225.00",
+      "771.59"
+    ],
+    "expected_transaction_count": 3,
+    "expected_transaction_sum": "-11453.41",
+    "expected_opening_balance": "15000.00",
+    "expected_closing_balance": "3546.59",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_high_value_cr_block_2017_04",
+    "description": "High-value credit/debit block should keep running-balance token selection stable",
+    "file_name": "HSBC_2017-04-high-value-redacted.pdf",
+    "text_file": "case_real_high_value_cr_block_2017_04.txt",
+    "expected_transaction_amounts": [
+      "2120.55",
+      "-1003.11",
+      "3258.94"
+    ],
+    "expected_transaction_count": 3,
+    "expected_transaction_sum": "4376.38",
+    "expected_opening_balance": "7612.26",
+    "expected_closing_balance": "11988.64",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
+    "id": "hsbc_real_statement_tail_block_terminates_context",
+    "description": "Tail/legal blocks after carried-forward line must not produce transactions",
+    "file_name": "HSBC_tail_context_redacted.pdf",
+    "text_file": "case_real_statement_tail_block_terminates_context.txt",
+    "expected_transaction_amounts": [
+      "-10.00"
+    ],
+    "expected_transaction_count": 1,
+    "expected_transaction_sum": "-10.00",
+    "expected_opening_balance": "100.00",
+    "expected_closing_balance": "90.00",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
     "expected_warning_substrings": []
   }
 ]

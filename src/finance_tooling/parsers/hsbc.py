@@ -61,6 +61,17 @@ _NOISE_PREFIXES = (
     "ACCOUNT NUMBER",
     "SHEET NUMBER",
 )
+_NOISE_SUBSTRINGS = (
+    "FINANCIAL SERVICES COMPENSATION SCHEME",
+    "MONTHLY CAP ON UNARRANGED OVERDRAFT CHARGES",
+    "CREDIT INTEREST IS CALCULATED DAILY",
+    "PAYMENT SCHEME EXCHANGE RATES",
+    "NON-STERLING CASH FEE",
+    "COMMERCIAL BANKING CUSTOMERS",
+    "BUSINESS PRICE LIST",
+    "DEAF OR SPEECH IMPAIRED CUSTOMERS",
+    "USED BY DEAF OR SPEECH IMPAIRED CUSTOMERS",
+)
 _NON_TXN_BALANCE_MARKERS = (
     "OPENINGBALANCE",
     "CLOSINGBALANCE",
@@ -212,47 +223,55 @@ def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
     rows: list[ParsedRow] = []
     pending_context_parts: list[str] = []
     pending_has_txn_prefix = False
+    pending_sign_marker: str | None = None
 
     header_row = _parse_statement_row(block.raw_date, block.header_text)
-    header_context: str | None = None
-    header_has_txn_context = False
     if header_row is not None:
         rows.append(header_row)
     elif not _is_non_transaction_line(block.header_text):
-        header_context = block.header_text
-        header_has_txn_context = _has_transaction_context(block.header_text)
+        pending_context_parts = [block.header_text]
+        pending_has_txn_prefix = _has_transaction_context(block.header_text)
+        pending_sign_marker = _description_sign_marker(block.header_text)
 
     for line in block.continuation_lines:
         if _is_non_transaction_line(line):
             pending_context_parts = []
             pending_has_txn_prefix = False
+            pending_sign_marker = None
+            continue
+
+        if _is_non_transaction_context_line(line):
+            pending_context_parts = []
+            pending_has_txn_prefix = False
+            pending_sign_marker = None
             continue
 
         if not _contains_amount(line):
             pending_context_parts.append(line)
             if _has_transaction_context(line):
                 pending_has_txn_prefix = True
+                pending_sign_marker = _description_sign_marker(line)
             continue
 
         line_is_txn = _starts_with_transaction_prefix(line)
-        if not line_is_txn and not pending_has_txn_prefix and not header_has_txn_context:
+        if not line_is_txn and not pending_has_txn_prefix:
             pending_context_parts = []
             pending_has_txn_prefix = False
+            pending_sign_marker = None
             continue
 
-        line_context = " ".join(pending_context_parts).strip() if pending_context_parts else None
-        fallback_context = " ".join(
-            part for part in (header_context, line_context) if part is not None and part
-        )
+        fallback_context = " ".join(part for part in pending_context_parts if part).strip()
         row = _parse_statement_row(
             block.raw_date,
             line,
-            fallback_context=fallback_context or None,
+            fallback_context=fallback_context if fallback_context else None,
+            inherited_sign_marker=pending_sign_marker if not line_is_txn else None,
         )
         if row is not None:
             rows.append(row)
         pending_context_parts = []
         pending_has_txn_prefix = False
+        pending_sign_marker = None
 
     return rows
 
@@ -262,6 +281,7 @@ def _parse_statement_row(
     rest: str,
     *,
     fallback_context: str | None = None,
+    inherited_sign_marker: str | None = None,
 ) -> ParsedRow | None:
     if _is_non_transaction_line(rest):
         return None
@@ -283,9 +303,13 @@ def _parse_statement_row(
     description_upper = description.upper()
     if any(skip in description_upper for skip in _SKIP_HINTS):
         return None
+    # Fallback context can carry unrelated CR/DR text from previous lines; infer
+    # description marker only from the transaction line lead itself.
     indicator_marker = _token_sign_marker(transaction_token) or _description_sign_marker(
-        description
+        description_lead
     )
+    if indicator_marker is None:
+        indicator_marker = inherited_sign_marker
     amount = _parse_amount_token(transaction_token)
     if amount is None:
         return None
@@ -310,6 +334,8 @@ def _is_non_transaction_line(line: str) -> bool:
         return True
     if any(upper.startswith(prefix) for prefix in _NOISE_PREFIXES):
         return True
+    if any(marker in upper for marker in _NOISE_SUBSTRINGS):
+        return True
     return False
 
 
@@ -329,9 +355,16 @@ def _starts_with_transaction_prefix(line: str) -> bool:
 
 def _has_transaction_context(line: str) -> bool:
     upper = line.strip().upper()
+    if _is_non_transaction_context_line(upper):
+        return False
     if _starts_with_transaction_prefix(upper):
         return True
     return any(hint in upper for hint in _TXN_CONTEXT_HINTS)
+
+
+def _is_non_transaction_context_line(line: str) -> bool:
+    upper = line.strip().upper()
+    return any(marker in upper for marker in _NOISE_SUBSTRINGS)
 
 
 def _parse_amount_token(token: str) -> Decimal | None:
