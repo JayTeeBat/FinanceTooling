@@ -76,15 +76,16 @@ def test_registry_returns_diagnostics_payload() -> None:
 def test_revolut_parser_parses_currency_symbol_amounts() -> None:
     parser = RevolutParser()
     text = """
-    19 Jun 2019 PayPlug €4.90 €4.90
-    24 Nov 2019 International Transfer to JeanBaptiste Thomazo €90.00 €0.45
+    Account transactions from 1 January 2019 to 31 December 2019
+    19 Jun 2019 PayPlug €4.90 €95.10
+    24 Jun 2019 Payment from JeanBaptiste Thomazo €20.00 €115.10
     """
 
     result = parser.parse(Path("account-statement_2019.pdf"), text)
 
     assert len(result.transactions) == 2
     assert result.transactions[0].amount_native == Decimal("-4.90")
-    assert result.transactions[1].amount_native == Decimal("-90.00")
+    assert result.transactions[1].amount_native == Decimal("20.00")
 
 
 def test_hsbc_parser_parses_compact_date_rows() -> None:

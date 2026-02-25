@@ -1,0 +1,4 @@
+Account transactions from 1 January 2019 to 31 December 2019
+Date Description Money out Money in Balance
+19 Jun 2019 PayPlug €4.90 €95.10
+24 Jun 2019 Payment from John €20.00 €115.10
