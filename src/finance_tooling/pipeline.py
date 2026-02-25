@@ -7,6 +7,7 @@ import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import cast
 
@@ -18,10 +19,11 @@ from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
 from finance_tooling.fx import ensure_fx_cache, resolve_rate
+from finance_tooling.importers import load_hsbc_csv_transactions
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers import select_parser_with_diagnostics
 from finance_tooling.parsers.base import StatementValidation
-from finance_tooling.scanner import discover_statement_pdfs
+from finance_tooling.scanner import discover_csv_files, discover_statement_pdfs
 from finance_tooling.store import upsert_transactions
 
 
@@ -85,6 +87,87 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
+def _normalize_description(description: str) -> str:
+    normalized = " ".join(description.strip().lower().split())
+    return normalized
+
+
+def _source_priority(transaction: Transaction) -> int:
+    # Higher priority wins on cross-source clashes.
+    return 2 if transaction.parser == "hsbc_csv" else 1
+
+
+def _transaction_resolution_key(transaction: Transaction) -> tuple[str, str, str, str, str]:
+    account_label = (transaction.account_label or "").strip().lower()
+    return (
+        transaction.bank.strip().upper(),
+        transaction.currency.strip().upper(),
+        transaction.booking_date.isoformat(),
+        str(transaction.amount_native),
+        account_label,
+    )
+
+
+def _descriptions_similar(left: str, right: str) -> bool:
+    left_normalized = _normalize_description(left)
+    right_normalized = _normalize_description(right)
+    if left_normalized == right_normalized:
+        return True
+    if left_normalized in right_normalized or right_normalized in left_normalized:
+        return True
+    similarity = SequenceMatcher(a=left_normalized, b=right_normalized).ratio()
+    return similarity >= 0.6
+
+
+def _resolve_cross_source_conflicts(
+    transactions: list[Transaction],
+) -> tuple[list[Transaction], list[str], dict[str, int]]:
+    grouped: dict[tuple[str, str, str, str, str], list[Transaction]] = {}
+    for transaction in transactions:
+        grouped.setdefault(_transaction_resolution_key(transaction), []).append(transaction)
+
+    kept: list[Transaction] = []
+    warnings: list[str] = []
+    duplicate_drop_count = 0
+    clash_drop_count = 0
+
+    for key in sorted(grouped):
+        group = grouped[key]
+        csv_rows = [transaction for transaction in group if transaction.parser == "hsbc_csv"]
+        non_csv_rows = [transaction for transaction in group if transaction.parser != "hsbc_csv"]
+
+        if not csv_rows or not non_csv_rows:
+            kept.extend(group)
+            continue
+
+        kept.extend(csv_rows)
+
+        remaining_csv_indices = set(range(len(csv_rows)))
+        for transaction in non_csv_rows:
+            matched_index: int | None = None
+            for csv_index in sorted(remaining_csv_indices):
+                if _descriptions_similar(transaction.description, csv_rows[csv_index].description):
+                    matched_index = csv_index
+                    break
+
+            if matched_index is not None:
+                duplicate_drop_count += 1
+                continue
+
+            clash_drop_count += 1
+            warnings.append(
+                "Conflict resolved in favor of HSBC CSV for "
+                f"{transaction.booking_date} {transaction.amount_native} "
+                f"({transaction.description!r} from {transaction.source_file.name})"
+            )
+
+    metrics = {
+        "cross_source_duplicate_drop_count": duplicate_drop_count,
+        "cross_source_clash_drop_count": clash_drop_count,
+    }
+    return kept, warnings, metrics
+
+
 def run_workflow(settings: Settings) -> WorkflowResult:
     """Execute the full finance statement workflow."""
     warnings: list[str] = []
@@ -93,6 +176,11 @@ def run_workflow(settings: Settings) -> WorkflowResult:
     validations: list[StatementValidation] = []
     parser_selection_diagnostics: list[dict[str, object]] = []
     parser_low_confidence_file_count = 0
+    hsbc_csv_files_scanned = 0
+    cross_source_metrics = {
+        "cross_source_duplicate_drop_count": 0,
+        "cross_source_clash_drop_count": 0,
+    }
 
     files = discover_statement_pdfs(settings.input_path)
     progress = tqdm(
@@ -139,6 +227,15 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             files_failed += 1
             warnings.append(f"Failed to process {pdf_path}: {exc}")
 
+    if settings.hsbc_csv_path is not None:
+        hsbc_csv_files = discover_csv_files(settings.hsbc_csv_path)
+        csv_import_result = load_hsbc_csv_transactions(hsbc_csv_files)
+        hsbc_csv_files_scanned = csv_import_result.files_scanned
+        extracted.extend(csv_import_result.transactions)
+        warnings.extend(csv_import_result.warnings)
+
+    extracted, clash_warnings, cross_source_metrics = _resolve_cross_source_conflicts(extracted)
+    warnings.extend(clash_warnings)
     classified = classify_transactions(extracted)
     enriched, fx_warnings = _apply_fx_and_mtime(classified, settings)
     warnings.extend(fx_warnings)
@@ -204,6 +301,11 @@ def run_workflow(settings: Settings) -> WorkflowResult:
             "statement_reconciliation_hsbc_median_abs_difference": hsbc_abs_difference,
             "parser_low_confidence_file_count": parser_low_confidence_file_count,
             "parser_selection_diagnostics": parser_selection_diagnostics,
+            "hsbc_csv_files_scanned": hsbc_csv_files_scanned,
+            "cross_source_duplicate_drop_count": cross_source_metrics[
+                "cross_source_duplicate_drop_count"
+            ],
+            "cross_source_clash_drop_count": cross_source_metrics["cross_source_clash_drop_count"],
             "fx_cache_path": str(settings.fx_cache_path),
             "warnings": warnings,
         },
