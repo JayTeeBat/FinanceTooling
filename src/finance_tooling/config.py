@@ -15,6 +15,9 @@ EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
+INGEST_WORKERS_ENV = "FINANCE_INGEST_WORKERS"
+INGEST_TEXT_CACHE_ENABLED_ENV = "FINANCE_INGEST_TEXT_CACHE_ENABLED"
+INGEST_TEXT_CACHE_PATH_ENV = "FINANCE_INGEST_TEXT_CACHE_PATH"
 HSBC_CSV_PATH_ENV = "FINANCE_HSBC_CSV_PATH"
 CATEGORY_RULES_PATH_ENV = "FINANCE_CATEGORY_RULES_PATH"
 CATEGORY_OVERRIDES_PATH_ENV = "FINANCE_CATEGORY_OVERRIDES_PATH"
@@ -35,6 +38,9 @@ class Settings:
     base_currency: str
     fx_cache_path: Path
     fx_auto_fetch: bool
+    ingest_workers: int
+    ingest_text_cache_enabled: bool
+    ingest_text_cache_path: Path
     hsbc_csv_path: Path | None
     category_rules_path: Path
     category_overrides_path: Path
@@ -58,6 +64,18 @@ def _parse_bool(raw_value: str | None, *, default: bool) -> bool:
         return False
 
     raise ValueError(f"Invalid boolean value: {raw_value}")
+
+
+def _parse_int(raw_value: str | None, *, default: int, minimum: int) -> int:
+    if raw_value is None:
+        return default
+    try:
+        parsed = int(raw_value.strip())
+    except ValueError as exc:
+        raise ValueError(f"Invalid integer value: {raw_value}") from exc
+    if parsed < minimum:
+        raise ValueError(f"Value must be >= {minimum}: {raw_value}")
+    return parsed
 
 
 def _load_dotenv(path: Path = DOTENV_PATH) -> None:
@@ -117,6 +135,14 @@ def load_settings_from_env() -> Settings:
         processed_dir / "fx_rates_history.parquet"
     )
     fx_auto_fetch = _parse_bool(os.environ.get(FX_AUTO_FETCH_ENV), default=True)
+    ingest_workers = _parse_int(os.environ.get(INGEST_WORKERS_ENV), default=1, minimum=1)
+    ingest_text_cache_enabled = _parse_bool(
+        os.environ.get(INGEST_TEXT_CACHE_ENABLED_ENV),
+        default=False,
+    )
+    ingest_text_cache_path = _resolve_path_from_env(INGEST_TEXT_CACHE_PATH_ENV) or (
+        input_path.parent / "cache" / "ingest_text_cache.parquet"
+    )
     hsbc_csv_path = _resolve_path_from_env(HSBC_CSV_PATH_ENV)
     if hsbc_csv_path is not None and not hsbc_csv_path.exists():
         raise ValueError(f"HSBC CSV path does not exist: {hsbc_csv_path}")
@@ -138,6 +164,9 @@ def load_settings_from_env() -> Settings:
         base_currency=base_currency,
         fx_cache_path=fx_cache_path,
         fx_auto_fetch=fx_auto_fetch,
+        ingest_workers=ingest_workers,
+        ingest_text_cache_enabled=ingest_text_cache_enabled,
+        ingest_text_cache_path=ingest_text_cache_path,
         hsbc_csv_path=hsbc_csv_path,
         category_rules_path=category_rules_path,
         category_overrides_path=category_overrides_path,

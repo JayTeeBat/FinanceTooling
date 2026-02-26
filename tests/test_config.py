@@ -9,6 +9,9 @@ from finance_tooling.config import (
     FX_AUTO_FETCH_ENV,
     FX_CACHE_PATH_ENV,
     HSBC_CSV_PATH_ENV,
+    INGEST_TEXT_CACHE_ENABLED_ENV,
+    INGEST_TEXT_CACHE_PATH_ENV,
+    INGEST_WORKERS_ENV,
     INPUT_PATH_ENV,
     MASTER_PARQUET_ENV,
     OUTPUT_PATH_ENV,
@@ -31,6 +34,9 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(EXPORT_JSON_PATH_ENV, raising=False)
     monkeypatch.delenv(FX_CACHE_PATH_ENV, raising=False)
     monkeypatch.delenv(FX_AUTO_FETCH_ENV, raising=False)
+    monkeypatch.delenv(INGEST_WORKERS_ENV, raising=False)
+    monkeypatch.delenv(INGEST_TEXT_CACHE_ENABLED_ENV, raising=False)
+    monkeypatch.delenv(INGEST_TEXT_CACHE_PATH_ENV, raising=False)
     monkeypatch.delenv(HSBC_CSV_PATH_ENV, raising=False)
     monkeypatch.delenv(CATEGORY_RULES_PATH_ENV, raising=False)
     monkeypatch.delenv(CATEGORY_OVERRIDES_PATH_ENV, raising=False)
@@ -50,6 +56,11 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.category_overrides_path == (processed_dir / "category_overrides.yaml").resolve()
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True
+    assert settings.ingest_workers == 1
+    assert settings.ingest_text_cache_enabled is False
+    assert settings.ingest_text_cache_path == (
+        raw_dir.parent / "cache" / "ingest_text_cache.parquet"
+    ).resolve()
     assert settings.hsbc_csv_path is None
 
 
@@ -69,6 +80,9 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     monkeypatch.setenv(EXPORT_JSON_PATH_ENV, str(custom_dir / "tx.json"))
     monkeypatch.setenv(FX_CACHE_PATH_ENV, str(custom_dir / "fx.parquet"))
     monkeypatch.setenv(FX_AUTO_FETCH_ENV, "false")
+    monkeypatch.setenv(INGEST_WORKERS_ENV, "4")
+    monkeypatch.setenv(INGEST_TEXT_CACHE_ENABLED_ENV, "true")
+    monkeypatch.setenv(INGEST_TEXT_CACHE_PATH_ENV, str(custom_dir / "ingest_cache.parquet"))
     monkeypatch.setenv(HSBC_CSV_PATH_ENV, str(custom_dir / "hsbc.csv"))
     monkeypatch.setenv(CATEGORY_RULES_PATH_ENV, str(custom_dir / "category_rules.yaml"))
     monkeypatch.setenv(CATEGORY_OVERRIDES_PATH_ENV, str(custom_dir / "category_overrides.yaml"))
@@ -88,6 +102,9 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.base_currency == "GBP"
     assert settings.fx_auto_fetch is False
+    assert settings.ingest_workers == 4
+    assert settings.ingest_text_cache_enabled is True
+    assert settings.ingest_text_cache_path == (custom_dir / "ingest_cache.parquet").resolve()
     assert settings.hsbc_csv_path == (custom_dir / "hsbc.csv").resolve()
 
 
@@ -118,6 +135,8 @@ def test_load_settings_reads_required_paths_from_dotenv(monkeypatch, tmp_path: P
                 f"{PROCESSED_PATH_ENV}={processed_dir}",
                 f"{BASE_CURRENCY_ENV}=usd",
                 f"{FX_AUTO_FETCH_ENV}=false",
+                f"{INGEST_WORKERS_ENV}=2",
+                f"{INGEST_TEXT_CACHE_ENABLED_ENV}=true",
             ]
         ),
         encoding="utf-8",
@@ -128,6 +147,8 @@ def test_load_settings_reads_required_paths_from_dotenv(monkeypatch, tmp_path: P
     monkeypatch.delenv(PROCESSED_PATH_ENV, raising=False)
     monkeypatch.delenv(BASE_CURRENCY_ENV, raising=False)
     monkeypatch.delenv(FX_AUTO_FETCH_ENV, raising=False)
+    monkeypatch.delenv(INGEST_WORKERS_ENV, raising=False)
+    monkeypatch.delenv(INGEST_TEXT_CACHE_ENABLED_ENV, raising=False)
 
     settings = load_settings_from_env()
 
@@ -135,3 +156,23 @@ def test_load_settings_reads_required_paths_from_dotenv(monkeypatch, tmp_path: P
     assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
     assert settings.base_currency == "USD"
     assert settings.fx_auto_fetch is False
+    assert settings.ingest_workers == 2
+    assert settings.ingest_text_cache_enabled is True
+
+
+def test_load_settings_rejects_invalid_ingest_workers(monkeypatch, tmp_path: Path) -> None:
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+
+    monkeypatch.setenv(INPUT_PATH_ENV, str(raw_dir))
+    monkeypatch.setenv(PROCESSED_PATH_ENV, str(processed_dir))
+    monkeypatch.setenv(INGEST_WORKERS_ENV, "0")
+
+    try:
+        load_settings_from_env()
+    except ValueError as exc:
+        assert ">= 1" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for invalid FINANCE_INGEST_WORKERS")

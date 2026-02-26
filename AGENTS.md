@@ -144,76 +144,80 @@ Prioritized recommendations from latest repo assessment:
 ## Hand-Off Log
 
 ### 2026-02-26 - codex
-- Branch: `main`
+- Branch: `feature/pipeline-decomposition`
 - Completed:
-  - Decomposed workflow orchestration by adding staged modules under
-    `src/finance_tooling/workflow/`:
-    `ingest.py`, `hsbc_merge.py`, `enrichment.py`, `reporting.py`, and
-    typed stage contracts in `types.py`.
-  - Refactored `src/finance_tooling/pipeline.py` into an orchestration facade
-    that preserves `run_workflow` behavior and compatibility helper functions
-    used by tests.
-  - Preserved output artifact and summary behavior while routing persistence
-    and reporting through the new reporting stage.
+  - Changed default ingest text cache location to live beside raw statements
+    under the same parent directory:
+    `<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet`.
+  - Kept explicit override support via `FINANCE_INGEST_TEXT_CACHE_PATH`.
+  - Updated README documentation to reflect encrypted-vault-aligned default
+    cache placement.
+  - Updated config tests for the new default cache path behavior.
 - Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
+  - `uv run ruff check src/finance_tooling/config.py tests/test_config.py README.md`: pass
+  - `uv run pytest tests/test_config.py`: pass
 - Open items:
-  - Narrow remaining broad exception handling in workflow/classification/store
-    paths to targeted error categories.
-  - Tighten completeness/report payload typing further to reduce `cast(...)`
-    usage.
+  - Existing hand-off entries still reference the prior `<processed>` default
+    path for cache location.
 - Next action:
-  - Continue the architecture hardening pass by replacing broad exception
-    handling with explicit error categories and structured warning context.
+  - Align historical performance notes/examples to the new sibling-of-raw cache
+    default wherever needed.
 
-### 2026-02-25 - codex
-- Branch: `feature/automated-categorization`
+### 2026-02-26 - codex
+- Branch: `feature/pipeline-decomposition`
 - Completed:
-  - Applied expanded categorization YAML rules and overrides (SEPA transfer
-    patterns, TFL transport, telecom, council tax, memberships, childcare,
-    and merchant-settlement handling for `MARS CHOCOLATE UK`).
-  - Snapshotted nominal processed artifacts before rerun to
-    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed_snapshots/2026-02-26-005537-categorization-pre`
-    with checksum manifest.
-  - Re-ran pipeline against nominal processed path with explicit YAML rule and
-    override env vars.
-  - Verified categorization improvement versus prior YAML benchmark:
-    `categorized_count` `2989 -> 4213` (`+1224`) and
-    `uncategorized_ratio` `0.7571 -> 0.6576` (`-0.0995`).
+  - Added persistent ingest text cache module
+    (`src/finance_tooling/workflow/ingest_cache.py`) with parquet-backed
+    load/upsert and keying by `(resolved_path, mtime_ns, file_size)`.
+  - Added cache settings:
+    `FINANCE_INGEST_TEXT_CACHE_ENABLED` (default `false`) and
+    `FINANCE_INGEST_TEXT_CACHE_PATH` (default
+    `<processed>/ingest_text_cache.parquet`).
+  - Integrated cache hit/miss/write flow into ingestion prep and propagated
+    cache diagnostics into `run_summary.json` and `performance_summary.json`.
+  - Added/updated tests for cache behavior and config coverage in
+    `tests/test_ingest.py`, `tests/test_config.py`,
+    `tests/test_pipeline.py`, and `tests/test_perf_check.py`.
+  - Validated cache behavior on full corpus in isolated path:
+    `/tmp/finance_tooling_processed_perf_cache_20260226-224820`
+    (run 2: ingest `2.709s`, cache hits `199`).
 - Checks:
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false FINANCE_CATEGORY_RULES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_rules.yaml FINANCE_CATEGORY_OVERRIDES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_overrides.yaml uv run python -m finance_tooling`: pass
-- Open items:
-  - The pre-run nominal snapshot summary predates categorization metrics, so
-    direct nominal pre/post category fields were unavailable.
-- Next action:
-  - Add a second-pass rule/override batch for new residual leaders (for
-    example `virement de mars wrigley ...`, `exchanged to eur`, and `sky digital`).
-
-### 2026-02-25 - codex
-- Branch: `feature/automated-categorization`
-- Completed:
-  - Added YAML categorization config support (`.yaml`/`.yml`) while retaining
-    JSON compatibility for rules and overrides.
-  - Added schema aliases for human-friendly rule keys (`id`/`match`) mapped to
-    classifier internals (`rule_id`/`match_type`).
-  - Switched default categorization config paths to
-    `<processed>/category_rules.yaml` and
-    `<processed>/category_overrides.yaml`.
-  - Added starter config templates under `config/`:
-    `category_rules.yaml` and `category_overrides.yaml`.
-  - Updated README examples to YAML and added tests for YAML rule/override
-    parsing and schema alias behavior.
-- Checks:
-  - `uv sync --all-groups`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
+  - `uv run ruff check src/finance_tooling tests`: pass
   - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
+  - `uv run pytest tests/test_config.py tests/test_ingest.py tests/test_pipeline.py tests/test_perf_check.py`: pass
+  - `FINANCE_PROCESSED_PATH=/tmp/finance_tooling_processed_perf_cache_20260226-224820 FINANCE_FX_AUTO_FETCH=false FINANCE_INGEST_WORKERS=4 FINANCE_INGEST_TEXT_CACHE_ENABLED=true FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw uv run python -m finance_tooling.perf_check`: pass
 - Open items:
-  - Override writeback workflow from reviewed/corrected exports is still not
-    implemented.
+  - Cache currently has no pruning/retention policy for very long-lived runs.
+  - Ingest parser/bank timing aggregates still exclude extraction-time
+    attribution.
 - Next action:
-  - Add a CLI command to upsert override entries from corrected category data.
+  - Add cache pruning policy (for example, max-age or max-rows) and extend
+    ingest timing diagnostics to separate extraction vs parser time.
+
+### 2026-02-26 - codex
+- Branch: `feature/pipeline-decomposition`
+- Completed:
+  - Added opt-in ingestion worker config (`FINANCE_INGEST_WORKERS`) and
+    parallelized ingest preparation in `src/finance_tooling/workflow/ingest.py`
+    while preserving default single-process behavior.
+  - Added ingest timing aggregates by parser and bank to workflow contracts and
+    summary artifacts (`run_summary.json`, `performance_summary.json`).
+  - Reduced repeated HSBC full-text flattening by introducing shared flattened
+    parsing helpers in ingest stage.
+  - Added ingest-focused tests in `tests/test_ingest.py` and expanded config
+    and pipeline/perf coverage for new settings and summary fields.
+  - Ran an isolated full-corpus perf check with workers:
+    `/tmp/finance_tooling_processed_perf_workers4_20260226-223247`.
+- Checks:
+  - `uv run ruff check src/finance_tooling tests`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest tests/test_config.py tests/test_ingest.py tests/test_pipeline.py tests/test_perf_check.py`: pass
+  - `FINANCE_PROCESSED_PATH=/tmp/finance_tooling_processed_perf_workers4_20260226-223247 FINANCE_FX_AUTO_FETCH=false FINANCE_INGEST_WORKERS=4 FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw uv run python -m finance_tooling.perf_check`: pass
+- Open items:
+  - Ingest timing aggregates currently cover parser parse time, not extraction
+    time per parser/bank.
+  - Font descriptor warnings from PDF extraction remain noisy in full-corpus
+    runs.
+- Next action:
+  - Add extraction-time attribution in ingest diagnostics and evaluate optional
+    warning suppression for known pdfplumber FontBBox noise.
