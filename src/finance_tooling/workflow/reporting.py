@@ -1,0 +1,184 @@
+"""Persistence and reporting stage."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import cast
+
+from pandas import DataFrame
+
+from finance_tooling.classify import ClassificationDiagnostics
+from finance_tooling.completeness import build_completeness_report
+from finance_tooling.config import Settings
+from finance_tooling.dashboard import render_dashboard_html
+from finance_tooling.models import Transaction, WorkflowResult
+from finance_tooling.parsers.base import StatementValidation
+from finance_tooling.store import UpsertResult, upsert_transactions
+from finance_tooling.workflow.types import (
+    HsbcSelectionDiagnostic,
+    ParserSelectionDiagnostic,
+    SummaryPayload,
+)
+
+
+def write_json(path: Path, payload: dict[str, object] | SummaryPayload) -> None:
+    """Write JSON payload with stable formatting."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+
+
+def persist_and_report(
+    *,
+    settings: Settings,
+    source_files: list[Path],
+    files_failed: int,
+    transactions: list[Transaction],
+    validations: list[StatementValidation],
+    parser_selection_diagnostics: list[ParserSelectionDiagnostic],
+    parser_low_confidence_file_count: int,
+    hsbc_csv_files_scanned: int,
+    hsbc_merge_metrics: dict[str, int],
+    hsbc_period_parse_variant_match_count: int,
+    hsbc_selection_diagnostics: list[HsbcSelectionDiagnostic],
+    classification_diagnostics: ClassificationDiagnostics,
+    warnings: list[str],
+    upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
+    render_dashboard_html_fn: Callable[..., Path] = render_dashboard_html,
+) -> tuple[WorkflowResult, SummaryPayload]:
+    """Persist artifacts and return final workflow result plus summary payload."""
+    completeness_report = build_completeness_report(
+        source_files,
+        transactions,
+        validations=validations,
+    )
+    completeness_status = cast(str, completeness_report["status"])
+    completeness_coverage_ratio = cast(float, completeness_report["file_coverage_ratio"])
+    missing_source_file_count = cast(int, completeness_report["missing_source_file_count"])
+    reconciliation = cast(dict[str, object], completeness_report["statement_reconciliation"])
+    reconciliation_checkable_count = cast(int, reconciliation["checkable_file_count"])
+    reconciliation_fail_count = cast(int, reconciliation["fail_count"])
+    reconciliation_uncheckable_count = cast(int, reconciliation["uncheckable_file_count"])
+    reconciliation_pass_ratio = cast(float | None, reconciliation["pass_ratio"])
+    reconciliation_median_abs_difference = cast(
+        float | None, reconciliation["median_abs_difference"]
+    )
+    by_bank_abs_difference = cast(list[dict[str, object]], reconciliation["by_bank_abs_difference"])
+    hsbc_abs_difference = next(
+        (
+            cast(float | None, item.get("median_abs_difference"))
+            for item in by_bank_abs_difference
+            if cast(str, item.get("bank")) == "HSBC"
+        ),
+        None,
+    )
+
+    write_json(settings.completeness_json_path, completeness_report)
+
+    upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
+
+    settings.export_csv_path.parent.mkdir(parents=True, exist_ok=True)
+    settings.export_json_path.parent.mkdir(parents=True, exist_ok=True)
+    dataframe: DataFrame = upsert.dataframe
+    dataframe.to_csv(settings.export_csv_path, index=False)
+    dataframe.to_json(settings.export_json_path, orient="records", indent=2)
+
+    dashboard_path = render_dashboard_html_fn(
+        dataframe,
+        settings.output_path,
+        base_currency=settings.base_currency,
+        files_scanned=len(source_files),
+        files_failed=files_failed,
+        new_rows=upsert.new_rows,
+    )
+
+    summary_payload: SummaryPayload = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "files_scanned": len(source_files),
+        "files_failed": files_failed,
+        "transactions_parsed": len(transactions),
+        "new_rows": upsert.new_rows,
+        "total_rows": upsert.total_rows,
+        "parquet_path": str(upsert.parquet_path),
+        "dashboard_path": str(dashboard_path),
+        "completeness_report_path": str(settings.completeness_json_path),
+        "completeness_status": completeness_status,
+        "file_coverage_ratio": completeness_coverage_ratio,
+        "missing_source_file_count": missing_source_file_count,
+        "statement_reconciliation_checkable_file_count": reconciliation_checkable_count,
+        "statement_reconciliation_fail_count": reconciliation_fail_count,
+        "statement_reconciliation_uncheckable_file_count": reconciliation_uncheckable_count,
+        "statement_reconciliation_pass_ratio": reconciliation_pass_ratio,
+        "statement_reconciliation_median_abs_difference": reconciliation_median_abs_difference,
+        "statement_reconciliation_hsbc_median_abs_difference": hsbc_abs_difference,
+        "parser_low_confidence_file_count": parser_low_confidence_file_count,
+        "parser_selection_diagnostics": parser_selection_diagnostics,
+        "hsbc_csv_files_scanned": hsbc_csv_files_scanned,
+        "hsbc_csv_statement_replaced_count": hsbc_merge_metrics[
+            "hsbc_csv_statement_replaced_count"
+        ],
+        "hsbc_pdf_fallback_statement_count": hsbc_merge_metrics[
+            "hsbc_pdf_fallback_statement_count"
+        ],
+        "hsbc_csv_only_statement_count": hsbc_merge_metrics["hsbc_csv_only_statement_count"],
+        "hsbc_pdf_balance_validated_count": hsbc_merge_metrics["hsbc_pdf_balance_validated_count"],
+        "hsbc_pdf_balance_validation_fail_count": hsbc_merge_metrics[
+            "hsbc_pdf_balance_validation_fail_count"
+        ],
+        "hsbc_selection_policy": "adaptive_reconciliation",
+        "hsbc_adaptive_source_switch_count": hsbc_merge_metrics[
+            "hsbc_adaptive_source_switch_count"
+        ],
+        "hsbc_selected_csv_month_count": hsbc_merge_metrics["hsbc_selected_csv_month_count"],
+        "hsbc_selected_pdf_month_count": hsbc_merge_metrics["hsbc_selected_pdf_month_count"],
+        "hsbc_period_remap_applied_month_count": hsbc_merge_metrics[
+            "hsbc_period_remap_applied_month_count"
+        ],
+        "hsbc_period_remap_reassigned_tx_count": hsbc_merge_metrics[
+            "hsbc_period_remap_reassigned_tx_count"
+        ],
+        "hsbc_period_remap_unassigned_csv_tx_count": hsbc_merge_metrics[
+            "hsbc_period_remap_unassigned_csv_tx_count"
+        ],
+        "hsbc_period_parse_variant_match_count": hsbc_period_parse_variant_match_count,
+        "hsbc_selection_diagnostics": hsbc_selection_diagnostics,
+        "categorized_count": classification_diagnostics.categorized_count,
+        "uncategorized_count": classification_diagnostics.uncategorized_count,
+        "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
+        "category_source_counts": classification_diagnostics.category_source_counts,
+        "top_uncategorized_descriptions": (
+            classification_diagnostics.top_uncategorized_descriptions
+        ),
+        "top_rules_by_hits": classification_diagnostics.top_rules_by_hits,
+        "category_rules_path": str(settings.category_rules_path),
+        "category_overrides_path": str(settings.category_overrides_path),
+        "fx_cache_path": str(settings.fx_cache_path),
+        "warnings": warnings,
+    }
+    write_json(settings.summary_json_path, summary_payload)
+
+    result = WorkflowResult(
+        dashboard_path=dashboard_path,
+        parquet_path=upsert.parquet_path,
+        csv_path=settings.export_csv_path,
+        json_path=settings.export_json_path,
+        summary_path=settings.summary_json_path,
+        completeness_path=settings.completeness_json_path,
+        files_scanned=len(source_files),
+        files_failed=files_failed,
+        transactions_parsed=len(transactions),
+        new_rows=upsert.new_rows,
+        total_rows=upsert.total_rows,
+        completeness_status=completeness_status,
+        completeness_coverage_ratio=completeness_coverage_ratio,
+        missing_source_file_count=missing_source_file_count,
+        reconciliation_checkable_file_count=reconciliation_checkable_count,
+        reconciliation_fail_count=reconciliation_fail_count,
+        reconciliation_uncheckable_file_count=reconciliation_uncheckable_count,
+        reconciliation_pass_ratio=reconciliation_pass_ratio,
+        warnings=tuple(warnings),
+    )
+
+    return result, summary_payload
