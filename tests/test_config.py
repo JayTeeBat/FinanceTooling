@@ -58,9 +58,10 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.fx_auto_fetch is True
     assert settings.ingest_workers == 1
     assert settings.ingest_text_cache_enabled is False
-    assert settings.ingest_text_cache_path == (
-        raw_dir.parent / "cache" / "ingest_text_cache.parquet"
-    ).resolve()
+    assert (
+        settings.ingest_text_cache_path
+        == (raw_dir.parent / "cache" / "ingest_text_cache.parquet").resolve()
+    )
     assert settings.hsbc_csv_path is None
 
 

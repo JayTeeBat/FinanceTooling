@@ -93,82 +93,115 @@ Use this template:
   - <single highest priority next step>
 ```
 
+## Next Agent Recommendations
+
+Prioritized recommendations for the next worker:
+
+1. Implement manual categorization review roundtrip (export -> review -> import)
+- Add a review export focused on fallback rows (`category_source == "fallback"`)
+  from normalized outputs.
+- Keep review columns explicit: `description`, `bank`, `account_label`,
+  `category`, `subcategory`, `category_source`.
+- Add import/upsert flow into `config/category_overrides.yaml`.
+- Upsert key policy: normalized fingerprint + bank by default, with optional
+  account-label scope.
+- Conflict policy: update matching override; insert when no match.
+
+2. Apply second-pass residual rule/override batch for current uncategorized leaders
+- Target the latest high-frequency residual fingerprints:
+  - `visa rate`
+  - `cr marschocolateuk cr marker`
+  - `virement de mars wrigley confection ery france notprovided`
+  - `exchanged to eur`
+  - `ealing broadway`
+  - `bp hmrc tfc`
+  - `sncf`
+  - `top up by`
+  - `vis revolut revolut com`
+  - `so curt park 29heronsforde`
+
+3. Add run-to-run categorization delta reporting
+- Compare current vs prior run counters (`categorized_count`,
+  `uncategorized_count`, `uncategorized_ratio`) in a compact summary for faster
+  iteration decisions.
+
+4. Keep quality gates mandatory
+- Continue enforcing:
+  - `uv run ruff check .`
+  - `uv run ruff format .`
+  - `uv run ty check src/finance_tooling tests`
+  - `uv run pytest`
+
+Success target for the next categorization pass:
+- Reduce `uncategorized_ratio` from `0.6617` by at least `0.05` absolute,
+  without worsening reconciliation metrics.
+
 
 ## Hand-Off Log
 
-### 2026-02-25 - codex
+### 2026-02-26 - codex
 - Branch: `feature/automated-categorization`
 - Completed:
-  - Applied expanded categorization YAML rules and overrides (SEPA transfer
-    patterns, TFL transport, telecom, council tax, memberships, childcare,
-    and merchant-settlement handling for `MARS CHOCOLATE UK`).
-  - Snapshotted nominal processed artifacts before rerun to
-    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed_snapshots/2026-02-26-005537-categorization-pre`
-    with checksum manifest.
-  - Re-ran pipeline against nominal processed path with explicit YAML rule and
-    override env vars.
-  - Verified categorization improvement versus prior YAML benchmark:
-    `categorized_count` `2989 -> 4213` (`+1224`) and
-    `uncategorized_ratio` `0.7571 -> 0.6576` (`-0.0995`).
+  - Executed iterative categorization waves with user-guided decisions using
+    the new review/export import-ready override workflow.
+  - Added targeted override batches for major residual fingerprints across
+    HSBC, Revolut, Boursobank, and LaBanquePostale, including
+    `virement pour -> Transfers/Bank Transfer`.
+  - Used 2022 Excel workbook context where available to disambiguate
+    categorization decisions (for example `DVLA-RF07HXX`, `LBEALING`).
+  - Added explicit review marker comment for
+    `virinstmrthomazojoummethom` in `config/category_overrides.yaml`.
 - Checks:
-  - `FINANCE_STATEMENTS_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_PROCESSED_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed FINANCE_HSBC_CSV_PATH=/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw FINANCE_FX_AUTO_FETCH=false FINANCE_CATEGORY_RULES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_rules.yaml FINANCE_CATEGORY_OVERRIDES_PATH=/home/thomazo/dev/FinanceTooling/worktrees/automated-categorization/config/category_overrides.yaml uv run python -m finance_tooling`: pass
+  - `set -a; . /home/thomazo/dev/FinanceTooling/.env; set +a; FINANCE_CATEGORY_OVERRIDES_PATH=... FINANCE_CATEGORY_RULES_PATH=... uv run python -m finance_tooling run`: pass
 - Open items:
-  - The pre-run nominal snapshot summary predates categorization metrics, so
-    direct nominal pre/post category fields were unavailable.
-- Next action:
-  - Add a second-pass rule/override batch for new residual leaders (for
-    example `virement de mars wrigley ...`, `exchanged to eur`, and `sky digital`).
-
-### 2026-02-25 - codex
-- Branch: `feature/automated-categorization`
-- Completed:
-  - Added YAML categorization config support (`.yaml`/`.yml`) while retaining
-    JSON compatibility for rules and overrides.
-  - Added schema aliases for human-friendly rule keys (`id`/`match`) mapped to
-    classifier internals (`rule_id`/`match_type`).
-  - Switched default categorization config paths to
-    `<processed>/category_rules.yaml` and
-    `<processed>/category_overrides.yaml`.
-  - Added starter config templates under `config/`:
-    `category_rules.yaml` and `category_overrides.yaml`.
-  - Updated README examples to YAML and added tests for YAML rule/override
-    parsing and schema alias behavior.
-- Checks:
-  - `uv sync --all-groups`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Override writeback workflow from reviewed/corrected exports is still not
+  - Remaining recurring uncategorized leaders include cheque rows (`cheque n`,
+    `cheque n cid 176`) and unresolved transfer/person patterns (`dd nest`,
+    `virinsttheryfrederic`).
+  - Run-to-run categorization delta reporting in summary output is still not
     implemented.
 - Next action:
-  - Add a CLI command to upsert override entries from corrected category data.
+  - Continue residual fingerprint triage from current top-uncategorized list,
+    prioritizing stable recurring merchants with clear taxonomy fit.
 
-### 2026-02-25 - codex
+### 2026-02-26 - codex
 - Branch: `feature/automated-categorization`
 - Completed:
-  - Implemented rules-first automated categorization with configurable JSON
-    rule and override stores, including robust description normalization and
-    deterministic precedence (`override -> rule -> fallback`).
-  - Extended normalized transaction schema and parquet columns with
-    categorization metadata (`subcategory`, `category_confidence`,
-    `category_source`, `category_rule_id`).
-  - Integrated categorization diagnostics into `run_summary.json` including
-    categorized/uncategorized counts and ratios, source breakdown, top
-    uncategorized descriptions, and top matched rules.
-  - Added settings/env support for
-    `FINANCE_CATEGORY_RULES_PATH` and `FINANCE_CATEGORY_OVERRIDES_PATH`.
-  - Added tests for override precedence and categorization diagnostics, and
-    updated config/pipeline tests for new settings and summary fields.
+  - Implemented manual categorization review roundtrip CLI in
+    `python -m finance_tooling` with `review-export` and `review-import`
+    subcommands.
+  - Added fallback-focused review export from normalized outputs with explicit
+    review columns: `description`, `bank`, `account_label`, `category`,
+    `subcategory`, `category_source`.
+  - Added review import/upsert flow to override config with default key
+    `fingerprint + bank` and optional `--include-account-label-scope`.
+  - Added tests for fallback export and override upsert/update behavior, and
+    documented roundtrip usage in `README.md`.
 - Checks:
   - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
+  - `uv run ruff format .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
 - Open items:
-  - Override persistence writeback workflow (capturing manual edits into
-    `category_overrides.json`) is not yet implemented.
+  - Second-pass residual rule/override batch for uncategorized leaders is still
+    pending.
+  - Run-to-run categorization delta reporting is not yet implemented.
 - Next action:
-  - Add a small CLI utility to ingest corrected category exports and upsert
-    override entries for future runs.
+  - Implement run-to-run categorization delta reporting in summary output.
+
+### 2026-02-26 - codex
+- Branch: `feature/automated-categorization`
+- Completed:
+  - Updated worktree `AGENTS.md` with a decision-complete next-worker plan for
+    manual categorization review writeback and residual rule targeting.
+  - Added explicit residual fingerprint priority list and measurable success
+    target for the next categorization pass.
+  - Added recommendation details for override upsert scope/conflict handling.
+- Checks:
+  - `manual AGENTS.md update only`: not run
+- Open items:
+  - Manual review export/import CLI for override upsert is still not
+    implemented.
+  - Residual second-pass rule batch has not been applied yet.
+- Next action:
+  - Implement CLI workflow to export fallback categorization candidates and
+    import reviewed results into `config/category_overrides.yaml`.

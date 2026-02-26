@@ -18,6 +18,23 @@ uv sync --all-groups
 uv run python -m finance_tooling
 ```
 
+Manual categorization review roundtrip:
+
+```bash
+uv run python -m finance_tooling review-export \
+  --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
+  --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv"
+
+# edit fallback_category_review.csv (set category/subcategory)
+
+uv run python -m finance_tooling review-import \
+  --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
+  --overrides-path "config/category_overrides.yaml"
+```
+
+Default upsert key is normalized `description` fingerprint + `bank`. Add
+`--include-account-label-scope` on import to include `account_label` in the key.
+
 ## Development Commands
 
 ```bash
