@@ -49,6 +49,8 @@ categorization, and reporting.
   - `feature/<topic>` for features
   - `fix/<topic>` for bug fixes
   - `chore/<topic>` for maintenance/tooling
+- No work happens directly on `main`; always use the standard work branch ->
+  PR -> merge process.
 - Keep pull requests focused and small enough to review quickly.
 - Do not rewrite history on shared branches.
 - Do not remove or rewrite legacy scripts unless a migration plan is included.
@@ -127,6 +129,32 @@ Prioritized recommendations from latest repo assessment:
 
 ## Hand-Off Log
 
+### 2026-02-26 - codex
+- Branch: `main`
+- Completed:
+  - Decomposed workflow orchestration by adding staged modules under
+    `src/finance_tooling/workflow/`:
+    `ingest.py`, `hsbc_merge.py`, `enrichment.py`, `reporting.py`, and
+    typed stage contracts in `types.py`.
+  - Refactored `src/finance_tooling/pipeline.py` into an orchestration facade
+    that preserves `run_workflow` behavior and compatibility helper functions
+    used by tests.
+  - Preserved output artifact and summary behavior while routing persistence
+    and reporting through the new reporting stage.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Narrow remaining broad exception handling in workflow/classification/store
+    paths to targeted error categories.
+  - Tighten completeness/report payload typing further to reduce `cast(...)`
+    usage.
+- Next action:
+  - Continue the architecture hardening pass by replacing broad exception
+    handling with explicit error categories and structured warning context.
+
 ### 2026-02-25 - codex
 - Branch: `feature/automated-categorization`
 - Completed:
@@ -175,16 +203,3 @@ Prioritized recommendations from latest repo assessment:
     implemented.
 - Next action:
   - Add a CLI command to upsert override entries from corrected category data.
-
-### 2026-02-25 - codex
-- Branch: `feature/automated-categorization`
-- Completed:
-  - Added `## Next Agent Recommendations` section before `## Hand-Off Log`.
-  - Documented prioritized architecture and maintainability improvements for the next agent session.
-- Checks:
-  - `sed -n '1,280p' AGENTS.md`: pass
-- Open items:
-  - Recommendations are documented; implementation work is still pending in code modules.
-- Next action:
-  - Add a small CLI utility to ingest corrected category exports and upsert
-    override entries for future runs.
