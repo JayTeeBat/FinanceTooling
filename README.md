@@ -28,6 +28,32 @@ uv run pytest
 uv run pre-commit run --all-files
 ```
 
+## Performance Check
+
+For a safe full-corpus performance run, use an isolated processed directory so
+the standard destination is untouched.
+
+```bash
+STAMP="$(date +%Y%m%d-%H%M%S)"
+PERF_PROCESSED_PATH="/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed_perf/${STAMP}"
+
+FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
+FINANCE_FX_AUTO_FETCH=false \
+FINANCE_INGEST_WORKERS=4 \
+FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
+FINANCE_HSBC_CSV_PATH="${FINANCE_STATEMENTS_PATH}" \
+uv run python -m finance_tooling.perf_check
+```
+
+The run writes standard artifacts plus `performance_summary.json` under the
+isolated `FINANCE_PROCESSED_PATH`, including total runtime and per-stage timings
+(`ingest`, `hsbc_merge`, `enrichment`, `reporting`).
+Set `FINANCE_INGEST_WORKERS` to `>1` to enable multiprocessing during ingestion
+prep; default is `1`.
+Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
+`<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet` (or override path via
+`FINANCE_INGEST_TEXT_CACHE_PATH`) and speed up repeated runs.
+
 ## Statement Workflow
 
 The workflow reads environment variables from `.env` in the repository root (if present),
@@ -50,6 +76,9 @@ export FINANCE_EXPORT_JSON_PATH="/path/to/output/transactions_normalized.json"
 export FINANCE_BASE_CURRENCY="EUR"
 export FINANCE_FX_CACHE_PATH="/path/to/output/fx_rates_history.parquet"
 export FINANCE_FX_AUTO_FETCH="true"
+export FINANCE_INGEST_WORKERS="1"
+export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
+export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet"
 export FINANCE_HSBC_CSV_PATH="/path/to/hsbc.csv_or_folder"
 export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
 export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"

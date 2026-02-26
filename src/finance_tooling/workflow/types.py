@@ -87,6 +87,12 @@ class SummaryPayload(TypedDict):
     hsbc_period_remap_unassigned_csv_tx_count: int
     hsbc_period_parse_variant_match_count: int
     hsbc_selection_diagnostics: list[HsbcSelectionDiagnostic]
+    ingest_parser_duration_seconds_by_parser: dict[str, float]
+    ingest_duration_seconds_by_bank: dict[str, float]
+    ingest_text_cache_enabled: bool
+    ingest_text_cache_hits: int
+    ingest_text_cache_misses: int
+    ingest_text_cache_write_count: int
     categorized_count: int
     uncategorized_count: int
     uncategorized_ratio: float
@@ -113,6 +119,12 @@ class IngestResult:
     hsbc_statement_periods_by_date: dict[str, tuple[date, date]]
     hsbc_period_parse_variant_match_count: int
     hsbc_csv_files_scanned: int
+    parser_duration_seconds_by_parser: dict[str, float]
+    duration_seconds_by_bank: dict[str, float]
+    text_cache_enabled: bool
+    text_cache_hits: int
+    text_cache_misses: int
+    text_cache_write_count: int
 
 
 @dataclass(frozen=True)

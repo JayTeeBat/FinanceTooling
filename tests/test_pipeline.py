@@ -67,6 +67,9 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         base_currency="EUR",
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
+        ingest_workers=1,
+        ingest_text_cache_enabled=False,
+        ingest_text_cache_path=input_dir / "ingest_text_cache.parquet",
         hsbc_csv_path=None,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
@@ -149,6 +152,12 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["hsbc_period_parse_variant_match_count"] == 0
     assert summary_payload["parser_low_confidence_file_count"] == 2
     assert len(summary_payload["parser_selection_diagnostics"]) == 2
+    assert "ingest_parser_duration_seconds_by_parser" in summary_payload
+    assert "ingest_duration_seconds_by_bank" in summary_payload
+    assert summary_payload["ingest_text_cache_enabled"] is False
+    assert summary_payload["ingest_text_cache_hits"] == 0
+    assert summary_payload["ingest_text_cache_misses"] == 0
+    assert summary_payload["ingest_text_cache_write_count"] == 0
     assert summary_payload["categorized_count"] == 1
     assert summary_payload["uncategorized_count"] == 0
     assert summary_payload["uncategorized_ratio"] == 0.0
@@ -255,6 +264,9 @@ def test_run_workflow_prefers_hsbc_csv_for_same_statement_month(
         base_currency="GBP",
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
+        ingest_workers=1,
+        ingest_text_cache_enabled=False,
+        ingest_text_cache_path=input_dir / "ingest_text_cache.parquet",
         hsbc_csv_path=hsbc_csv,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
@@ -378,6 +390,9 @@ def test_run_workflow_keeps_pdf_fallback_and_csv_only_statements(
         base_currency="GBP",
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
+        ingest_workers=1,
+        ingest_text_cache_enabled=False,
+        ingest_text_cache_path=input_dir / "ingest_text_cache.parquet",
         hsbc_csv_path=hsbc_csv,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
@@ -500,6 +515,9 @@ def test_run_workflow_uses_pdf_balances_to_adaptively_select_source(
         base_currency="GBP",
         fx_cache_path=input_dir / "fx.parquet",
         fx_auto_fetch=False,
+        ingest_workers=1,
+        ingest_text_cache_enabled=False,
+        ingest_text_cache_path=input_dir / "ingest_text_cache.parquet",
         hsbc_csv_path=hsbc_csv,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
