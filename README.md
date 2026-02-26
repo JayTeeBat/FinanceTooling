@@ -51,6 +51,8 @@ export FINANCE_BASE_CURRENCY="EUR"
 export FINANCE_FX_CACHE_PATH="/path/to/output/fx_rates_history.parquet"
 export FINANCE_FX_AUTO_FETCH="true"
 export FINANCE_HSBC_CSV_PATH="/path/to/hsbc.csv_or_folder"
+export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
+export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"
 
 uv run python -m finance_tooling
 ```
@@ -64,6 +66,21 @@ The workflow recursively scans statement PDFs, uses bank-specific parsers
 transactions, auto-fetches historical daily ECB FX rates and applies conversion
 using transaction booking dates (with previous business-day fallback), upserts into
 a canonical parquet store, and generates dashboard + exports.
+
+Categorization is deterministic and rules-first. When no categorization env vars are
+set, the workflow expects:
+
+- `<FINANCE_PROCESSED_PATH>/category_rules.yaml`
+- `<FINANCE_PROCESSED_PATH>/category_overrides.yaml`
+
+The repository includes starter templates:
+
+- `config/category_rules.yaml`
+- `config/category_overrides.yaml`
+
+Supported formats for both files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
+Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
+standard categorization rules.
 
 When `FINANCE_HSBC_CSV_PATH` is set, the workflow also imports HSBC CSV files and
 merges HSBC sources by statement month (`YYYY-MM-DD` in file names). For months where

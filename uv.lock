@@ -230,6 +230,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pdfplumber" },
     { name = "pyarrow" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "tqdm" },
 ]
@@ -247,6 +248,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2.0" },
     { name = "pdfplumber", specifier = ">=0.11.0" },
     { name = "pyarrow", specifier = ">=18.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "requests", specifier = ">=2.32.0" },
     { name = "tqdm", specifier = ">=4.67.0" },
 ]

@@ -1,0 +1,135 @@
+version: 1
+overrides:
+  # Fingerprints should use normalized descriptions (lowercase, compact spaces).
+  - fingerprint: paypal payment
+    category: Transfers
+    subcategory: Wallet Transfer
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: virsepac p a m depoitiers
+    category: Transfers
+    subcategory: Bank Transfer
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: virsepacafdelavienne
+    category: Transfers
+    subcategory: Bank Transfer
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: prlvsepaorange sa
+    category: Utilities
+    subcategory: Telecom
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: prlvsepasgfidescogeneral fidesco
+    category: Memberships
+    subcategory: Charity & Membership
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: lb ealing
+    category: Housing
+    subcategory: Council Tax
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: ealing broadway ss ealing
+    category: Housing
+    subcategory: Council Tax
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: ealing broadway ce ealing
+    category: Housing
+    subcategory: Council Tax
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: transport for london
+    category: Transport
+    subcategory: Mobility
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: tfl travel ch tfl gov uk cp
+    category: Transport
+    subcategory: Mobility
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: vodafone ltd
+    category: Utilities
+    subcategory: Telecom
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: h3g
+    category: Utilities
+    subcategory: Telecom
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: national trust mem
+    category: Memberships
+    subcategory: Charity & Membership
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: tax free childcare
+    category: Family
+    subcategory: Childcare
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: ail hsbc
+    category: Fees
+    subcategory: Bank Fees
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: marks spencer plc ealing brdway
+    category: Shopping
+    subcategory: General Retail
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: tesco
+    category: Groceries
+    subcategory: Supermarket
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: co op
+    category: Groceries
+    subcategory: Supermarket
+    bank: null
+    account_label: null
+    hit_count: 0
+
+  - fingerprint: mars chocolate uk
+    category: Income
+    subcategory: Merchant Settlement
+    bank: HSBC
+    account_label: null
+    hit_count: 0

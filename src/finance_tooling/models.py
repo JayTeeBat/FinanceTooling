@@ -18,6 +18,10 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "fx_source",
     "amount_eur",
     "category",
+    "subcategory",
+    "category_confidence",
+    "category_source",
+    "category_rule_id",
     "bank",
     "account_label",
     "source_file",
@@ -39,6 +43,10 @@ class Transaction:
     bank: str
     parser: str
     category: str = "Uncategorized"
+    subcategory: str | None = None
+    category_confidence: float | None = None
+    category_source: str | None = None
+    category_rule_id: str | None = None
     account_label: str | None = None
     fx_rate_to_eur: Decimal | None = None
     fx_rate_date: date | None = None

@@ -16,6 +16,8 @@ EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
 HSBC_CSV_PATH_ENV = "FINANCE_HSBC_CSV_PATH"
+CATEGORY_RULES_PATH_ENV = "FINANCE_CATEGORY_RULES_PATH"
+CATEGORY_OVERRIDES_PATH_ENV = "FINANCE_CATEGORY_OVERRIDES_PATH"
 DOTENV_PATH = Path(".env")
 
 
@@ -34,6 +36,8 @@ class Settings:
     fx_cache_path: Path
     fx_auto_fetch: bool
     hsbc_csv_path: Path | None
+    category_rules_path: Path
+    category_overrides_path: Path
 
 
 def _resolve_path_from_env(env_name: str) -> Path | None:
@@ -116,6 +120,12 @@ def load_settings_from_env() -> Settings:
     hsbc_csv_path = _resolve_path_from_env(HSBC_CSV_PATH_ENV)
     if hsbc_csv_path is not None and not hsbc_csv_path.exists():
         raise ValueError(f"HSBC CSV path does not exist: {hsbc_csv_path}")
+    category_rules_path = _resolve_path_from_env(CATEGORY_RULES_PATH_ENV) or (
+        processed_dir / "category_rules.yaml"
+    )
+    category_overrides_path = _resolve_path_from_env(CATEGORY_OVERRIDES_PATH_ENV) or (
+        processed_dir / "category_overrides.yaml"
+    )
 
     return Settings(
         input_path=input_path,
@@ -129,4 +139,6 @@ def load_settings_from_env() -> Settings:
         fx_cache_path=fx_cache_path,
         fx_auto_fetch=fx_auto_fetch,
         hsbc_csv_path=hsbc_csv_path,
+        category_rules_path=category_rules_path,
+        category_overrides_path=category_overrides_path,
     )

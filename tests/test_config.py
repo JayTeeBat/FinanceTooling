@@ -2,6 +2,8 @@ from pathlib import Path
 
 from finance_tooling.config import (
     BASE_CURRENCY_ENV,
+    CATEGORY_OVERRIDES_PATH_ENV,
+    CATEGORY_RULES_PATH_ENV,
     EXPORT_CSV_PATH_ENV,
     EXPORT_JSON_PATH_ENV,
     FX_AUTO_FETCH_ENV,
@@ -30,6 +32,8 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(FX_CACHE_PATH_ENV, raising=False)
     monkeypatch.delenv(FX_AUTO_FETCH_ENV, raising=False)
     monkeypatch.delenv(HSBC_CSV_PATH_ENV, raising=False)
+    monkeypatch.delenv(CATEGORY_RULES_PATH_ENV, raising=False)
+    monkeypatch.delenv(CATEGORY_OVERRIDES_PATH_ENV, raising=False)
     monkeypatch.delenv(BASE_CURRENCY_ENV, raising=False)
 
     settings = load_settings_from_env()
@@ -42,6 +46,8 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.fx_cache_path == (processed_dir / "fx_rates_history.parquet").resolve()
+    assert settings.category_rules_path == (processed_dir / "category_rules.yaml").resolve()
+    assert settings.category_overrides_path == (processed_dir / "category_overrides.yaml").resolve()
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True
     assert settings.hsbc_csv_path is None
@@ -64,6 +70,8 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     monkeypatch.setenv(FX_CACHE_PATH_ENV, str(custom_dir / "fx.parquet"))
     monkeypatch.setenv(FX_AUTO_FETCH_ENV, "false")
     monkeypatch.setenv(HSBC_CSV_PATH_ENV, str(custom_dir / "hsbc.csv"))
+    monkeypatch.setenv(CATEGORY_RULES_PATH_ENV, str(custom_dir / "category_rules.yaml"))
+    monkeypatch.setenv(CATEGORY_OVERRIDES_PATH_ENV, str(custom_dir / "category_overrides.yaml"))
     monkeypatch.setenv(BASE_CURRENCY_ENV, "gbp")
     (custom_dir / "hsbc.csv").write_text("Date,Payee,Amount\n", encoding="utf-8")
 
@@ -74,6 +82,8 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.export_csv_path == (custom_dir / "tx.csv").resolve()
     assert settings.export_json_path == (custom_dir / "tx.json").resolve()
     assert settings.fx_cache_path == (custom_dir / "fx.parquet").resolve()
+    assert settings.category_rules_path == (custom_dir / "category_rules.yaml").resolve()
+    assert settings.category_overrides_path == (custom_dir / "category_overrides.yaml").resolve()
     assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.base_currency == "GBP"
