@@ -48,12 +48,26 @@ categorization, and reporting.
 - Branch naming:
   - `feature/<topic>` for features
   - `fix/<topic>` for bug fixes
+  - `refactor/<topic>` for refactors
   - `chore/<topic>` for maintenance/tooling
 - No work happens directly on `main`; always use the standard work branch ->
   PR -> merge process.
 - Keep pull requests focused and small enough to review quickly.
 - Do not rewrite history on shared branches.
 - Do not remove or rewrite legacy scripts unless a migration plan is included.
+
+### Standard Workflow
+
+1. Do not work on `main`; implement changes on a dedicated
+   `feature/<topic>`, `fix/<topic>`, or `refactor/<topic>` branch.
+2. Before proposing merge, ensure work is user-validated and all mandatory
+   quality gates pass:
+   - `uv run ruff check .`
+   - `uv run ruff format .`
+   - `uv run ty check src/finance_tooling tests`
+   - `uv run pytest`
+3. Once validated and green, commit on the working branch, push to `origin`,
+   and open a PR targeting `main` (do not merge directly from local state).
 
 ## Legacy and Migration Policy
 
