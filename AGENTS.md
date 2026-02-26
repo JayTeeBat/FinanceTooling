@@ -93,6 +93,37 @@ Use this template:
   - <single highest priority next step>
 ```
 
+## Next Agent Recommendations
+
+Prioritized recommendations from latest repo assessment:
+
+1. Decompose workflow orchestration in `src/finance_tooling/pipeline.py`
+- Split into focused units (`ingest`, `hsbc_merge`, `enrichment`, `reporting`) while preserving behavior.
+- Benefit: lower maintenance risk, simpler reasoning, smaller test surfaces.
+
+2. Tighten typed boundaries for report payloads
+- Replace broad `dict[str, object]` payload construction/casts with typed dataclasses or `TypedDict` for summary and completeness outputs.
+- Benefit: safer refactors and clearer internal APIs.
+
+3. Preserve monetary precision through storage/reporting paths
+- Reduce `Decimal -> float` conversions where not strictly required; keep decimal-safe representation until final presentation.
+- Benefit: better reconciliation accuracy and less rounding drift.
+
+4. Replace broad exception handling with targeted error categories
+- Narrow `except Exception` blocks in workflow/FX paths and emit structured warning context.
+- Benefit: improved observability and faster debugging of real failures.
+
+5. Improve parser/importer extensibility model
+- Move from static registry tuple toward explicit plugin registration/discovery pattern.
+- Benefit: easier onboarding of additional bank formats with cleaner boundaries.
+
+6. Keep quality gates mandatory
+- Continue enforcing:
+  - `uv run ruff check .`
+  - `uv run ruff format .`
+  - `uv run ty check src/finance_tooling tests`
+  - `uv run pytest`
+- Benefit: protects reliability during refactors of parser and pipeline internals.
 
 ## Hand-Off Log
 
@@ -148,27 +179,12 @@ Use this template:
 ### 2026-02-25 - codex
 - Branch: `feature/automated-categorization`
 - Completed:
-  - Implemented rules-first automated categorization with configurable JSON
-    rule and override stores, including robust description normalization and
-    deterministic precedence (`override -> rule -> fallback`).
-  - Extended normalized transaction schema and parquet columns with
-    categorization metadata (`subcategory`, `category_confidence`,
-    `category_source`, `category_rule_id`).
-  - Integrated categorization diagnostics into `run_summary.json` including
-    categorized/uncategorized counts and ratios, source breakdown, top
-    uncategorized descriptions, and top matched rules.
-  - Added settings/env support for
-    `FINANCE_CATEGORY_RULES_PATH` and `FINANCE_CATEGORY_OVERRIDES_PATH`.
-  - Added tests for override precedence and categorization diagnostics, and
-    updated config/pipeline tests for new settings and summary fields.
+  - Added `## Next Agent Recommendations` section before `## Hand-Off Log`.
+  - Documented prioritized architecture and maintainability improvements for the next agent session.
 - Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format --check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
+  - `sed -n '1,280p' AGENTS.md`: pass
 - Open items:
-  - Override persistence writeback workflow (capturing manual edits into
-    `category_overrides.json`) is not yet implemented.
+  - Recommendations are documented; implementation work is still pending in code modules.
 - Next action:
   - Add a small CLI utility to ingest corrected category exports and upsert
     override entries for future runs.
