@@ -18,6 +18,35 @@ uv sync --all-groups
 uv run python -m finance_tooling
 ```
 
+Manual categorization review roundtrip:
+
+```bash
+uv run python -m finance_tooling review-export \
+  --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
+  --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv"
+
+# edit fallback_category_review.csv (set category/subcategory)
+
+uv run python -m finance_tooling review-import \
+  --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
+  --overrides-path "config/category_overrides.yaml"
+```
+
+Default upsert key is normalized `description` fingerprint + `bank`. Add
+`--include-account-label-scope` on import to include `account_label` in the key.
+
+Commit-to-commit metrics log update:
+
+```bash
+uv run python -m finance_tooling metrics-log-update \
+  --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" \
+  --log-path "docs/metrics_commit_log.csv" \
+  --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"
+```
+
+This writes percentage-based parsing/categorization metrics keyed by commit hash
+for quick trend checks, plus a per-bank categorization percentage breakdown.
+
 ## Development Commands
 
 ```bash

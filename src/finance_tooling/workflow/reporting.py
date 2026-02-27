@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -100,6 +101,40 @@ def persist_and_report(
         new_rows=upsert.new_rows,
     )
 
+    category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"transactions_count": 0, "categorized_count": 0, "uncategorized_count": 0}
+    )
+    for tx in transactions:
+        bank = tx.bank.strip() if tx.bank.strip() else "UNKNOWN"
+        counters = category_metrics_by_bank_counters[bank]
+        counters["transactions_count"] += 1
+        is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
+            (tx.category_source or "").strip().lower() == "fallback"
+        )
+        if is_uncategorized:
+            counters["uncategorized_count"] += 1
+        else:
+            counters["categorized_count"] += 1
+
+    category_metrics_by_bank = []
+    for bank in sorted(category_metrics_by_bank_counters):
+        counters = category_metrics_by_bank_counters[bank]
+        total = counters["transactions_count"]
+        categorized_pct = (counters["categorized_count"] / total) * 100.0 if total > 0 else 0.0
+        uncategorized_pct = (
+            (counters["uncategorized_count"] / total) * 100.0 if total > 0 else 0.0
+        )
+        category_metrics_by_bank.append(
+            {
+                "bank": bank,
+                "transactions_count": total,
+                "categorized_count": counters["categorized_count"],
+                "uncategorized_count": counters["uncategorized_count"],
+                "categorized_pct": round(categorized_pct, 4),
+                "uncategorized_pct": round(uncategorized_pct, 4),
+            }
+        )
+
     summary_payload: SummaryPayload = {
         "generated_at": datetime.now(UTC).isoformat(),
         "files_scanned": len(source_files),
@@ -160,6 +195,7 @@ def persist_and_report(
         "uncategorized_count": classification_diagnostics.uncategorized_count,
         "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
         "category_source_counts": classification_diagnostics.category_source_counts,
+        "category_metrics_by_bank": category_metrics_by_bank,
         "top_uncategorized_descriptions": (
             classification_diagnostics.top_uncategorized_descriptions
         ),

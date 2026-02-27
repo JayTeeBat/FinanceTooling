@@ -97,6 +97,7 @@ class SummaryPayload(TypedDict):
     uncategorized_count: int
     uncategorized_ratio: float
     category_source_counts: dict[str, int]
+    category_metrics_by_bank: list[dict[str, object]]
     top_uncategorized_descriptions: list[dict[str, object]]
     top_rules_by_hits: list[dict[str, object]]
     category_rules_path: str
