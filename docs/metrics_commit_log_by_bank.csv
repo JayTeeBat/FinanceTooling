@@ -1,0 +1,5 @@
+generated_at,commit,branch,bank,transactions_count,categorized_count,uncategorized_count,categorized_pct,uncategorized_pct
+2026-02-27T00:10:01.842862+00:00,0cb30c5,feature/automated-categorization,Boursobank,2410,504,1906,20.9129,79.0871
+2026-02-27T00:10:01.842862+00:00,0cb30c5,feature/automated-categorization,HSBC,5092,2817,2275,55.3221,44.6779
+2026-02-27T00:10:01.842862+00:00,0cb30c5,feature/automated-categorization,LaBanquePostale,2561,289,2272,11.2847,88.7153
+2026-02-27T00:10:01.842862+00:00,0cb30c5,feature/automated-categorization,Revolut,2481,1790,691,72.1483,27.8517

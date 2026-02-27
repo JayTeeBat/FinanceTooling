@@ -11,6 +11,12 @@ from finance_tooling.categorization_review import (
 )
 from finance_tooling.classify import load_override_store
 from finance_tooling.config import load_settings_from_env
+from finance_tooling.metrics_log import (
+    build_bank_snapshots,
+    build_snapshot,
+    upsert_bank_snapshots,
+    upsert_snapshot,
+)
 from finance_tooling.pipeline import run_workflow
 
 
@@ -61,6 +67,41 @@ def _build_parser() -> argparse.ArgumentParser:
         "--include-account-label-scope",
         action="store_true",
         help="Use normalized fingerprint + bank + account_label as upsert key.",
+    )
+
+    metrics_log = subparsers.add_parser(
+        "metrics-log-update",
+        help="Append or update commit-level percentage metrics from run_summary.json.",
+    )
+    metrics_log.add_argument(
+        "--summary-path",
+        type=Path,
+        default=None,
+        help="Path to run_summary.json (defaults to settings summary path when env is configured).",
+    )
+    metrics_log.add_argument(
+        "--log-path",
+        type=Path,
+        default=Path("docs/metrics_commit_log.csv"),
+        help="Destination overall metrics CSV path.",
+    )
+    metrics_log.add_argument(
+        "--log-path-by-bank",
+        type=Path,
+        default=Path("docs/metrics_commit_log_by_bank.csv"),
+        help="Destination per-bank metrics CSV path.",
+    )
+    metrics_log.add_argument(
+        "--commit",
+        type=str,
+        default=None,
+        help="Optional commit hash override (defaults to current git HEAD short hash).",
+    )
+    metrics_log.add_argument(
+        "--branch",
+        type=str,
+        default=None,
+        help="Optional branch override (defaults to current git branch).",
     )
 
     return parser
@@ -145,6 +186,50 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Updated: {result.overrides_updated}")
         print(f"Inserted: {result.overrides_inserted}")
         print(f"Skipped rows: {result.rows_skipped}")
+        return 0
+
+    if command == "metrics-log-update":
+        summary_path = args.summary_path
+        if summary_path is None:
+            try:
+                settings = load_settings_from_env()
+                summary_path = settings.summary_json_path
+            except ValueError:
+                print(
+                    "Configuration error: provide --summary-path "
+                    "or configure env so settings can be loaded."
+                )
+                return 1
+        if not summary_path.exists():
+            print(f"Summary file not found: {summary_path}")
+            return 1
+
+        snapshot = build_snapshot(summary_path, commit=args.commit, branch=args.branch)
+        total_rows, replaced = upsert_snapshot(args.log_path, snapshot)
+        bank_snapshots = build_bank_snapshots(
+            summary_path,
+            commit=snapshot.commit,
+            branch=snapshot.branch,
+        )
+        bank_rows, bank_replaced = upsert_bank_snapshots(args.log_path_by_bank, bank_snapshots)
+        action = "updated" if replaced else "appended"
+        bank_action = "updated" if bank_replaced else "appended"
+        reconciliation_pct = (
+            f"{snapshot.reconciliation_pass_pct:.2f}%"
+            if snapshot.reconciliation_pass_pct is not None
+            else "n/a"
+        )
+        print(f"Metrics log {action} for commit {snapshot.commit}: {args.log_path}")
+        print(f"- parsing_success_pct: {snapshot.parsing_success_pct:.2f}%")
+        print(f"- categorized_pct: {snapshot.categorized_pct:.2f}%")
+        print(f"- uncategorized_pct: {snapshot.uncategorized_pct:.2f}%")
+        print(f"- reconciliation_pass_pct: {reconciliation_pct}")
+        print(f"- rows in log: {total_rows}")
+        print(
+            f"Per-bank metrics log {bank_action} for commit "
+            f"{snapshot.commit}: {args.log_path_by_bank}"
+        )
+        print(f"- bank rows for commit: {bank_rows}")
         return 0
 
     parser.print_help()

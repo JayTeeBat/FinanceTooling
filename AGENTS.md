@@ -53,6 +53,26 @@ categorization, and reporting.
 - Do not rewrite history on shared branches.
 - Do not remove or rewrite legacy scripts unless a migration plan is included.
 
+## Metrics Log Protocol
+
+- Maintain `docs/metrics_commit_log.csv` as a commit-to-commit, percentage-based
+  trend log for parsing/categorization performance.
+- Maintain `docs/metrics_commit_log_by_bank.csv` as a per-bank commit-to-commit
+  percentage breakdown for categorization performance.
+- After any commit that changes pipeline behavior or categorization data, update
+  the metrics log using the latest `run_summary.json`:
+  - `uv run python -m finance_tooling metrics-log-update --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`
+- If the log update is done after committing code, include it in a follow-up
+  commit (or amend before push).
+- Keep metrics high-level and stable across runs:
+  - `parsing_success_pct`
+  - `completeness_coverage_pct`
+  - `reconciliation_pass_pct`
+  - `categorized_pct`
+  - `uncategorized_pct`
+- Do not include source data paths or absolute filesystem paths in
+  `docs/metrics_commit_log.csv`.
+
 ## Legacy and Migration Policy
 
 - Legacy script logic has been migrated into typed package modules under
