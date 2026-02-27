@@ -45,7 +45,9 @@ class BoursobankParser(BaseStatementParser):
     def _negative_markers(self) -> tuple[str, ...]:
         return ("account-statement",)
 
-    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+    def _extract_rows(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
         del file_path
         rows: list[ParsedRow] = []
         warnings: list[str] = []
@@ -75,7 +77,7 @@ class BoursobankParser(BaseStatementParser):
                 )
             )
 
-        return rows, warnings
+        return rows, warnings, None
 
     def _normalize_config(self) -> NormalizeConfig:
         return NormalizeConfig(

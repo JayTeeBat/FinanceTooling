@@ -21,9 +21,9 @@ _AMOUNT_TOKEN_PATTERN = re.compile(
     r"(?P<amount>[+-]?\d[\d,]*(?:\.\d{2}|,\d{2})(?:\s?(?:CR|DR))?)",
     re.IGNORECASE,
 )
-_POSITIVE_HINTS = ("SALARY", "PAYMENT IN", "TRANSFER FROM", "INTEREST", "REFUND")
-_NEGATIVE_HINTS = ("DR_MARKER",)
-_POSITIVE_MARKERS = ("CR_MARKER",)
+_POSITIVE_HINTS = ("PAYMENT IN", "TRANSFER FROM", "INTEREST", "REFUND")
+_NEGATIVE_HINTS = ()
+_POSITIVE_MARKERS = ()
 _SKIP_HINTS = (
     "BALANCEBROUGHTFORWARD",
     "BALANCE CARRIED FORWARD",
@@ -91,21 +91,110 @@ _TXN_CONTEXT_HINTS = (
     "DIRECT DEBIT",
     "DEBIT",
 )
+_HARD_TABLE_END_MARKERS = (
+    "BALANCECARRIEDFORWARD",
+    "CLOSINGBALANCE",
+    "NEWBALANCE",
+)
+_TABLE_HEADER_MARKERS = (
+    "DATE PAYMENT TYPE",
+    "DATE DESCRIPTION",
+)
+_BOUNDARY_STATE_OUTSIDE = "OUTSIDE_TABLE"
+_BOUNDARY_STATE_IN = "IN_TABLE"
+_BOUNDARY_STATE_AFTER = "AFTER_TABLE"
 
 
 @dataclass(frozen=True)
 class _ParsedBlock:
     raw_date: str
     header_text: str
+    header_raw_text: str
     continuation_lines: list[str]
+    continuation_raw_lines: list[str]
+    column_anchors: _ColumnAnchors | None
+
+
+@dataclass(frozen=True)
+class _ColumnAnchors:
+    paid_out_start: int
+    paid_in_start: int
+    balance_start: int
 
 
 @dataclass(frozen=True)
 class _ParsedRowCandidate:
     row: ParsedRow
     amount_absolute: Decimal
+    signed_amount: Decimal
     running_balance: Decimal | None
-    marker_source: str | None
+    sign_source: str
+    running_vs_marker_conflict: bool = False
+
+
+@dataclass
+class _BoundaryStats:
+    table_start_count: int = 0
+    table_end_count: int = 0
+    rows_seen_in_table: int = 0
+    rows_rejected_outside_table: int = 0
+    rows_rejected_after_table: int = 0
+    transition_anomaly_count: int = 0
+
+    def as_diagnostics(self) -> dict[str, object]:
+        return {
+            "table_start_count": self.table_start_count,
+            "table_end_count": self.table_end_count,
+            "rows_seen_in_table": self.rows_seen_in_table,
+            "rows_rejected_outside_table": self.rows_rejected_outside_table,
+            "rows_rejected_after_table": self.rows_rejected_after_table,
+            "transition_anomaly_count": self.transition_anomaly_count,
+        }
+
+
+@dataclass
+class _SignStats:
+    sign_from_running_balance_count: int = 0
+    sign_from_column_position_count: int = 0
+    sign_from_token_marker_count: int = 0
+    sign_from_description_marker_count: int = 0
+    sign_from_fallback_hint_count: int = 0
+    sign_default_debit_count: int = 0
+    sign_conflict_running_vs_marker_count: int = 0
+    sign_unresolved_ambiguous_count: int = 0
+
+    def add_source(self, source: str) -> None:
+        if source == "running_balance":
+            self.sign_from_running_balance_count += 1
+            return
+        if source == "column_position":
+            self.sign_from_column_position_count += 1
+            return
+        if source == "token_marker":
+            self.sign_from_token_marker_count += 1
+            return
+        if source == "description_marker":
+            self.sign_from_description_marker_count += 1
+            return
+        if source == "fallback_hint":
+            self.sign_from_fallback_hint_count += 1
+            return
+        if source == "default_debit":
+            self.sign_default_debit_count += 1
+            return
+        self.sign_unresolved_ambiguous_count += 1
+
+    def as_diagnostics(self) -> dict[str, object]:
+        return {
+            "sign_from_running_balance_count": self.sign_from_running_balance_count,
+            "sign_from_column_position_count": self.sign_from_column_position_count,
+            "sign_from_token_marker_count": self.sign_from_token_marker_count,
+            "sign_from_description_marker_count": self.sign_from_description_marker_count,
+            "sign_from_fallback_hint_count": self.sign_from_fallback_hint_count,
+            "sign_default_debit_count": self.sign_default_debit_count,
+            "sign_conflict_running_vs_marker_count": self.sign_conflict_running_vs_marker_count,
+            "sign_unresolved_ambiguous_count": self.sign_unresolved_ambiguous_count,
+        }
 
 
 class HsbcParser(BaseStatementParser):
@@ -120,18 +209,29 @@ class HsbcParser(BaseStatementParser):
     def _content_markers(self) -> tuple[str, ...]:
         return ("hsbc", "your statement")
 
-    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
-        del file_path
+    def _extract_rows(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
         rows: list[ParsedRow] = []
+        warnings: list[str] = []
         blocks: list[_ParsedBlock] = []
+        boundary = _BoundaryStats()
+        sign_stats = _SignStats()
+        previous_running_balance: Decimal | None = None
         current_date: str | None = None
         current_header: str = ""
+        current_header_raw: str = ""
         current_continuations: list[str] = []
+        current_continuations_raw: list[str] = []
+        current_column_anchors: _ColumnAnchors | None = None
 
         for raw_line in full_text.splitlines():
             line = " ".join(raw_line.split())
             if not line:
                 continue
+            maybe_column_anchors = _extract_column_anchors(raw_line)
+            if maybe_column_anchors is not None:
+                current_column_anchors = maybe_column_anchors
 
             match = _DATE_PREFIX_PATTERN.match(line)
             if match is not None:
@@ -140,33 +240,117 @@ class HsbcParser(BaseStatementParser):
                         _ParsedBlock(
                             raw_date=current_date,
                             header_text=current_header,
+                            header_raw_text=current_header_raw,
                             continuation_lines=current_continuations,
+                            continuation_raw_lines=current_continuations_raw,
+                            column_anchors=current_column_anchors,
                         )
                     )
                 current_date = match.group("date")
                 current_header = match.group("rest")
+                current_header_raw = raw_line
                 current_continuations = []
+                current_continuations_raw = []
                 continue
 
             if current_date is not None:
                 current_continuations.append(line)
+                current_continuations_raw.append(raw_line)
 
         if current_date is not None:
             blocks.append(
                 _ParsedBlock(
                     raw_date=current_date,
                     header_text=current_header,
+                    header_raw_text=current_header_raw,
                     continuation_lines=current_continuations,
+                    continuation_raw_lines=current_continuations_raw,
+                    column_anchors=current_column_anchors,
                 )
             )
-        for block in blocks:
-            rows.extend(_rows_from_block(block))
+        state = _BOUNDARY_STATE_OUTSIDE
+        saw_table_header = False
+        for raw_line in full_text.splitlines():
+            line = " ".join(raw_line.split()).upper()
+            if not line:
+                continue
+            if any(line.startswith(marker) for marker in _TABLE_HEADER_MARKERS):
+                saw_table_header = True
 
-        return rows, []
+        for block in blocks:
+            if _is_hard_table_end_line(block.header_text):
+                if state != _BOUNDARY_STATE_IN:
+                    if boundary.table_start_count > 0:
+                        boundary.transition_anomaly_count += 1
+                else:
+                    boundary.table_end_count += 1
+                    state = _BOUNDARY_STATE_AFTER
+                continue
+
+            parsed_rows, block_sign_stats, block_last_running_balance = _rows_from_block(
+                block,
+                previous_running_balance=previous_running_balance,
+            )
+            sign_stats.sign_from_running_balance_count += (
+                block_sign_stats.sign_from_running_balance_count
+            )
+            sign_stats.sign_from_column_position_count += (
+                block_sign_stats.sign_from_column_position_count
+            )
+            sign_stats.sign_from_token_marker_count += block_sign_stats.sign_from_token_marker_count
+            sign_stats.sign_from_description_marker_count += (
+                block_sign_stats.sign_from_description_marker_count
+            )
+            sign_stats.sign_from_fallback_hint_count += (
+                block_sign_stats.sign_from_fallback_hint_count
+            )
+            sign_stats.sign_default_debit_count += block_sign_stats.sign_default_debit_count
+            sign_stats.sign_conflict_running_vs_marker_count += (
+                block_sign_stats.sign_conflict_running_vs_marker_count
+            )
+            sign_stats.sign_unresolved_ambiguous_count += (
+                block_sign_stats.sign_unresolved_ambiguous_count
+            )
+            parsed_count = len(parsed_rows)
+
+            if state == _BOUNDARY_STATE_OUTSIDE:
+                if _is_confident_table_start(
+                    block,
+                    parsed_count,
+                    saw_table_header=saw_table_header,
+                ):
+                    state = _BOUNDARY_STATE_IN
+                    boundary.table_start_count += 1
+                else:
+                    boundary.rows_rejected_outside_table += parsed_count
+                    continue
+
+            if state == _BOUNDARY_STATE_AFTER:
+                boundary.rows_rejected_after_table += parsed_count
+                continue
+
+            rows.extend(parsed_rows)
+            boundary.rows_seen_in_table += parsed_count
+            previous_running_balance = block_last_running_balance
+
+        if boundary.transition_anomaly_count > 0:
+            warnings.append(
+                f"{file_path.name}: HSBC boundary state anomalies detected "
+                f"({boundary.transition_anomaly_count}) while extracting rows"
+            )
+
+        return (
+            rows,
+            warnings,
+            {
+                "hsbc_boundary": boundary.as_diagnostics(),
+                "hsbc_sign": sign_stats.as_diagnostics(),
+            },
+        )
 
     def _normalize_config(self) -> NormalizeConfig:
         return NormalizeConfig(
-            sign_mode="hint_priority_with_default_debit",
+            sign_mode="explicit_sign",
             default_currency="GBP",
             positive_hints=_POSITIVE_HINTS + _POSITIVE_MARKERS,
             negative_hints=_NEGATIVE_HINTS,
@@ -227,19 +411,31 @@ def _extract_balance(full_text: str, patterns: tuple[re.Pattern[str], ...]) -> D
     return None
 
 
-def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
+def _rows_from_block(
+    block: _ParsedBlock,
+    *,
+    previous_running_balance: Decimal | None,
+) -> tuple[list[ParsedRow], _SignStats, Decimal | None]:
     rows: list[_ParsedRowCandidate] = []
+    sign_stats = _SignStats()
     pending_context_parts: list[str] = []
     pending_has_txn_prefix = False
     pending_sign_marker: str | None = None
-    previous_running_balance: Decimal | None = None
 
-    header_row = _parse_statement_row_candidate(block.raw_date, block.header_text)
+    header_row = _parse_statement_row_candidate(
+        block.raw_date,
+        block.header_text,
+        raw_rest=block.header_raw_text,
+        column_anchors=block.column_anchors,
+    )
     if header_row is not None:
         header_row, previous_running_balance = _apply_running_balance_sign_override(
             header_row,
             previous_running_balance,
         )
+        sign_stats.add_source(header_row.sign_source)
+        if header_row.running_vs_marker_conflict:
+            sign_stats.sign_conflict_running_vs_marker_count += 1
         rows = _append_or_merge_duplicate_candidate(rows, header_row)
         if header_row.running_balance is not None:
             previous_running_balance = header_row.running_balance
@@ -248,7 +444,8 @@ def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
         pending_has_txn_prefix = _has_transaction_context(block.header_text)
         pending_sign_marker = _description_sign_marker(block.header_text)
 
-    for line in block.continuation_lines:
+    for index, line in enumerate(block.continuation_lines):
+        raw_line = block.continuation_raw_lines[index]
         if _is_non_transaction_line(line):
             pending_context_parts = []
             pending_has_txn_prefix = False
@@ -281,12 +478,17 @@ def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
             line,
             fallback_context=fallback_context if fallback_context else None,
             inherited_sign_marker=pending_sign_marker if not line_is_txn else None,
+            raw_rest=raw_line,
+            column_anchors=block.column_anchors,
         )
         if row is not None:
             row, previous_running_balance = _apply_running_balance_sign_override(
                 row,
                 previous_running_balance,
             )
+            sign_stats.add_source(row.sign_source)
+            if row.running_vs_marker_conflict:
+                sign_stats.sign_conflict_running_vs_marker_count += 1
             rows = _append_or_merge_duplicate_candidate(rows, row)
             if row.running_balance is not None:
                 previous_running_balance = row.running_balance
@@ -294,7 +496,7 @@ def _rows_from_block(block: _ParsedBlock) -> list[ParsedRow]:
         pending_has_txn_prefix = False
         pending_sign_marker = None
 
-    return [candidate.row for candidate in rows]
+    return [candidate.row for candidate in rows], sign_stats, previous_running_balance
 
 
 def _parse_statement_row_candidate(
@@ -303,6 +505,8 @@ def _parse_statement_row_candidate(
     *,
     fallback_context: str | None = None,
     inherited_sign_marker: str | None = None,
+    raw_rest: str | None = None,
+    column_anchors: _ColumnAnchors | None = None,
 ) -> _ParsedRowCandidate | None:
     if _is_non_transaction_line(rest):
         return None
@@ -331,37 +535,85 @@ def _parse_statement_row_candidate(
     indicator_marker = token_marker or description_marker
     if indicator_marker is None:
         indicator_marker = inherited_sign_marker
-    marker_source: str | None = None
+    sign_source = "default_debit"
     if token_marker is not None:
-        marker_source = "token"
+        sign_source = "token_marker"
     elif description_marker is not None:
-        marker_source = "description"
+        sign_source = "description_marker"
     elif inherited_sign_marker is not None:
-        marker_source = "inherited"
+        sign_source = "description_marker"
     amount = _parse_amount_token(transaction_token)
     if amount is None:
         return None
+    amount_absolute = abs(amount)
     running_balance: Decimal | None = None
     if len(matches) > 1:
         running_balance = _parse_amount_token(matches[-1].group("amount"))
+    column_sign_marker = _infer_column_sign_marker(
+        normalized_rest=rest,
+        raw_rest=raw_rest,
+        selected_match=selected,
+        all_matches=matches,
+        column_anchors=column_anchors,
+    )
+    signed_amount, fallback_sign_source = _signed_amount_from_source(
+        amount_absolute=amount_absolute,
+        description=description,
+        indicator_marker=indicator_marker,
+        column_sign_marker=column_sign_marker,
+    )
+    if sign_source == "default_debit":
+        sign_source = fallback_sign_source
     if indicator_marker is not None:
         description = f"{description} {indicator_marker}"
     row = ParsedRow(
         raw_date=_normalize_compact_date(raw_date),
         raw_description=description,
-        raw_amount=str(abs(amount)),
+        raw_amount=str(signed_amount),
         raw_currency_hint="GBP",
     )
     return _ParsedRowCandidate(
         row=row,
-        amount_absolute=abs(amount),
+        amount_absolute=amount_absolute,
+        signed_amount=signed_amount,
         running_balance=running_balance,
-        marker_source=marker_source,
+        sign_source=sign_source,
     )
 
 
 def _contains_amount(line: str) -> bool:
     return _AMOUNT_TOKEN_PATTERN.search(line) is not None
+
+
+def _is_hard_table_end_line(line: str) -> bool:
+    upper = line.upper()
+    compact = upper.replace(" ", "")
+    if any(marker in compact for marker in _HARD_TABLE_END_MARKERS):
+        return True
+    return upper.startswith("ACCOUNT SUMMARY")
+
+
+def _is_confident_table_start(
+    block: _ParsedBlock,
+    parsed_row_count: int,
+    *,
+    saw_table_header: bool,
+) -> bool:
+    if parsed_row_count == 0:
+        return False
+    if _is_hard_table_end_line(block.header_text):
+        return False
+    if _starts_with_transaction_prefix(block.header_text):
+        return True
+    if _has_transaction_context(block.header_text):
+        return True
+    if "SALARY" in block.header_text.upper():
+        return True
+    amount_count = len(list(_AMOUNT_TOKEN_PATTERN.finditer(block.header_text)))
+    if amount_count >= 2:
+        return True
+    # Require a stronger signal when no explicit table header was seen.
+    return saw_table_header
 
 
 def _is_non_transaction_line(line: str) -> bool:
@@ -478,8 +730,6 @@ def _apply_running_balance_sign_override(
 ) -> tuple[_ParsedRowCandidate, Decimal | None]:
     if candidate.running_balance is None or previous_running_balance is None:
         return candidate, previous_running_balance
-    if candidate.marker_source is not None:
-        return candidate, previous_running_balance
 
     delta = candidate.running_balance - previous_running_balance
     if delta == 0:
@@ -491,4 +741,103 @@ def _apply_running_balance_sign_override(
     description_without_markers = _dedupe_description(candidate.row.raw_description)
     updated_description = f"{description_without_markers} {inferred_marker}"
     updated_row = replace(candidate.row, raw_description=updated_description)
-    return replace(candidate, row=updated_row), previous_running_balance
+    inferred_signed_amount = candidate.amount_absolute if delta > 0 else -candidate.amount_absolute
+    marker_based_signed_amount = _signed_amount_from_description_marker(
+        candidate.row.raw_description,
+        amount_absolute=candidate.amount_absolute,
+    )
+    running_vs_marker_conflict = (
+        marker_based_signed_amount is not None
+        and marker_based_signed_amount != inferred_signed_amount
+    )
+    return (
+        replace(
+            candidate,
+            row=replace(updated_row, raw_amount=str(inferred_signed_amount)),
+            signed_amount=inferred_signed_amount,
+            sign_source="running_balance",
+            running_vs_marker_conflict=running_vs_marker_conflict,
+        ),
+        previous_running_balance,
+    )
+
+
+def _signed_amount_from_source(
+    *,
+    amount_absolute: Decimal,
+    description: str,
+    indicator_marker: str | None,
+    column_sign_marker: str | None,
+) -> tuple[Decimal, str]:
+    if column_sign_marker == "CR_MARKER":
+        return amount_absolute, "column_position"
+    if column_sign_marker == "DR_MARKER":
+        return -amount_absolute, "column_position"
+    if indicator_marker == "CR_MARKER":
+        return amount_absolute, "description_marker"
+    if indicator_marker == "DR_MARKER":
+        return -amount_absolute, "description_marker"
+    description_upper = description.upper()
+    if description_upper.startswith("BP ") and "SALARY" in description_upper:
+        return amount_absolute, "fallback_hint"
+    if any(hint in description_upper for hint in _POSITIVE_HINTS):
+        return amount_absolute, "fallback_hint"
+    return -amount_absolute, "default_debit"
+
+
+def _signed_amount_from_description_marker(
+    description: str,
+    *,
+    amount_absolute: Decimal,
+) -> Decimal | None:
+    if description.endswith(" CR_MARKER"):
+        return amount_absolute
+    if description.endswith(" DR_MARKER"):
+        return -amount_absolute
+    return None
+
+
+def _extract_column_anchors(raw_line: str) -> _ColumnAnchors | None:
+    upper = raw_line.upper()
+    paid_out_start = upper.find("PAIDOUT")
+    paid_in_start = upper.find("PAIDIN")
+    balance_start = upper.find("BALANCE")
+    if paid_out_start < 0 or paid_in_start < 0 or balance_start < 0:
+        return None
+    if not (paid_out_start < paid_in_start < balance_start):
+        return None
+    return _ColumnAnchors(
+        paid_out_start=paid_out_start,
+        paid_in_start=paid_in_start,
+        balance_start=balance_start,
+    )
+
+
+def _infer_column_sign_marker(
+    *,
+    normalized_rest: str,
+    raw_rest: str | None,
+    selected_match: re.Match[str],
+    all_matches: list[re.Match[str]],
+    column_anchors: _ColumnAnchors | None,
+) -> str | None:
+    if raw_rest is None or column_anchors is None:
+        return None
+    raw_matches = list(_AMOUNT_TOKEN_PATTERN.finditer(raw_rest))
+    if not raw_matches:
+        return None
+    selected_index = 0
+    for idx, match in enumerate(all_matches):
+        if match.start() == selected_match.start() and match.end() == selected_match.end():
+            selected_index = idx
+            break
+    if selected_index >= len(raw_matches):
+        return None
+    raw_selected = raw_matches[selected_index]
+    token_start = raw_selected.start()
+    if token_start >= column_anchors.paid_in_start and token_start < column_anchors.balance_start:
+        return "CR_MARKER"
+    if token_start >= column_anchors.paid_out_start and token_start < column_anchors.paid_in_start:
+        return "DR_MARKER"
+    del normalized_rest
+    return None

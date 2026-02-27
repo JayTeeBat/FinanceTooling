@@ -150,6 +150,22 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["statement_reconciliation_median_abs_difference"] is None
     assert summary_payload["statement_reconciliation_hsbc_median_abs_difference"] is None
     assert summary_payload["hsbc_period_parse_variant_match_count"] == 0
+    assert summary_payload["hsbc_boundary_table_start_count"] == 0
+    assert summary_payload["hsbc_boundary_table_end_count"] == 0
+    assert summary_payload["hsbc_boundary_rows_seen_in_table"] == 0
+    assert summary_payload["hsbc_boundary_rows_rejected_outside_table"] == 0
+    assert summary_payload["hsbc_boundary_rows_rejected_after_table"] == 0
+    assert summary_payload["hsbc_boundary_transition_anomaly_count"] == 0
+    assert summary_payload["hsbc_boundary_diagnostics"] == []
+    assert summary_payload["hsbc_sign_from_running_balance_count"] == 0
+    assert summary_payload["hsbc_sign_from_column_position_count"] == 0
+    assert summary_payload["hsbc_sign_from_token_marker_count"] == 0
+    assert summary_payload["hsbc_sign_from_description_marker_count"] == 0
+    assert summary_payload["hsbc_sign_from_fallback_hint_count"] == 0
+    assert summary_payload["hsbc_sign_default_debit_count"] == 0
+    assert summary_payload["hsbc_sign_conflict_running_vs_marker_count"] == 0
+    assert summary_payload["hsbc_sign_unresolved_ambiguous_count"] == 0
+    assert summary_payload["hsbc_sign_diagnostics"] == []
     assert summary_payload["parser_low_confidence_file_count"] == 2
     assert len(summary_payload["parser_selection_diagnostics"]) == 2
     assert "ingest_parser_duration_seconds_by_parser" in summary_payload

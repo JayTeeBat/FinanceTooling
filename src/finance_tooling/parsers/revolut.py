@@ -52,7 +52,9 @@ class RevolutParser(BaseStatementParser):
     def _content_markers(self) -> tuple[str, ...]:
         return ("revolut", "account-statement")
 
-    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+    def _extract_rows(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
         del file_path
         opening_balance, _ = _extract_summary_balances(full_text)
         raw_rows = _extract_account_rows(full_text)
@@ -89,7 +91,7 @@ class RevolutParser(BaseStatementParser):
                 )
             )
 
-        return rows, []
+        return rows, [], None
 
     def _normalize_config(self) -> NormalizeConfig:
         return NormalizeConfig(

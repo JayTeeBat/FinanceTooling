@@ -49,6 +49,32 @@ class HsbcSelectionDiagnostic(TypedDict):
     statement_period_end: str | None
 
 
+class HsbcBoundaryDiagnostic(TypedDict):
+    """Per-file HSBC boundary-state diagnostics."""
+
+    source_file: str
+    table_start_count: int
+    table_end_count: int
+    rows_seen_in_table: int
+    rows_rejected_outside_table: int
+    rows_rejected_after_table: int
+    transition_anomaly_count: int
+
+
+class HsbcSignDiagnostic(TypedDict):
+    """Per-file HSBC sign-resolution diagnostics."""
+
+    source_file: str
+    sign_from_running_balance_count: int
+    sign_from_column_position_count: int
+    sign_from_token_marker_count: int
+    sign_from_description_marker_count: int
+    sign_from_fallback_hint_count: int
+    sign_default_debit_count: int
+    sign_conflict_running_vs_marker_count: int
+    sign_unresolved_ambiguous_count: int
+
+
 class SummaryPayload(TypedDict):
     """Run summary payload persisted to JSON."""
 
@@ -86,6 +112,22 @@ class SummaryPayload(TypedDict):
     hsbc_period_remap_reassigned_tx_count: int
     hsbc_period_remap_unassigned_csv_tx_count: int
     hsbc_period_parse_variant_match_count: int
+    hsbc_boundary_table_start_count: int
+    hsbc_boundary_table_end_count: int
+    hsbc_boundary_rows_seen_in_table: int
+    hsbc_boundary_rows_rejected_outside_table: int
+    hsbc_boundary_rows_rejected_after_table: int
+    hsbc_boundary_transition_anomaly_count: int
+    hsbc_boundary_diagnostics: list[HsbcBoundaryDiagnostic]
+    hsbc_sign_from_running_balance_count: int
+    hsbc_sign_from_column_position_count: int
+    hsbc_sign_from_token_marker_count: int
+    hsbc_sign_from_description_marker_count: int
+    hsbc_sign_from_fallback_hint_count: int
+    hsbc_sign_default_debit_count: int
+    hsbc_sign_conflict_running_vs_marker_count: int
+    hsbc_sign_unresolved_ambiguous_count: int
+    hsbc_sign_diagnostics: list[HsbcSignDiagnostic]
     hsbc_selection_diagnostics: list[HsbcSelectionDiagnostic]
     ingest_parser_duration_seconds_by_parser: dict[str, float]
     ingest_duration_seconds_by_bank: dict[str, float]
@@ -119,6 +161,10 @@ class IngestResult:
     parser_low_confidence_file_count: int
     hsbc_statement_periods_by_date: dict[str, tuple[date, date]]
     hsbc_period_parse_variant_match_count: int
+    hsbc_boundary_metrics: dict[str, int]
+    hsbc_boundary_diagnostics: list[HsbcBoundaryDiagnostic]
+    hsbc_sign_metrics: dict[str, int]
+    hsbc_sign_diagnostics: list[HsbcSignDiagnostic]
     hsbc_csv_files_scanned: int
     parser_duration_seconds_by_parser: dict[str, float]
     duration_seconds_by_bank: dict[str, float]

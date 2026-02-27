@@ -19,6 +19,7 @@ class ParserOutput:
     transactions: list[Transaction]
     warnings: list[str]
     validation: StatementValidation | None = None
+    diagnostics: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -109,7 +110,7 @@ class BaseStatementParser(ABC):
         return score
 
     def parse(self, file_path: Path, full_text: str) -> ParserOutput:
-        rows, warnings = self._extract_rows(file_path, full_text)
+        rows, warnings, diagnostics = self._extract_rows(file_path, full_text)
         config = self._normalize_config()
 
         transactions: list[Transaction] = []
@@ -151,10 +152,17 @@ class BaseStatementParser(ABC):
 
         if validation_warning is not None:
             warnings.append(validation_warning)
-        return ParserOutput(transactions=transactions, warnings=warnings, validation=validation)
+        return ParserOutput(
+            transactions=transactions,
+            warnings=warnings,
+            validation=validation,
+            diagnostics=diagnostics,
+        )
 
     @abstractmethod
-    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+    def _extract_rows(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
         """Extract raw statement rows and parser warnings from input text."""
 
     @abstractmethod

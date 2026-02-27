@@ -27,7 +27,9 @@ class GenericParser(BaseStatementParser):
         del file_path, first_page_text
         return 0
 
-    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+    def _extract_rows(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
         del file_path
         rows: list[ParsedRow] = []
 
@@ -57,7 +59,7 @@ class GenericParser(BaseStatementParser):
                 )
             )
 
-        return rows, []
+        return rows, [], None
 
     def _normalize_config(self) -> NormalizeConfig:
         return NormalizeConfig(
