@@ -17,7 +17,9 @@ class _DummyParser(BaseStatementParser):
     def __init__(self, payload: ValidationPayload) -> None:
         self._payload = payload
 
-    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+    def _extract_rows(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
         del full_text
         return (
             [
@@ -29,6 +31,7 @@ class _DummyParser(BaseStatementParser):
                 )
             ],
             [],
+            None,
         )
 
     def _normalize_config(self) -> NormalizeConfig:

@@ -19,7 +19,9 @@ from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.store import UpsertResult, upsert_transactions
 from finance_tooling.workflow.types import (
+    HsbcBoundaryDiagnostic,
     HsbcSelectionDiagnostic,
+    HsbcSignDiagnostic,
     ParserSelectionDiagnostic,
     SummaryPayload,
 )
@@ -43,6 +45,10 @@ def persist_and_report(
     hsbc_csv_files_scanned: int,
     hsbc_merge_metrics: dict[str, int],
     hsbc_period_parse_variant_match_count: int,
+    hsbc_boundary_metrics: dict[str, int],
+    hsbc_boundary_diagnostics: list[HsbcBoundaryDiagnostic],
+    hsbc_sign_metrics: dict[str, int],
+    hsbc_sign_diagnostics: list[HsbcSignDiagnostic],
     hsbc_selection_diagnostics: list[HsbcSelectionDiagnostic],
     ingest_parser_duration_seconds_by_parser: dict[str, float],
     ingest_duration_seconds_by_bank: dict[str, float],
@@ -121,9 +127,7 @@ def persist_and_report(
         counters = category_metrics_by_bank_counters[bank]
         total = counters["transactions_count"]
         categorized_pct = (counters["categorized_count"] / total) * 100.0 if total > 0 else 0.0
-        uncategorized_pct = (
-            (counters["uncategorized_count"] / total) * 100.0 if total > 0 else 0.0
-        )
+        uncategorized_pct = (counters["uncategorized_count"] / total) * 100.0 if total > 0 else 0.0
         category_metrics_by_bank.append(
             {
                 "bank": bank,
@@ -184,6 +188,36 @@ def persist_and_report(
             "hsbc_period_remap_unassigned_csv_tx_count"
         ],
         "hsbc_period_parse_variant_match_count": hsbc_period_parse_variant_match_count,
+        "hsbc_boundary_table_start_count": hsbc_boundary_metrics["table_start_count"],
+        "hsbc_boundary_table_end_count": hsbc_boundary_metrics["table_end_count"],
+        "hsbc_boundary_rows_seen_in_table": hsbc_boundary_metrics["rows_seen_in_table"],
+        "hsbc_boundary_rows_rejected_outside_table": hsbc_boundary_metrics[
+            "rows_rejected_outside_table"
+        ],
+        "hsbc_boundary_rows_rejected_after_table": hsbc_boundary_metrics[
+            "rows_rejected_after_table"
+        ],
+        "hsbc_boundary_transition_anomaly_count": hsbc_boundary_metrics["transition_anomaly_count"],
+        "hsbc_boundary_diagnostics": hsbc_boundary_diagnostics,
+        "hsbc_sign_from_running_balance_count": hsbc_sign_metrics[
+            "sign_from_running_balance_count"
+        ],
+        "hsbc_sign_from_column_position_count": hsbc_sign_metrics[
+            "sign_from_column_position_count"
+        ],
+        "hsbc_sign_from_token_marker_count": hsbc_sign_metrics["sign_from_token_marker_count"],
+        "hsbc_sign_from_description_marker_count": hsbc_sign_metrics[
+            "sign_from_description_marker_count"
+        ],
+        "hsbc_sign_from_fallback_hint_count": hsbc_sign_metrics["sign_from_fallback_hint_count"],
+        "hsbc_sign_default_debit_count": hsbc_sign_metrics["sign_default_debit_count"],
+        "hsbc_sign_conflict_running_vs_marker_count": hsbc_sign_metrics[
+            "sign_conflict_running_vs_marker_count"
+        ],
+        "hsbc_sign_unresolved_ambiguous_count": hsbc_sign_metrics[
+            "sign_unresolved_ambiguous_count"
+        ],
+        "hsbc_sign_diagnostics": hsbc_sign_diagnostics,
         "hsbc_selection_diagnostics": hsbc_selection_diagnostics,
         "ingest_parser_duration_seconds_by_parser": ingest_parser_duration_seconds_by_parser,
         "ingest_duration_seconds_by_bank": ingest_duration_seconds_by_bank,

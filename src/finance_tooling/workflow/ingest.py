@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from time import perf_counter
+from typing import cast
 
 from tqdm import tqdm
 
@@ -34,7 +35,13 @@ from finance_tooling.workflow.ingest_cache import (
     load_text_cache,
     upsert_text_cache,
 )
-from finance_tooling.workflow.types import IngestResult, ParserCandidate, ParserSelectionDiagnostic
+from finance_tooling.workflow.types import (
+    HsbcBoundaryDiagnostic,
+    HsbcSignDiagnostic,
+    IngestResult,
+    ParserCandidate,
+    ParserSelectionDiagnostic,
+)
 
 _HSBC_STATEMENT_DATE_PATTERN = re.compile(r"(?:19|20)\d{2}-\d{2}-\d{2}")
 _HSBC_STATEMENT_PERIOD_PATTERN = re.compile(
@@ -315,6 +322,13 @@ def _can_use_parallel_prepare(
     )
 
 
+def _int_diagnostic_value(payload: dict[str, object], key: str) -> int:
+    value = payload.get(key)
+    if isinstance(value, int):
+        return value
+    return 0
+
+
 def ingest_statements(
     settings: Settings,
     *,
@@ -333,6 +347,26 @@ def ingest_statements(
     parser_low_confidence_file_count = 0
     hsbc_csv_files_scanned = 0
     hsbc_period_parse_variant_match_count = 0
+    hsbc_boundary_metrics: dict[str, int] = {
+        "table_start_count": 0,
+        "table_end_count": 0,
+        "rows_seen_in_table": 0,
+        "rows_rejected_outside_table": 0,
+        "rows_rejected_after_table": 0,
+        "transition_anomaly_count": 0,
+    }
+    hsbc_boundary_diagnostics: list[HsbcBoundaryDiagnostic] = []
+    hsbc_sign_metrics: dict[str, int] = {
+        "sign_from_running_balance_count": 0,
+        "sign_from_column_position_count": 0,
+        "sign_from_token_marker_count": 0,
+        "sign_from_description_marker_count": 0,
+        "sign_from_fallback_hint_count": 0,
+        "sign_default_debit_count": 0,
+        "sign_conflict_running_vs_marker_count": 0,
+        "sign_unresolved_ambiguous_count": 0,
+    }
+    hsbc_sign_diagnostics: list[HsbcSignDiagnostic] = []
     hsbc_statement_periods_by_date: dict[str, tuple[date, date]] = {}
     parser_duration_seconds_by_parser: dict[str, float] = defaultdict(float)
     duration_seconds_by_bank: dict[str, float] = defaultdict(float)
@@ -468,6 +502,115 @@ def ingest_statements(
             warnings.extend(output.warnings)
             if output.validation is not None:
                 validations.append(output.validation)
+            if parser.name == "hsbc" and output.diagnostics is not None:
+                hsbc_boundary = output.diagnostics.get("hsbc_boundary")
+                if isinstance(hsbc_boundary, dict):
+                    hsbc_boundary_payload = cast(dict[str, object], hsbc_boundary)
+                    boundary_row: HsbcBoundaryDiagnostic = {
+                        "source_file": str(prepared.source_file),
+                        "table_start_count": _int_diagnostic_value(
+                            hsbc_boundary_payload,
+                            "table_start_count",
+                        ),
+                        "table_end_count": _int_diagnostic_value(
+                            hsbc_boundary_payload,
+                            "table_end_count",
+                        ),
+                        "rows_seen_in_table": _int_diagnostic_value(
+                            hsbc_boundary_payload,
+                            "rows_seen_in_table",
+                        ),
+                        "rows_rejected_outside_table": _int_diagnostic_value(
+                            hsbc_boundary_payload,
+                            "rows_rejected_outside_table",
+                        ),
+                        "rows_rejected_after_table": _int_diagnostic_value(
+                            hsbc_boundary_payload,
+                            "rows_rejected_after_table",
+                        ),
+                        "transition_anomaly_count": _int_diagnostic_value(
+                            hsbc_boundary_payload,
+                            "transition_anomaly_count",
+                        ),
+                    }
+                    hsbc_boundary_diagnostics.append(boundary_row)
+                    hsbc_boundary_metrics["table_start_count"] += boundary_row["table_start_count"]
+                    hsbc_boundary_metrics["table_end_count"] += boundary_row["table_end_count"]
+                    hsbc_boundary_metrics["rows_seen_in_table"] += boundary_row[
+                        "rows_seen_in_table"
+                    ]
+                    hsbc_boundary_metrics["rows_rejected_outside_table"] += boundary_row[
+                        "rows_rejected_outside_table"
+                    ]
+                    hsbc_boundary_metrics["rows_rejected_after_table"] += boundary_row[
+                        "rows_rejected_after_table"
+                    ]
+                    hsbc_boundary_metrics["transition_anomaly_count"] += boundary_row[
+                        "transition_anomaly_count"
+                    ]
+                hsbc_sign = output.diagnostics.get("hsbc_sign")
+                if isinstance(hsbc_sign, dict):
+                    hsbc_sign_payload = cast(dict[str, object], hsbc_sign)
+                    sign_row: HsbcSignDiagnostic = {
+                        "source_file": str(prepared.source_file),
+                        "sign_from_running_balance_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_from_running_balance_count",
+                        ),
+                        "sign_from_column_position_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_from_column_position_count",
+                        ),
+                        "sign_from_token_marker_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_from_token_marker_count",
+                        ),
+                        "sign_from_description_marker_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_from_description_marker_count",
+                        ),
+                        "sign_from_fallback_hint_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_from_fallback_hint_count",
+                        ),
+                        "sign_default_debit_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_default_debit_count",
+                        ),
+                        "sign_conflict_running_vs_marker_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_conflict_running_vs_marker_count",
+                        ),
+                        "sign_unresolved_ambiguous_count": _int_diagnostic_value(
+                            hsbc_sign_payload,
+                            "sign_unresolved_ambiguous_count",
+                        ),
+                    }
+                    hsbc_sign_diagnostics.append(sign_row)
+                    hsbc_sign_metrics["sign_from_running_balance_count"] += sign_row[
+                        "sign_from_running_balance_count"
+                    ]
+                    hsbc_sign_metrics["sign_from_column_position_count"] += sign_row[
+                        "sign_from_column_position_count"
+                    ]
+                    hsbc_sign_metrics["sign_from_token_marker_count"] += sign_row[
+                        "sign_from_token_marker_count"
+                    ]
+                    hsbc_sign_metrics["sign_from_description_marker_count"] += sign_row[
+                        "sign_from_description_marker_count"
+                    ]
+                    hsbc_sign_metrics["sign_from_fallback_hint_count"] += sign_row[
+                        "sign_from_fallback_hint_count"
+                    ]
+                    hsbc_sign_metrics["sign_default_debit_count"] += sign_row[
+                        "sign_default_debit_count"
+                    ]
+                    hsbc_sign_metrics["sign_conflict_running_vs_marker_count"] += sign_row[
+                        "sign_conflict_running_vs_marker_count"
+                    ]
+                    hsbc_sign_metrics["sign_unresolved_ambiguous_count"] += sign_row[
+                        "sign_unresolved_ambiguous_count"
+                    ]
             if (
                 parser.name == "hsbc"
                 and prepared.hsbc_statement_date is not None
@@ -499,6 +642,10 @@ def ingest_statements(
         parser_low_confidence_file_count=parser_low_confidence_file_count,
         hsbc_statement_periods_by_date=hsbc_statement_periods_by_date,
         hsbc_period_parse_variant_match_count=hsbc_period_parse_variant_match_count,
+        hsbc_boundary_metrics=hsbc_boundary_metrics,
+        hsbc_boundary_diagnostics=hsbc_boundary_diagnostics,
+        hsbc_sign_metrics=hsbc_sign_metrics,
+        hsbc_sign_diagnostics=hsbc_sign_diagnostics,
         hsbc_csv_files_scanned=hsbc_csv_files_scanned,
         parser_duration_seconds_by_parser=dict(parser_duration_seconds_by_parser),
         duration_seconds_by_bank=dict(duration_seconds_by_bank),

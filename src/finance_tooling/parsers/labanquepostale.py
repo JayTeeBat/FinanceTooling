@@ -103,7 +103,9 @@ class LaBanquePostaleParser(BaseStatementParser):
             return ParserOutput(transactions=[], warnings=[], validation=None)
         return super().parse(file_path, full_text)
 
-    def _extract_rows(self, file_path: Path, full_text: str) -> tuple[list[ParsedRow], list[str]]:
+    def _extract_rows(
+        self, file_path: Path, full_text: str
+    ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
         year = self._resolve_year(file_path.name)
         rows: list[ParsedRow] = []
         lines = full_text.splitlines()
@@ -125,7 +127,7 @@ class LaBanquePostaleParser(BaseStatementParser):
                 )
             )
 
-        return rows, []
+        return rows, [], None
 
     def _normalize_config(self) -> NormalizeConfig:
         return NormalizeConfig(

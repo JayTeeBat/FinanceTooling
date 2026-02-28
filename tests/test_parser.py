@@ -1,5 +1,6 @@
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 from finance_tooling.parsers.boursobank import BoursobankParser
 from finance_tooling.parsers.hsbc import HsbcParser
@@ -427,3 +428,54 @@ def test_hsbc_parser_uses_running_balance_delta_to_override_ambiguous_sign_hint(
     assert result.transactions[1].amount_native == Decimal("-100.00")
     assert result.validation is not None
     assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_boundary_state_rejects_rows_after_carried_forward() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 100.00
+    02 Mar 2024 CARD SHOP 10.00 90.00
+    03 Mar 2024 BALANCECARRIEDFORWARD 90.00
+    04 Mar 2024 CARD SHOP 5.00 85.00
+    Closing Balance 90.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    diagnostics = result.diagnostics
+    assert diagnostics is not None
+    hsbc_boundary = cast(dict[str, object], diagnostics["hsbc_boundary"])
+    assert hsbc_boundary["table_start_count"] == 1
+    assert hsbc_boundary["table_end_count"] == 1
+    assert hsbc_boundary["rows_seen_in_table"] == 1
+    assert hsbc_boundary["rows_rejected_after_table"] == 1
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_emits_boundary_warning_for_end_marker_after_table_start() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 100.00
+    02 Mar 2024 CARD SHOP 10.00 90.00
+    03 Mar 2024 BALANCECARRIEDFORWARD 90.00
+    04 Mar 2024 BALANCECARRIEDFORWARD 90.00
+    Closing Balance 90.00
+    """
+
+    result = parser.parse(Path("HSBC_2024_statement.pdf"), text)
+
+    assert any("boundary state anomalies" in warning for warning in result.warnings)
+
+
+def test_hsbc_parser_uses_guarded_bp_salary_fallback_for_credit_when_balance_missing() -> None:
+    parser = HsbcParser()
+    text = """
+    25 Aug 17 BP VANTAGEPOWE AUGUSTSALARY 3,686.57
+    """
+
+    result = parser.parse(Path("HSBC_2017_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("3686.57")

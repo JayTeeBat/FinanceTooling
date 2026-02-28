@@ -159,69 +159,75 @@ Success target for the next categorization pass:
 
 ## Hand-Off Log
 
-### 2026-02-26 - codex
-- Branch: `feature/automated-categorization`
+### 2026-02-27 - codex
+- Branch: `fix/hsbc-table-boundary-state-machine`
 - Completed:
-  - Executed iterative categorization waves with user-guided decisions using
-    the new review/export import-ready override workflow.
-  - Added targeted override batches for major residual fingerprints across
-    HSBC, Revolut, Boursobank, and LaBanquePostale, including
-    `virement pour -> Transfers/Bank Transfer`.
-  - Used 2022 Excel workbook context where available to disambiguate
-    categorization decisions (for example `DVLA-RF07HXX`, `LBEALING`).
-  - Added explicit review marker comment for
-    `virinstmrthomazojoummethom` in `config/category_overrides.yaml`.
-- Checks:
-  - `set -a; . /home/thomazo/dev/FinanceTooling/.env; set +a; FINANCE_CATEGORY_OVERRIDES_PATH=... FINANCE_CATEGORY_RULES_PATH=... uv run python -m finance_tooling run`: pass
-- Open items:
-  - Remaining recurring uncategorized leaders include cheque rows (`cheque n`,
-    `cheque n cid 176`) and unresolved transfer/person patterns (`dd nest`,
-    `virinsttheryfrederic`).
-  - Run-to-run categorization delta reporting in summary output is still not
-    implemented.
-- Next action:
-  - Continue residual fingerprint triage from current top-uncategorized list,
-    prioritizing stable recurring merchants with clear taxonomy fit.
-
-### 2026-02-26 - codex
-- Branch: `feature/automated-categorization`
-- Completed:
-  - Implemented manual categorization review roundtrip CLI in
-    `python -m finance_tooling` with `review-export` and `review-import`
-    subcommands.
-  - Added fallback-focused review export from normalized outputs with explicit
-    review columns: `description`, `bank`, `account_label`, `category`,
-    `subcategory`, `category_source`.
-  - Added review import/upsert flow to override config with default key
-    `fingerprint + bank` and optional `--include-account-label-scope`.
-  - Added tests for fallback export and override upsert/update behavior, and
-    documented roundtrip usage in `README.md`.
+  - Implemented HSBC column-position sign inference from raw table spacing by
+    detecting `Paidout`/`Paidin`/`Balance` anchors and resolving sign from token
+    x-position when running-balance evidence is unavailable.
+  - Preserved raw HSBC line context through block parsing and added
+    `sign_from_column_position_count` diagnostics end-to-end in ingest/summary.
+  - Verified the three first-page false negatives in `2016-12-29` are now
+    parsed as credits and ran full-corpus validation in `/tmp`.
 - Checks:
   - `uv run ruff check .`: pass
   - `uv run ruff format .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
 - Open items:
-  - Second-pass residual rule/override batch for uncategorized leaders is still
-    pending.
-  - Run-to-run categorization delta reporting is not yet implemented.
+  - Remaining high-diff HSBC months include `2019-05`, `2019-06`, `2019-07`.
+  - Add targeted regression fixtures for paid-in/paid-out split edge cases.
 - Next action:
-  - Implement run-to-run categorization delta reporting in summary output.
+  - Add focused HSBC fixtures for column-position split cases and run a
+    residual-diff triage pass on 2019 months.
 
-### 2026-02-26 - codex
-- Branch: `feature/automated-categorization`
+### 2026-02-27 - codex
+- Branch: `fix/hsbc-table-boundary-state-machine`
 - Completed:
-  - Updated worktree `AGENTS.md` with a decision-complete next-worker plan for
-    manual categorization review writeback and residual rule targeting.
-  - Added explicit residual fingerprint priority list and measurable success
-    target for the next categorization pass.
-  - Added recommendation details for override upsert scope/conflict handling.
+  - Reworked HSBC sign inference to explicit signed amounts with
+    balance-first resolution, including cross-block running-balance context.
+  - Disabled broad HSBC `SALARY` positive bias and replaced it with guarded
+    fallback (`BP ... SALARY`) while keeping CR/DR marker precedence.
+  - Added HSBC sign diagnostics (`hsbc_sign_*`) from parser through ingest and
+    run summary, plus parser and workflow test updates.
+  - Ran full-corpus validation in `/tmp`; compared to prior run, reconciliation
+    fail counts held steady while major outlier `2017-08` improved from
+    `|diff|=735.80` to `|diff|=107.08`.
 - Checks:
-  - `manual AGENTS.md update only`: not run
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
 - Open items:
-  - Manual review export/import CLI for override upsert is still not
-    implemented.
-  - Residual second-pass rule batch has not been applied yet.
+  - Remaining HSBC high-diff months include `2016-12`, `2019-05`, `2019-06`,
+    `2019-07`.
+  - Consider deeper paid-in/paid-out column-position inference from raw spacing
+    to reduce reliance on fallback hints.
 - Next action:
-  - Implement CLI workflow to export fallback categorization candidates and
-    import reviewed results into `config/category_overrides.yaml`.
+  - Add robust column-position sign inference using original line spacing and
+    re-run full-corpus reconciliation comparison.
+
+### 2026-02-27 - codex
+- Branch: `fix/hsbc-table-boundary-state-machine`
+- Completed:
+  - Implemented a strict HSBC transaction table-boundary state machine in the
+    HSBC parser to gate extraction to in-table regions only.
+  - Added HSBC boundary diagnostics plumbing from parser output through ingest
+    aggregation and run summary JSON (`hsbc_boundary_*` counters + per-file
+    diagnostics list).
+  - Added parser regression tests for post-carried-forward row rejection and
+    boundary anomaly warnings; updated parser/workflow typing contracts and
+    tests for diagnostics support.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Validate full-corpus HSBC reconciliation deltas against baseline outlier
+    months (`2017-08`, `2016-12`, `2019-05` to `2019-07`).
+  - Tune strict start/end markers if corpus run shows false negatives in
+    legacy layouts.
+- Next action:
+  - Run full-corpus workflow and compare HSBC reconciliation fail/checkable and
+  `|diff|` outlier months versus the 2026-02-25 baseline.
