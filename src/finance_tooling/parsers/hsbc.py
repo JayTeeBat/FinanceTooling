@@ -555,6 +555,7 @@ def _parse_statement_row_candidate(
         selected_match=selected,
         all_matches=matches,
         column_anchors=column_anchors,
+        indicator_marker=indicator_marker,
     )
     signed_amount, fallback_sign_source = _signed_amount_from_source(
         amount_absolute=amount_absolute,
@@ -820,6 +821,7 @@ def _infer_column_sign_marker(
     selected_match: re.Match[str],
     all_matches: list[re.Match[str]],
     column_anchors: _ColumnAnchors | None,
+    indicator_marker: str | None = None,
 ) -> str | None:
     if raw_rest is None or column_anchors is None:
         return None
@@ -835,9 +837,23 @@ def _infer_column_sign_marker(
         return None
     raw_selected = raw_matches[selected_index]
     token_start = raw_selected.start()
-    if token_start >= column_anchors.paid_in_start and token_start < column_anchors.balance_start:
+    token_end = raw_selected.end()
+    token_center = token_start + ((token_end - token_start - 1) / 2.0)
+
+    # OCR/text extraction can shift token starts by one character. Use token
+    # center for column classification and guard the paid-out/paid-in boundary.
+    if abs(token_center - column_anchors.paid_in_start) <= 1.0 and indicator_marker in {
+        "CR_MARKER",
+        "DR_MARKER",
+    }:
+        return indicator_marker
+
+    if token_center >= column_anchors.paid_in_start and token_center < column_anchors.balance_start:
         return "CR_MARKER"
-    if token_start >= column_anchors.paid_out_start and token_start < column_anchors.paid_in_start:
+    if (
+        token_center >= column_anchors.paid_out_start
+        and token_center < column_anchors.paid_in_start
+    ):
         return "DR_MARKER"
     del normalized_rest
     return None

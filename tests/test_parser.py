@@ -430,6 +430,43 @@ def test_hsbc_parser_uses_running_balance_delta_to_override_ambiguous_sign_hint(
     assert result.validation.status == "pass"
 
 
+def test_hsbc_parser_handles_one_char_left_paid_in_credit_with_cr_marker() -> None:
+    parser = HsbcParser()
+    text = """
+    DATE PAYMENT TYPE                               PAIDOUT      PAIDIN    BALANCE
+    Opening Balance 21693.52
+    27 Aug 18 CR REVERSAL OF 25-08
+                   CHAD MOTORMILESLTD
+                   BALANCE PRIUS                            10,000.00
+    Closing Balance 31693.52
+    """
+
+    result = parser.parse(Path("HSBC_2018_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("10000.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_handles_one_char_left_paid_in_credit_without_marker() -> None:
+    parser = HsbcParser()
+    text = """
+    DATE PAYMENT TYPE                               PAIDOUT      PAIDIN    BALANCE
+    Opening Balance 1664.30
+    25 May 21 BP CHARRUAU C
+                   Claire Charruau                              10,000.00
+    Closing Balance 11664.30
+    """
+
+    result = parser.parse(Path("HSBC_2021_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("10000.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
 def test_hsbc_parser_boundary_state_rejects_rows_after_carried_forward() -> None:
     parser = HsbcParser()
     text = """

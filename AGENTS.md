@@ -159,6 +159,32 @@ Success target for the next categorization pass:
 
 ## Hand-Off Log
 
+### 2026-02-28 - codex
+- Branch: `fix/hsbc-table-boundary-state-machine`
+- Completed:
+  - Hardened HSBC column-based sign inference by classifying with token-center
+    geometry (instead of token start) and preserving CR/DR marker precedence in
+    near paid-out/paid-in boundary cases.
+  - Added focused HSBC parser regressions for one-character left-boundary
+    paid-in credits (with and without explicit CR marker), reproducing the two
+    observed `10,000.00` sign-flip failures.
+  - Ran full-corpus pipeline with HSBC CSV disabled in isolated output and
+    improved reconciliation from `36/193` failed/checkable to `35/193`; the
+    `2018-08-29` outlier (`|diff|=20000.00`) dropped out of HSBC fail files.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - HSBC high-diff outliers remain led by `2019-03` (`|diff|=13027.96`) and
+    2021 months with large residual differences.
+  - Investigate whether additional boundary-tolerance tuning is needed for
+    column anchors where token-center still falls in paid-out range.
+- Next action:
+  - Triage `2019-03-29` with cached raw text + parsed rows to isolate remaining
+    non-sign reconciliation defects.
+
 ### 2026-02-27 - codex
 - Branch: `fix/hsbc-table-boundary-state-machine`
 - Completed:
@@ -206,28 +232,3 @@ Success target for the next categorization pass:
 - Next action:
   - Add robust column-position sign inference using original line spacing and
     re-run full-corpus reconciliation comparison.
-
-### 2026-02-27 - codex
-- Branch: `fix/hsbc-table-boundary-state-machine`
-- Completed:
-  - Implemented a strict HSBC transaction table-boundary state machine in the
-    HSBC parser to gate extraction to in-table regions only.
-  - Added HSBC boundary diagnostics plumbing from parser output through ingest
-    aggregation and run summary JSON (`hsbc_boundary_*` counters + per-file
-    diagnostics list).
-  - Added parser regression tests for post-carried-forward row rejection and
-    boundary anomaly warnings; updated parser/workflow typing contracts and
-    tests for diagnostics support.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Validate full-corpus HSBC reconciliation deltas against baseline outlier
-    months (`2017-08`, `2016-12`, `2019-05` to `2019-07`).
-  - Tune strict start/end markers if corpus run shows false negatives in
-    legacy layouts.
-- Next action:
-  - Run full-corpus workflow and compare HSBC reconciliation fail/checkable and
-  `|diff|` outlier months versus the 2026-02-25 baseline.
