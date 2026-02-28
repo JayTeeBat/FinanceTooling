@@ -394,21 +394,24 @@ def test_hsbc_parser_inherits_header_cr_marker_for_non_prefixed_continuation_amo
     assert result.validation.status == "pass"
 
 
-def test_hsbc_parser_deduplicates_repeated_continuation_rows() -> None:
+def test_hsbc_parser_keeps_repeated_continuation_rows_with_single_balance_token() -> None:
     parser = HsbcParser()
     text = """
     Opening Balance 1000.00
     25 Jun 19 VIS REVOLUT*
     REVOLUT.COM 500.00
     VIS REVOLUT*
-    REVOLUT.COM 500.00 500.00
-    Closing Balance 500.00
+    REVOLUT.COM 500.00 0.00
+    Closing Balance 0.00
     """
 
     result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
 
-    assert len(result.transactions) == 1
-    assert result.transactions[0].amount_native == Decimal("-500.00")
+    assert len(result.transactions) == 2
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-500.00"),
+        Decimal("-500.00"),
+    ]
     assert result.validation is not None
     assert result.validation.status == "pass"
 
@@ -513,6 +516,31 @@ def test_hsbc_parser_uses_visa_rate_amount_for_fx_inline_format() -> None:
     assert [tx.amount_native for tx in result.transactions] == [
         Decimal("-39.34"),
         Decimal("-1.08"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_uses_visa_rate_amount_for_fx_cash_context() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 17742.50
+    23 Jul 19 VIS CASH 0088325545
+               CRCA CHTE MARITIME
+               FOURAS DAB E2
+               EUR 50.00 @ 1.1106
+               Visa Rate 45.02
+            DR  Non-Sterling
+               Transaction Fee 1.23 17696.25
+    Closing Balance 17696.25
+    """
+
+    result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-45.02"),
+        Decimal("-1.23"),
     ]
     assert result.validation is not None
     assert result.validation.status == "pass"

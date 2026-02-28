@@ -702,9 +702,11 @@ def _parse_fx_rows_from_context(
 
 def _looks_like_fx_context(context: str) -> bool:
     upper = context.upper().strip()
-    if "INT'L" not in upper:
+    if not _starts_with_transaction_prefix(upper):
         return False
-    return _starts_with_transaction_prefix(upper)
+    if "INT'L" in upper:
+        return True
+    return upper.startswith("VIS CASH")
 
 
 def _looks_like_fx_cluster_detail_line(line: str) -> bool:
@@ -884,13 +886,14 @@ def _append_or_merge_duplicate_candidate(
     if not same_key:
         return [*existing, candidate]
 
-    if last.running_balance is None and candidate.running_balance is not None:
-        return [*existing[:-1], candidate]
-    if last.running_balance is not None and candidate.running_balance is None:
-        return existing
-    if last.running_balance is None and candidate.running_balance is None:
-        return [*existing, candidate]
-    if last.running_balance == candidate.running_balance:
+    # Only collapse rows when both carry the same running balance.
+    # This avoids dropping legitimate repeated transactions where only one
+    # line includes a balance token near page/table boundaries.
+    if (
+        last.running_balance is not None
+        and candidate.running_balance is not None
+        and last.running_balance == candidate.running_balance
+    ):
         return existing
     return [*existing, candidate]
 
