@@ -467,6 +467,91 @@ def test_hsbc_parser_handles_one_char_left_paid_in_credit_without_marker() -> No
     assert result.validation.status == "pass"
 
 
+def test_hsbc_parser_uses_visa_rate_amount_for_fx_debit_cluster() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 12331.06
+    06 Mar 19 DD PAYPAL PAYMENT 103.32
+               ))) INT'L 0081718057
+                   OOO SOLOD
+                   SANKT-PETERBU
+                   RUB 3,600.00
+                   @85.7346 Visa Rate 41.99
+               DR  Non-Sterling
+                   Transaction Fee 1.15 12,184.60
+    Closing Balance 12184.60
+    """
+
+    result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
+
+    assert len(result.transactions) == 3
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-103.32"),
+        Decimal("-41.99"),
+        Decimal("-1.15"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_uses_visa_rate_amount_for_fx_inline_format() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 500.00
+    06 Apr 21 VIS INT'L 0032265240
+               L EPI SUCRE
+               FOURAS
+               EUR 46.15 @ 1.1731 Visa Rate 39.34
+            DR Non-Sterling
+               Transaction Fee 1.08 459.58
+    Closing Balance 459.58
+    """
+
+    result = parser.parse(Path("HSBC_2021_statement.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-39.34"),
+        Decimal("-1.08"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_keeps_dr_cr_fx_reversal_rows_separate() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 275.74
+    14 Jan 22 VIS INT'L 0079854552
+               Amazon Prime*VF0US
+               amazon.fr/pri
+               EUR 49.00 @ 1.1959
+               Visa Rate 40.97
+            DR Non-Sterling
+               Transaction Fee 1.12
+               VIS INT'L 0079854553
+               Amazon Prime FR
+               amazon.fr/pri
+               EUR 49.00 @ 1.1998
+               Visa Rate 40.84
+            CR Non-Sterling
+               Transaction Fee 1.12 275.61
+    Closing Balance 275.61
+    """
+
+    result = parser.parse(Path("HSBC_2022_statement.pdf"), text)
+
+    assert len(result.transactions) == 4
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-40.97"),
+        Decimal("-1.12"),
+        Decimal("40.84"),
+        Decimal("1.12"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
 def test_hsbc_parser_boundary_state_rejects_rows_after_carried_forward() -> None:
     parser = HsbcParser()
     text = """
