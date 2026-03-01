@@ -29,7 +29,7 @@ uv run python -m finance_tooling review-export \
 
 uv run python -m finance_tooling review-import \
   --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
-  --overrides-path "config/category_overrides.yaml"
+  --overrides-path "$FINANCE_CATEGORY_OVERRIDES_PATH"
 ```
 
 Default upsert key is normalized `description` fingerprint + `bank`. Add
@@ -109,8 +109,8 @@ export FINANCE_INGEST_WORKERS="1"
 export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
 export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet"
 export FINANCE_HSBC_CSV_PATH="/path/to/hsbc.csv_or_folder"
-export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
-export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"
+export FINANCE_CATEGORY_RULES_PATH="/path/to/data/config/category_rules.yaml"
+export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/data/config/category_overrides.yaml"
 
 uv run python -m finance_tooling
 ```
@@ -131,10 +131,16 @@ set, the workflow expects:
 - `<FINANCE_PROCESSED_PATH>/category_rules.yaml`
 - `<FINANCE_PROCESSED_PATH>/category_overrides.yaml`
 
-The repository includes starter templates:
+The repository includes starter templates only (not live runtime state):
 
 - `config/category_rules.yaml`
 - `config/category_overrides.yaml`
+
+Recommended setup:
+
+- copy template files from `config/` to your data config directory
+- set `FINANCE_CATEGORY_RULES_PATH` and `FINANCE_CATEGORY_OVERRIDES_PATH` to those
+  data-path files
 
 Supported formats for both files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
