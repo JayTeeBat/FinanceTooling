@@ -7,3 +7,7 @@ generated_at,commit,branch,bank,transactions_count,categorized_count,uncategoriz
 2026-02-28T01:35:08.972403+00:00,eeecd56,fix/hsbc-sign-inference-hardening,HSBC,4837,681,4156,14.0790,85.9210
 2026-02-28T01:35:08.972403+00:00,eeecd56,fix/hsbc-sign-inference-hardening,LaBanquePostale,2561,212,2349,8.2780,91.7220
 2026-02-28T01:35:08.972403+00:00,eeecd56,fix/hsbc-sign-inference-hardening,Revolut,2481,117,2364,4.7158,95.2842
+2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,Boursobank,2410,133,2277,5.5187,94.4813
+2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,HSBC,4842,679,4163,14.0231,85.9769
+2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,LaBanquePostale,2561,212,2349,8.2780,91.7220
+2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,Revolut,2481,117,2364,4.7158,95.2842

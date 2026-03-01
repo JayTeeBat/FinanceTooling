@@ -169,6 +169,29 @@ Success target for the next categorization pass:
 ### 2026-03-01 - codex
 - Branch: `fix/hsbc-reconciliation-next`
 - Completed:
+  - Ran full workflow to nominal processed destination:
+    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed`.
+  - Updated metrics logs from nominal run summary via:
+    `uv run python -m finance_tooling metrics-log-update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`.
+  - Recorded refreshed reconciliation/categorization snapshots in
+    `docs/metrics_commit_log.csv` and `docs/metrics_commit_log_by_bank.csv`.
+- Checks:
+  - `uv run python -m finance_tooling`: pass
+  - `uv run python -m finance_tooling metrics-log-update ...`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Remaining HSBC fail in latest verification run remains
+    `2019-11-27` (`-0.03`) and is documented as a source-PDF formatting
+    artifact.
+- Next action:
+  - Decide whether to keep strict reconciliation tolerance (`0.01`) or accept
+    this residual as operationally negligible.
+
+### 2026-03-01 - codex
+- Branch: `fix/hsbc-reconciliation-next`
+- Completed:
   - Hardened HSBC FX cluster parsing for compact markers (`VisaRate`,
     `TransactionFee`) and broadened FX cluster detection to scan the full
     continuation cluster, not only the first continuation line.
@@ -222,32 +245,3 @@ Success target for the next categorization pass:
 - Next action:
   - Triage the remaining four low-diff HSBC months and decide whether to adjust
     tolerance policy for near-zero residuals (`|diff| <= 0.03`) or keep strict.
-
-### 2026-02-28 - codex
-- Branch: `fix/hsbc-sign-inference-hardening`
-- Completed:
-  - Ran isolated full-corpus validation after HSBC FX amount-token hardening in
-    `/tmp/fxfix_20260228-022508` with raw HSBC CSV reference enabled.
-  - Reviewed reconciliation evolution vs both no-CSV baseline
-    (`processed_run_20260228-012931`) and prior CSV-enabled run
-    (`/tmp/plan_debug_20260228-015004`), reducing HSBC fails to `9`.
-  - Added latest diagnostics note with remaining-fail divergence maps for
-    `2019-05-27`, `2019-06-27`, and `2019-07-27`:
-    `docs/hsbc_failed_statement_diagnostics_2026-02-28_fxfix.md`.
-  - Updated metrics logs from latest run summary into:
-    `docs/metrics_commit_log.csv` and `docs/metrics_commit_log_by_bank.csv`.
-- Checks:
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Remaining top HSBC residuals are concentrated in boundary-linked months:
-    `2019-05-27` (`+500.0`), `2019-06-27` (`+500.0`), `2019-07-27` (`+495.02`).
-  - `2019-05-27` shows exact PDF/CSV row+sum agreement yet still `+500` diff,
-    indicating likely balance-context/statement-period issue rather than row
-    parsing mismatch.
-- Next action:
-  - Trace HSBC month-boundary assignment and validation inputs around
-    `2019-06-27` ownership to resolve shared 2019-06/2019-07 divergence
-    signatures.

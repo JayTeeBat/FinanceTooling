@@ -1,3 +1,4 @@
 generated_at,commit,branch,files_scanned,files_failed,parsing_success_pct,completeness_coverage_pct,reconciliation_pass_pct,categorized_pct,uncategorized_pct
 2026-02-27T00:10:01.838646+00:00,0cb30c5,feature/automated-categorization,199,0,100.0000,100.0000,63.2124,43.0485,56.9515
 2026-02-28T01:35:08.966872+00:00,eeecd56,fix/hsbc-sign-inference-hardening,199,0,100.0000,100.5181,94.3005,9.3010,90.6990
+2026-03-01T00:21:43.019493+00:00,d06eb7a,fix/hsbc-reconciliation-next,199,0,100.0000,100.5181,98.4456,9.2810,90.7190
