@@ -80,7 +80,12 @@ _NON_TXN_BALANCE_MARKERS = (
     "BALANCEBROUGHTFORWARD",
     "BALANCECARRIEDFORWARD",
 )
-_TXN_PREFIXES = ("VIS", "DD", "ATM", "BP", "SO", "CR", "DR", ")))")
+_FX_CURRENCY_CODE_PATTERN = re.compile(
+    r"\b(?:EUR|USD|RUB|CHF|CAD|AUD|JPY|NOK|SEK|DKK|PLN)\b",
+    re.IGNORECASE,
+)
+_NON_STERLING_MARKER_PATTERN = re.compile(r"\b(?P<marker>CR|DR)\s+NON-STERLING\b", re.IGNORECASE)
+_TXN_PREFIX_PATTERN = re.compile(r"(?:(?:^(?:VIS|DD|ATM|BP|SO|CR|DR)(?:\b|$))|(?:^\)\)\)(?:\s|$)))")
 _TXN_CONTEXT_HINTS = (
     "CARD",
     "PAYMENT",
@@ -444,18 +449,22 @@ def _rows_from_block(
         pending_has_txn_prefix = _has_transaction_context(block.header_text)
         pending_sign_marker = _description_sign_marker(block.header_text)
 
-    for index, line in enumerate(block.continuation_lines):
+    index = 0
+    while index < len(block.continuation_lines):
+        line = block.continuation_lines[index]
         raw_line = block.continuation_raw_lines[index]
         if _is_non_transaction_line(line):
             pending_context_parts = []
             pending_has_txn_prefix = False
             pending_sign_marker = None
+            index += 1
             continue
 
         if _is_non_transaction_context_line(line):
             pending_context_parts = []
             pending_has_txn_prefix = False
             pending_sign_marker = None
+            index += 1
             continue
 
         if not _contains_amount(line):
@@ -463,6 +472,35 @@ def _rows_from_block(
             if _has_transaction_context(line):
                 pending_has_txn_prefix = True
                 pending_sign_marker = _description_sign_marker(line)
+            index += 1
+            continue
+
+        fallback_context = " ".join(part for part in pending_context_parts if part).strip()
+        parsed_fx = _parse_fx_rows_from_context(
+            raw_date=block.raw_date,
+            fallback_context=fallback_context,
+            continuation_lines=block.continuation_lines,
+            continuation_raw_lines=block.continuation_raw_lines,
+            start_index=index,
+            column_anchors=block.column_anchors,
+        )
+        if parsed_fx is not None:
+            fx_rows, next_index = parsed_fx
+            for fx_row in fx_rows:
+                fx_row, previous_running_balance = _apply_running_balance_sign_override(
+                    fx_row,
+                    previous_running_balance,
+                )
+                sign_stats.add_source(fx_row.sign_source)
+                if fx_row.running_vs_marker_conflict:
+                    sign_stats.sign_conflict_running_vs_marker_count += 1
+                rows = _append_or_merge_duplicate_candidate(rows, fx_row)
+                if fx_row.running_balance is not None:
+                    previous_running_balance = fx_row.running_balance
+            pending_context_parts = []
+            pending_has_txn_prefix = False
+            pending_sign_marker = None
+            index = next_index
             continue
 
         line_is_txn = _starts_with_transaction_prefix(line)
@@ -470,9 +508,9 @@ def _rows_from_block(
             pending_context_parts = []
             pending_has_txn_prefix = False
             pending_sign_marker = None
+            index += 1
             continue
 
-        fallback_context = " ".join(part for part in pending_context_parts if part).strip()
         row = _parse_statement_row_candidate(
             block.raw_date,
             line,
@@ -495,6 +533,7 @@ def _rows_from_block(
         pending_context_parts = []
         pending_has_txn_prefix = False
         pending_sign_marker = None
+        index += 1
 
     return [candidate.row for candidate in rows], sign_stats, previous_running_balance
 
@@ -582,6 +621,154 @@ def _parse_statement_row_candidate(
     )
 
 
+def _parse_fx_rows_from_context(
+    *,
+    raw_date: str,
+    fallback_context: str,
+    continuation_lines: list[str],
+    continuation_raw_lines: list[str],
+    start_index: int,
+    column_anchors: _ColumnAnchors | None,
+) -> tuple[list[_ParsedRowCandidate], int] | None:
+    if not fallback_context:
+        return None
+    if not _looks_like_fx_context(fallback_context):
+        return None
+
+    end_index = start_index + 1
+    while end_index < len(continuation_lines):
+        if _starts_with_transaction_prefix(continuation_lines[end_index]) and (
+            _NON_STERLING_MARKER_PATTERN.search(continuation_lines[end_index]) is None
+        ):
+            break
+        end_index += 1
+
+    cluster_lines = continuation_lines[start_index:end_index]
+    cluster_raw_lines = continuation_raw_lines[start_index:end_index]
+    if not any(_looks_like_fx_cluster_detail_line(line) for line in cluster_lines):
+        return None
+    marker = _non_sterling_marker_from_lines(cluster_lines)
+    visa_rate_amount = _extract_visa_rate_amount(cluster_lines)
+    if visa_rate_amount is None:
+        return None
+
+    sign_marker = marker or _description_sign_marker(fallback_context)
+    if sign_marker == "CR_MARKER":
+        signed_amount = visa_rate_amount
+        sign_source = "description_marker"
+    elif sign_marker == "DR_MARKER":
+        signed_amount = -visa_rate_amount
+        sign_source = "description_marker"
+    else:
+        signed_amount = -visa_rate_amount
+        sign_source = "default_debit"
+
+    description = fallback_context
+    if sign_marker is not None and not description.endswith(sign_marker):
+        description = f"{description} {sign_marker}"
+
+    candidates = [
+        _ParsedRowCandidate(
+            row=ParsedRow(
+                raw_date=_normalize_compact_date(raw_date),
+                raw_description=description,
+                raw_amount=str(signed_amount),
+                raw_currency_hint="GBP",
+            ),
+            amount_absolute=visa_rate_amount,
+            signed_amount=signed_amount,
+            running_balance=None,
+            sign_source=sign_source,
+        )
+    ]
+
+    for offset, cluster_line in enumerate(cluster_lines):
+        cluster_upper = cluster_line.upper()
+        compact_cluster_upper = cluster_upper.replace(" ", "")
+        if "TRANSACTION FEE" not in cluster_upper and "TRANSACTIONFEE" not in compact_cluster_upper:
+            continue
+        fee_row = _parse_statement_row_candidate(
+            raw_date,
+            cluster_line,
+            inherited_sign_marker=sign_marker,
+            raw_rest=cluster_raw_lines[offset],
+            column_anchors=column_anchors,
+        )
+        if fee_row is not None:
+            candidates.append(fee_row)
+        break
+
+    return candidates, end_index
+
+
+def _looks_like_fx_context(context: str) -> bool:
+    upper = context.upper().strip()
+    if not _starts_with_transaction_prefix(upper):
+        return False
+    if "INT'L" in upper:
+        return True
+    return upper.startswith("VIS CASH")
+
+
+def _looks_like_fx_cluster_detail_line(line: str) -> bool:
+    upper = line.upper()
+    compact_upper = upper.replace(" ", "")
+    if "VISA RATE" in upper or "VISARATE" in compact_upper:
+        return True
+    if "NON-STERLING" in upper or "NONSTERLING" in compact_upper:
+        return True
+    if "TRANSACTION FEE" in upper or "TRANSACTIONFEE" in compact_upper:
+        return True
+    if _FX_CURRENCY_CODE_PATTERN.search(upper) is not None and _contains_amount(line):
+        return True
+    return False
+
+
+def _non_sterling_marker_from_lines(lines: list[str]) -> str | None:
+    for line in lines:
+        match = _NON_STERLING_MARKER_PATTERN.search(line)
+        if match is None:
+            continue
+        marker = match.group("marker").upper()
+        if marker == "CR":
+            return "CR_MARKER"
+        if marker == "DR":
+            return "DR_MARKER"
+    return None
+
+
+def _extract_visa_rate_amount(lines: list[str]) -> Decimal | None:
+    for line in lines:
+        upper = line.upper()
+        compact_upper = upper.replace(" ", "")
+        visa_rate_index = upper.find("VISA RATE")
+        if visa_rate_index < 0:
+            compact_index = compact_upper.find("VISARATE")
+            if compact_index >= 0:
+                # Map compact string index back to the original line index.
+                no_space_idx = 0
+                for idx, ch in enumerate(upper):
+                    if ch == " ":
+                        continue
+                    if no_space_idx == compact_index:
+                        visa_rate_index = idx
+                        break
+                    no_space_idx += 1
+        if visa_rate_index < 0:
+            continue
+        matches = list(_AMOUNT_TOKEN_PATTERN.finditer(line))
+        if not matches:
+            continue
+        trailing = [match for match in matches if match.start() >= visa_rate_index]
+        ordered = trailing if trailing else matches
+        for match in reversed(ordered):
+            parsed = _parse_amount_token(match.group("amount"))
+            if parsed is None:
+                continue
+            return abs(parsed)
+    return None
+
+
 def _contains_amount(line: str) -> bool:
     return _AMOUNT_TOKEN_PATTERN.search(line) is not None
 
@@ -640,7 +827,7 @@ def _select_transaction_match(line: str, matches: list[re.Match[str]]) -> re.Mat
 
 def _starts_with_transaction_prefix(line: str) -> bool:
     upper = line.strip().upper()
-    return any(upper.startswith(prefix) for prefix in _TXN_PREFIXES)
+    return _TXN_PREFIX_PATTERN.match(upper) is not None
 
 
 def _has_transaction_context(line: str) -> bool:
@@ -714,13 +901,14 @@ def _append_or_merge_duplicate_candidate(
     if not same_key:
         return [*existing, candidate]
 
-    if last.running_balance is None and candidate.running_balance is not None:
-        return [*existing[:-1], candidate]
-    if last.running_balance is not None and candidate.running_balance is None:
-        return existing
-    if last.running_balance is None and candidate.running_balance is None:
-        return [*existing, candidate]
-    if last.running_balance == candidate.running_balance:
+    # Only collapse rows when both carry the same running balance.
+    # This avoids dropping legitimate repeated transactions where only one
+    # line includes a balance token near page/table boundaries.
+    if (
+        last.running_balance is not None
+        and candidate.running_balance is not None
+        and last.running_balance == candidate.running_balance
+    ):
         return existing
     return [*existing, candidate]
 

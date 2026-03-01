@@ -20,6 +20,13 @@ categorization, and reporting.
   - Overall statement reconciliation is `22/193` failed/checkable.
 - Immediate hardening targets: high-diff months (`2017-08`, `2016-12`) and
   residual mid-diff months (`2019-05`, `2019-06`, `2019-07`).
+- Debug triage reference (2026-02-28):
+  - `docs/hsbc_reconciliation_root_cause_triage_2026-02-28.md`
+  - Includes failed-month root-cause buckets and occurrence counts from
+    `processed_run_20260228-012931`.
+  - `docs/hsbc_failed_statement_diagnostics_2026-02-28_fxfix.md`
+  - Includes post-fix metric evolution (`/tmp/fxfix_20260228-022508`) and
+    detailed divergence maps for remaining 2019-05/2019-06/2019-07 fails.
 
 ## Engineering Standards
 
@@ -159,76 +166,82 @@ Success target for the next categorization pass:
 
 ## Hand-Off Log
 
-### 2026-02-28 - codex
-- Branch: `fix/hsbc-sign-inference-hardening`
+### 2026-03-01 - codex
+- Branch: `fix/hsbc-reconciliation-next`
 - Completed:
-  - Created a new worktree from merged `main` and applied the HSBC sign
-    hardening patch (`Fix HSBC one-char paid-in boundary sign inference`).
-  - Ported parser behavior to classify HSBC column sign using token-center
-    geometry and marker-aware boundary handling to address one-character
-    alignment drift near `PAIDIN`.
-  - Kept regression coverage for the two reproduced `10,000.00` sign-flip
-    patterns (CR reversal and BP continuation credit).
+  - Ran full workflow to nominal processed destination:
+    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed`.
+  - Updated metrics logs from nominal run summary via:
+    `uv run python -m finance_tooling metrics-log-update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`.
+  - Recorded refreshed reconciliation/categorization snapshots in
+    `docs/metrics_commit_log.csv` and `docs/metrics_commit_log_by_bank.csv`.
 - Checks:
+  - `uv run python -m finance_tooling`: pass
+  - `uv run python -m finance_tooling metrics-log-update ...`: pass
   - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
 - Open items:
-  - Core issue being fixed: HSBC rows with amount token starting exactly one
-    character left of `paid_in_start` can be misclassified as `DR` by
-    column-position inference, flipping true credits to debits and causing very
-    large reconciliation residuals (`2018-08-29`, `2021-05-27`).
-  - Confirm full-corpus impact and verify no regressions in other boundary-heavy
-    months (notably `2019-03`, `2019-05` to `2019-07`).
+  - Remaining HSBC fail in latest verification run remains
+    `2019-11-27` (`-0.03`) and is documented as a source-PDF formatting
+    artifact.
 - Next action:
-  - Run full-corpus pipeline from this worktree and compare reconciliation deltas
-    against `processed_run_20260228-012931` baseline.
+  - Decide whether to keep strict reconciliation tolerance (`0.01`) or accept
+    this residual as operationally negligible.
 
-### 2026-02-28 - codex
-- Branch: `fix/hsbc-table-boundary-state-machine`
+### 2026-03-01 - codex
+- Branch: `fix/hsbc-reconciliation-next`
 - Completed:
-  - Hardened HSBC column-based sign inference by classifying with token-center
-    geometry (instead of token start) and preserving CR/DR marker precedence in
-    near paid-out/paid-in boundary cases.
-  - Added focused HSBC parser regressions for one-character left-boundary
-    paid-in credits (with and without explicit CR marker), reproducing the two
-    observed `10,000.00` sign-flip failures.
-  - Ran full-corpus pipeline with HSBC CSV disabled in isolated output and
-    improved reconciliation from `36/193` failed/checkable to `35/193`; the
-    `2018-08-29` outlier (`|diff|=20000.00`) dropped out of HSBC fail files.
+  - Hardened HSBC FX cluster parsing for compact markers (`VisaRate`,
+    `TransactionFee`) and broadened FX cluster detection to scan the full
+    continuation cluster, not only the first continuation line.
+  - Added parser regression coverage for compact FX lines that previously
+    selected EUR nominal amounts instead of GBP `VisaRate` amounts.
+  - Validated full-corpus impact in isolated run
+    `/tmp/hsbc_recon_fixverify2_20260301-010651`: fixed `2016-12-29` and
+    reduced HSBC fails from `4` to `1`.
 - Checks:
   - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest tests/test_parser.py -q`: pass
   - `uv run pytest`: pass
+  - `uv run python -m finance_tooling.perf_check` (isolated temp output): pass
 - Open items:
-  - HSBC high-diff outliers remain led by `2019-03` (`|diff|=13027.96`) and
-    2021 months with large residual differences.
-  - Investigate whether additional boundary-tolerance tuning is needed for
-    column anchors where token-center still falls in paid-out range.
+  - Remaining HSBC fail: `2019-11-27` with diff `-0.03`.
+  - Decide whether reconciliation tolerance should remain strict at `0.01` or
+    be relaxed for near-zero residuals.
 - Next action:
-  - Triage `2019-03-29` with cached raw text + parsed rows to isolate remaining
-    non-sign reconciliation defects.
+  - Triage `2019-11-27` row-level residual and decide tolerance policy.
 
-### 2026-02-27 - codex
-- Branch: `fix/hsbc-table-boundary-state-machine`
+### 2026-03-01 - codex
+- Branch: `fix/hsbc-reconciliation-next`
 - Completed:
-  - Implemented HSBC column-position sign inference from raw table spacing by
-    detecting `Paidout`/`Paidin`/`Balance` anchors and resolving sign from token
-    x-position when running-balance evidence is unavailable.
-  - Preserved raw HSBC line context through block parsing and added
-    `sign_from_column_position_count` diagnostics end-to-end in ingest/summary.
-  - Verified the three first-page false negatives in `2016-12-29` are now
-    parsed as credits and ran full-corpus validation in `/tmp`.
+  - Implemented HSBC parser hardening to preserve legitimate repeated adjacent
+    transactions instead of collapsing rows when only one carries a running
+    balance token.
+  - Expanded HSBC FX `Visa Rate` extraction coverage to include `VIS CASH`
+    non-sterling clusters (not only `INT'L` contexts), preventing foreign
+    nominal amount selection (`EUR 50.00` vs GBP `Visa Rate 45.02`).
+  - Added parser regressions for repeated `REVOLUT 500.00` rows and `VIS CASH`
+    FX `Visa Rate` handling.
+  - Validated full-corpus impact in isolated run
+    `/tmp/hsbc_recon_fixverify_20260301-005301`:
+    HSBC failed reconciliations reduced from `9` to `4`, and target months
+    `2019-05-27`, `2019-06-27`, `2019-07-27` now reconcile with `0.0` diff.
 - Checks:
-  - `uv run ruff check .`: pass
   - `uv run ruff format .`: pass
+  - `uv run ruff check .`: pass
   - `uv run ty check src/finance_tooling tests`: pass
   - `uv run pytest`: pass
+  - `uv run pytest tests/test_parser.py -q`: pass
+  - `uv run python -m finance_tooling.perf_check` (isolated temp output): pass
 - Open items:
-  - Remaining high-diff HSBC months include `2019-05`, `2019-06`, `2019-07`.
-  - Add targeted regression fixtures for paid-in/paid-out split edge cases.
+  - Residual HSBC fails remain for:
+    `2016-05-28` (`-2.12`), `2016-12-29` (`-10.71`),
+    `2017-04-29` (`-5.89`), `2019-11-27` (`-0.03`).
+  - HSBC CSV exports for some months still omit duplicated card rows that exist
+    in PDFs; adaptive selection now correctly prefers PDF where it reduces
+    reconciliation error.
 - Next action:
-  - Add focused HSBC fixtures for column-position split cases and run a
-    residual-diff triage pass on 2019 months.
+  - Triage the remaining four low-diff HSBC months and decide whether to adjust
+    tolerance policy for near-zero residuals (`|diff| <= 0.03`) or keep strict.

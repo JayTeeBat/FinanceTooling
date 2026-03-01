@@ -394,21 +394,24 @@ def test_hsbc_parser_inherits_header_cr_marker_for_non_prefixed_continuation_amo
     assert result.validation.status == "pass"
 
 
-def test_hsbc_parser_deduplicates_repeated_continuation_rows() -> None:
+def test_hsbc_parser_keeps_repeated_continuation_rows_with_single_balance_token() -> None:
     parser = HsbcParser()
     text = """
     Opening Balance 1000.00
     25 Jun 19 VIS REVOLUT*
     REVOLUT.COM 500.00
     VIS REVOLUT*
-    REVOLUT.COM 500.00 500.00
-    Closing Balance 500.00
+    REVOLUT.COM 500.00 0.00
+    Closing Balance 0.00
     """
 
     result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
 
-    assert len(result.transactions) == 1
-    assert result.transactions[0].amount_native == Decimal("-500.00")
+    assert len(result.transactions) == 2
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-500.00"),
+        Decimal("-500.00"),
+    ]
     assert result.validation is not None
     assert result.validation.status == "pass"
 
@@ -463,6 +466,150 @@ def test_hsbc_parser_handles_one_char_left_paid_in_credit_without_marker() -> No
 
     assert len(result.transactions) == 1
     assert result.transactions[0].amount_native == Decimal("10000.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_uses_visa_rate_amount_for_fx_debit_cluster() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 12331.06
+    06 Mar 19 DD PAYPAL PAYMENT 103.32
+               ))) INT'L 0081718057
+                   OOO SOLOD
+                   SANKT-PETERBU
+                   RUB 3,600.00
+                   @85.7346 Visa Rate 41.99
+               DR  Non-Sterling
+                   Transaction Fee 1.15 12,184.60
+    Closing Balance 12184.60
+    """
+
+    result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
+
+    assert len(result.transactions) == 3
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-103.32"),
+        Decimal("-41.99"),
+        Decimal("-1.15"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_uses_visa_rate_amount_for_fx_inline_format() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 500.00
+    06 Apr 21 VIS INT'L 0032265240
+               L EPI SUCRE
+               FOURAS
+               EUR 46.15 @ 1.1731 Visa Rate 39.34
+            DR Non-Sterling
+               Transaction Fee 1.08 459.58
+    Closing Balance 459.58
+    """
+
+    result = parser.parse(Path("HSBC_2021_statement.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-39.34"),
+        Decimal("-1.08"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_uses_visa_rate_amount_for_fx_cash_context() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 17742.50
+    23 Jul 19 VIS CASH 0088325545
+               CRCA CHTE MARITIME
+               FOURAS DAB E2
+               EUR 50.00 @ 1.1106
+               Visa Rate 45.02
+            DR  Non-Sterling
+               Transaction Fee 1.23 17696.25
+    Closing Balance 17696.25
+    """
+
+    result = parser.parse(Path("HSBC_2019_statement.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-45.02"),
+        Decimal("-1.23"),
+    ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_uses_compact_visa_rate_and_transaction_fee_markers() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 3467.61
+    29 Dec 16 VIS INT'L0057900811
+               ESSOPICARDIVDA44
+               92VAVRAY744
+               EUR58.63@1.1709
+               VisaRate 50.07
+            DR  Non-Sterling
+               TransactionFee 1.37
+               VIS INT'L0057900812
+               ALAREINEASTRI
+               LESMOLIERES
+               EUR14.70@1.1713
+               VisaRate 12.55
+            DR  Non-Sterling
+               TransactionFee 0.34 3402.35
+    Closing Balance 3402.35
+    """
+
+    result = parser.parse(Path("HSBC_2016_statement.pdf"), text)
+
+    assert len(result.transactions) == 4
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-50.07"),
+        Decimal("-1.37"),
+        Decimal("-12.55"),
+        Decimal("-0.34"),
+    ]
+    assert result.validation is not None
+    assert result.validation.difference == Decimal("0.93")
+
+
+def test_hsbc_parser_keeps_dr_cr_fx_reversal_rows_separate() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 275.74
+    14 Jan 22 VIS INT'L 0079854552
+               Amazon Prime*VF0US
+               amazon.fr/pri
+               EUR 49.00 @ 1.1959
+               Visa Rate 40.97
+            DR Non-Sterling
+               Transaction Fee 1.12
+               VIS INT'L 0079854553
+               Amazon Prime FR
+               amazon.fr/pri
+               EUR 49.00 @ 1.1998
+               Visa Rate 40.84
+            CR Non-Sterling
+               Transaction Fee 1.12 275.61
+    Closing Balance 275.61
+    """
+
+    result = parser.parse(Path("HSBC_2022_statement.pdf"), text)
+
+    assert len(result.transactions) == 4
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-40.97"),
+        Decimal("-1.12"),
+        Decimal("40.84"),
+        Decimal("1.12"),
+    ]
     assert result.validation is not None
     assert result.validation.status == "pass"
 
