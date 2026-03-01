@@ -546,6 +546,40 @@ def test_hsbc_parser_uses_visa_rate_amount_for_fx_cash_context() -> None:
     assert result.validation.status == "pass"
 
 
+def test_hsbc_parser_uses_compact_visa_rate_and_transaction_fee_markers() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 3467.61
+    29 Dec 16 VIS INT'L0057900811
+               ESSOPICARDIVDA44
+               92VAVRAY744
+               EUR58.63@1.1709
+               VisaRate 50.07
+            DR  Non-Sterling
+               TransactionFee 1.37
+               VIS INT'L0057900812
+               ALAREINEASTRI
+               LESMOLIERES
+               EUR14.70@1.1713
+               VisaRate 12.55
+            DR  Non-Sterling
+               TransactionFee 0.34 3402.35
+    Closing Balance 3402.35
+    """
+
+    result = parser.parse(Path("HSBC_2016_statement.pdf"), text)
+
+    assert len(result.transactions) == 4
+    assert [tx.amount_native for tx in result.transactions] == [
+        Decimal("-50.07"),
+        Decimal("-1.37"),
+        Decimal("-12.55"),
+        Decimal("-0.34"),
+    ]
+    assert result.validation is not None
+    assert result.validation.difference == Decimal("0.93")
+
+
 def test_hsbc_parser_keeps_dr_cr_fx_reversal_rows_separate() -> None:
     parser = HsbcParser()
     text = """

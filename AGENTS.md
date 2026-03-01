@@ -169,6 +169,30 @@ Success target for the next categorization pass:
 ### 2026-03-01 - codex
 - Branch: `fix/hsbc-reconciliation-next`
 - Completed:
+  - Hardened HSBC FX cluster parsing for compact markers (`VisaRate`,
+    `TransactionFee`) and broadened FX cluster detection to scan the full
+    continuation cluster, not only the first continuation line.
+  - Added parser regression coverage for compact FX lines that previously
+    selected EUR nominal amounts instead of GBP `VisaRate` amounts.
+  - Validated full-corpus impact in isolated run
+    `/tmp/hsbc_recon_fixverify2_20260301-010651`: fixed `2016-12-29` and
+    reduced HSBC fails from `4` to `1`.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest tests/test_parser.py -q`: pass
+  - `uv run pytest`: pass
+  - `uv run python -m finance_tooling.perf_check` (isolated temp output): pass
+- Open items:
+  - Remaining HSBC fail: `2019-11-27` with diff `-0.03`.
+  - Decide whether reconciliation tolerance should remain strict at `0.01` or
+    be relaxed for near-zero residuals.
+- Next action:
+  - Triage `2019-11-27` row-level residual and decide tolerance policy.
+
+### 2026-03-01 - codex
+- Branch: `fix/hsbc-reconciliation-next`
+- Completed:
   - Implemented HSBC parser hardening to preserve legitimate repeated adjacent
     transactions instead of collapsing rows when only one carries a running
     balance token.
@@ -227,28 +251,3 @@ Success target for the next categorization pass:
   - Trace HSBC month-boundary assignment and validation inputs around
     `2019-06-27` ownership to resolve shared 2019-06/2019-07 divergence
     signatures.
-
-### 2026-02-28 - codex
-- Branch: `fix/hsbc-sign-inference-hardening`
-- Completed:
-  - Implemented HSBC FX amount-token hardening to prefer `Visa Rate` GBP amounts
-    in non-sterling multiline clusters and avoid parsing foreign nominal amounts
-    (for example `RUB 3,600.00`) as ledger transaction values.
-  - Added FX cluster handling for DR/CR non-sterling markers with separate
-    transaction-fee emission and preserved separate DR/CR reversal rows.
-  - Added targeted HSBC parser regressions for FX debit clusters, inline
-    `Visa Rate` formats, and DR/CR FX reversal pairs.
-- Checks:
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Validate full-corpus reconciliation deltas for HSBC against
-    `processed_run_20260228-012931`, with focus on former FX outliers
-    (`2019-03-29`, `2021-04-27`, `2022-01-27`).
-  - Remaining failed-month buckets tagged as `ROW_SET_GAP_OR_OTHER` and
-    `SMALL_MIXED_RESIDUAL` still need dedicated triage beyond FX token fixes.
-- Next action:
-  - Run isolated full-corpus pipeline with raw HSBC CSV reference enabled and
-    compare month-level reconciliation changes against baseline triage report.

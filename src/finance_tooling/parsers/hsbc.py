@@ -634,9 +634,6 @@ def _parse_fx_rows_from_context(
         return None
     if not _looks_like_fx_context(fallback_context):
         return None
-    line = continuation_lines[start_index]
-    if not _looks_like_fx_cluster_detail_line(line):
-        return None
 
     end_index = start_index + 1
     while end_index < len(continuation_lines):
@@ -648,6 +645,8 @@ def _parse_fx_rows_from_context(
 
     cluster_lines = continuation_lines[start_index:end_index]
     cluster_raw_lines = continuation_raw_lines[start_index:end_index]
+    if not any(_looks_like_fx_cluster_detail_line(line) for line in cluster_lines):
+        return None
     marker = _non_sterling_marker_from_lines(cluster_lines)
     visa_rate_amount = _extract_visa_rate_amount(cluster_lines)
     if visa_rate_amount is None:
@@ -684,7 +683,9 @@ def _parse_fx_rows_from_context(
     ]
 
     for offset, cluster_line in enumerate(cluster_lines):
-        if "TRANSACTION FEE" not in cluster_line.upper():
+        cluster_upper = cluster_line.upper()
+        compact_cluster_upper = cluster_upper.replace(" ", "")
+        if "TRANSACTION FEE" not in cluster_upper and "TRANSACTIONFEE" not in compact_cluster_upper:
             continue
         fee_row = _parse_statement_row_candidate(
             raw_date,
@@ -711,11 +712,12 @@ def _looks_like_fx_context(context: str) -> bool:
 
 def _looks_like_fx_cluster_detail_line(line: str) -> bool:
     upper = line.upper()
-    if "VISA RATE" in upper:
+    compact_upper = upper.replace(" ", "")
+    if "VISA RATE" in upper or "VISARATE" in compact_upper:
         return True
-    if "NON-STERLING" in upper:
+    if "NON-STERLING" in upper or "NONSTERLING" in compact_upper:
         return True
-    if "TRANSACTION FEE" in upper:
+    if "TRANSACTION FEE" in upper or "TRANSACTIONFEE" in compact_upper:
         return True
     if _FX_CURRENCY_CODE_PATTERN.search(upper) is not None and _contains_amount(line):
         return True
@@ -738,7 +740,20 @@ def _non_sterling_marker_from_lines(lines: list[str]) -> str | None:
 def _extract_visa_rate_amount(lines: list[str]) -> Decimal | None:
     for line in lines:
         upper = line.upper()
+        compact_upper = upper.replace(" ", "")
         visa_rate_index = upper.find("VISA RATE")
+        if visa_rate_index < 0:
+            compact_index = compact_upper.find("VISARATE")
+            if compact_index >= 0:
+                # Map compact string index back to the original line index.
+                no_space_idx = 0
+                for idx, ch in enumerate(upper):
+                    if ch == " ":
+                        continue
+                    if no_space_idx == compact_index:
+                        visa_rate_index = idx
+                        break
+                    no_space_idx += 1
         if visa_rate_index < 0:
             continue
         matches = list(_AMOUNT_TOKEN_PATTERN.finditer(line))
