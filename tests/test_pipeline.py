@@ -12,8 +12,15 @@ from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import ParserOutput, StatementParser, StatementValidation
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
-from finance_tooling.pipeline import _parse_hsbc_statement_period, run_workflow
+from finance_tooling.pipeline import (
+    _parse_hsbc_statement_period,
+    run_ingest,
+    run_transform,
+    run_update,
+    run_workflow,
+)
 from finance_tooling.store import UpsertResult
+from finance_tooling.workflow.staging import write_staged_transactions
 
 
 @dataclass
@@ -49,6 +56,7 @@ def _settings(input_dir: Path, *, base_currency: str = "EUR") -> Settings:
         master_parquet_path=input_dir / "transactions_master.parquet",
         export_csv_path=input_dir / "transactions_normalized.csv",
         export_json_path=input_dir / "transactions_normalized.json",
+        staged_transactions_path=input_dir / "staged_transactions.parquet",
         summary_json_path=input_dir / "run_summary.json",
         completeness_json_path=input_dir / "completeness_report.json",
         base_currency=base_currency,
@@ -337,3 +345,130 @@ def test_run_workflow_uses_hsbc_pdf_balances_for_validation(monkeypatch, tmp_pat
     assert any(
         "HSBC hsbc reconciliation mismatch" in warning for warning in summary_payload["warnings"]
     )
+
+
+def test_run_ingest_writes_staged_artifacts_only(monkeypatch, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    parsed_pdf = input_dir / "parsed_2024.pdf"
+    parsed_pdf.write_text("fake", encoding="utf-8")
+
+    settings = _settings(input_dir)
+
+    monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.extract_text_from_pdf",
+        lambda _: ExtractedPdfText(first_page_text="", full_text=""),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.select_parser_with_diagnostics",
+        lambda *_: ParserSelection(
+            parser=cast(StatementParser, _DummyParser()),
+            score=2,
+            threshold=2,
+            candidates=(
+                ParserScoreItem(parser_name="dummy", score=2),
+                ParserScoreItem(parser_name="generic", score=0),
+            ),
+        ),
+    )
+
+    result = run_ingest(settings)
+
+    assert result.files_scanned == 1
+    assert result.transactions_parsed == 1
+    assert result.staged_path == settings.staged_transactions_path
+    assert settings.staged_transactions_path.exists()
+    assert result.ingest_summary_path.exists()
+    ingest_summary = json.loads(result.ingest_summary_path.read_text(encoding="utf-8"))
+    assert ingest_summary["transactions_parsed"] == 1
+    assert ingest_summary["staged_transactions_path"] == str(settings.staged_transactions_path)
+    assert not settings.master_parquet_path.exists()
+    assert not settings.export_csv_path.exists()
+    assert not settings.export_json_path.exists()
+    assert not settings.summary_json_path.exists()
+    assert not settings.completeness_json_path.exists()
+
+
+def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    source_file = input_dir / "statement_2024.pdf"
+    source_file.write_text("fake", encoding="utf-8")
+    settings = _settings(input_dir)
+
+    staged_transaction = Transaction(
+        booking_date=date(2024, 5, 6),
+        description="Salary",
+        amount_native=Decimal("100.00"),
+        currency="EUR",
+        source_file=source_file,
+        bank="DummyBank",
+        parser="dummy",
+    )
+    write_staged_transactions(settings.staged_transactions_path, [staged_transaction])
+
+    monkeypatch.setattr(
+        "finance_tooling.pipeline.render_dashboard_html",
+        lambda *args, **kwargs: settings.output_path,
+    )
+
+    def _capture_upsert(_path: Path, transactions: list[Transaction]) -> UpsertResult:
+        dataframe = pd.DataFrame(
+            [
+                {
+                    "transaction_id": "tx-1",
+                    "booking_date": tx.booking_date.isoformat(),
+                    "description": tx.description,
+                    "amount_native": float(tx.amount_native),
+                    "currency": tx.currency,
+                    "fx_rate_to_eur": 1.0,
+                    "fx_rate_date": tx.booking_date.isoformat(),
+                    "fx_source": "BASE",
+                    "amount_eur": float(tx.amount_native),
+                    "category": tx.category,
+                    "subcategory": tx.subcategory,
+                    "category_confidence": tx.category_confidence,
+                    "category_source": tx.category_source,
+                    "category_rule_id": tx.category_rule_id,
+                    "bank": tx.bank,
+                    "account_label": tx.account_label,
+                    "source_file": str(tx.source_file),
+                    "source_file_mtime": None,
+                    "parser": tx.parser,
+                    "ingested_at": "2026-02-23T00:00:00+00:00",
+                }
+                for tx in transactions
+            ]
+        )
+        return UpsertResult(
+            parquet_path=settings.master_parquet_path,
+            dataframe=dataframe,
+            new_rows=len(transactions),
+            total_rows=len(transactions),
+        )
+
+    monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)
+
+    result = run_transform(settings)
+
+    assert result.transactions_parsed == 1
+    assert settings.summary_json_path.exists()
+    assert settings.completeness_json_path.exists()
+    assert settings.export_csv_path.exists()
+    assert settings.export_json_path.exists()
+
+
+def test_run_update_rejects_conflicting_stage_flags(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    settings = _settings(input_dir)
+
+    try:
+        run_update(settings, ingest_only=True, transform_only=True)
+    except ValueError as exc:
+        assert "mutually exclusive" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when both stage flags are set.")

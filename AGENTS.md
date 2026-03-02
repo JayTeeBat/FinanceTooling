@@ -167,6 +167,27 @@ Success target for the next categorization pass:
 ## Hand-Off Log
 
 ### 2026-03-02 - codex
+- Branch: `chore/cli-api-split`
+- Completed:
+  - Implemented CLI split commands `ingest`, `transform`, and `update`, with
+    deprecated `run` alias routed to `update`.
+  - Refactored orchestration into `run_ingest` / `run_transform` /
+    `run_update`, added staged parquet IO module at
+    `src/finance_tooling/workflow/staging.py`, and added ingest summary output.
+  - Extended config with `FINANCE_STAGED_TRANSACTIONS_PATH` and updated tests
+    for staging, pipeline split behavior, and CLI alias behavior.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Advanced planned flags (`--ingest-mode`, guardrails/snapshot controls,
+    `--metrics-scope`) remain deferred and are not implemented in this branch.
+- Next action:
+  - Implement deferred advanced CLI/control-surface flags as a focused follow-up.
+
+### 2026-03-02 - codex
 - Branch: `fix/hsbc-pdf-failures-triage`
 - Completed:
   - Removed HSBC CSV integration from runtime config and ingestion path
@@ -221,26 +242,3 @@ Success target for the next categorization pass:
 - Next action:
   - Execute Phase 2 by removing HSBC CSV source integration while preserving
     PDF-only reconciliation behavior.
-
-### 2026-03-01 - codex
-- Branch: `fix/hsbc-reconciliation-next`
-- Completed:
-  - Ran full workflow to nominal processed destination:
-    `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed`.
-  - Updated metrics logs from nominal run summary via:
-    `uv run python -m finance_tooling metrics-log-update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`.
-  - Recorded refreshed reconciliation/categorization snapshots in
-    `docs/metrics_commit_log.csv` and `docs/metrics_commit_log_by_bank.csv`.
-- Checks:
-  - `uv run python -m finance_tooling`: pass
-  - `uv run python -m finance_tooling metrics-log-update ...`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Remaining HSBC fail in latest verification run remains
-    `2019-11-27` (`-0.03`) and is documented as a source-PDF formatting
-    artifact.
-- Next action:
-  - Decide whether to keep strict reconciliation tolerance (`0.01`) or accept
-    this residual as operationally negligible.

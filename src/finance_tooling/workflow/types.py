@@ -213,6 +213,15 @@ class PersistResult:
 
 
 @dataclass(frozen=True)
+class StagingWriteResult:
+    """Metadata for a staged transaction parquet write."""
+
+    path: Path
+    rows_written: int
+    columns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ExportResult:
     """File export metadata for downstream reporting."""
 

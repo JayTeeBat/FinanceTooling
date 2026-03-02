@@ -15,6 +15,7 @@ from finance_tooling.config import (
     MASTER_PARQUET_ENV,
     OUTPUT_PATH_ENV,
     PROCESSED_PATH_ENV,
+    STAGED_TRANSACTIONS_PATH_ENV,
     load_settings_from_env,
 )
 
@@ -31,6 +32,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(MASTER_PARQUET_ENV, raising=False)
     monkeypatch.delenv(EXPORT_CSV_PATH_ENV, raising=False)
     monkeypatch.delenv(EXPORT_JSON_PATH_ENV, raising=False)
+    monkeypatch.delenv(STAGED_TRANSACTIONS_PATH_ENV, raising=False)
     monkeypatch.delenv(FX_CACHE_PATH_ENV, raising=False)
     monkeypatch.delenv(FX_AUTO_FETCH_ENV, raising=False)
     monkeypatch.delenv(INGEST_WORKERS_ENV, raising=False)
@@ -47,6 +49,10 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.master_parquet_path == (processed_dir / "transactions_master.parquet").resolve()
     assert settings.export_csv_path == (processed_dir / "transactions_normalized.csv").resolve()
     assert settings.export_json_path == (processed_dir / "transactions_normalized.json").resolve()
+    assert (
+        settings.staged_transactions_path
+        == (processed_dir / "staged_transactions.parquet").resolve()
+    )
     assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.fx_cache_path == (processed_dir / "fx_rates_history.parquet").resolve()
@@ -76,6 +82,7 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     monkeypatch.setenv(MASTER_PARQUET_ENV, str(custom_dir / "master.parquet"))
     monkeypatch.setenv(EXPORT_CSV_PATH_ENV, str(custom_dir / "tx.csv"))
     monkeypatch.setenv(EXPORT_JSON_PATH_ENV, str(custom_dir / "tx.json"))
+    monkeypatch.setenv(STAGED_TRANSACTIONS_PATH_ENV, str(custom_dir / "staged.parquet"))
     monkeypatch.setenv(FX_CACHE_PATH_ENV, str(custom_dir / "fx.parquet"))
     monkeypatch.setenv(FX_AUTO_FETCH_ENV, "false")
     monkeypatch.setenv(INGEST_WORKERS_ENV, "4")
@@ -91,6 +98,7 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.master_parquet_path == (custom_dir / "master.parquet").resolve()
     assert settings.export_csv_path == (custom_dir / "tx.csv").resolve()
     assert settings.export_json_path == (custom_dir / "tx.json").resolve()
+    assert settings.staged_transactions_path == (custom_dir / "staged.parquet").resolve()
     assert settings.fx_cache_path == (custom_dir / "fx.parquet").resolve()
     assert settings.category_rules_path == (custom_dir / "category_rules.yaml").resolve()
     assert settings.category_overrides_path == (custom_dir / "category_overrides.yaml").resolve()
