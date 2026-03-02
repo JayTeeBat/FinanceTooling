@@ -167,6 +167,34 @@ Success target for the next categorization pass:
 ## Hand-Off Log
 
 ### 2026-03-02 - codex
+- Branch: `chore/review-export-import-audit`
+- Completed:
+  - Hardened categorization review import/export flow with safer defaults:
+    `.env`-resolved default paths, fallback-row normalization, fallback-only
+    import filtering by default, and clean CLI error handling for review
+    subcommands.
+  - Added review-import guardrails and controls:
+    `--allow-load-warnings`, `--allow-non-fallback-import`, `--dry-run`,
+    `--backup/--no-backup`, and `--backup-path`; import now aborts by default
+    on override-load warnings.
+  - Added backup and dry-run behavior in review import, plus detailed counters
+    (`rows_skipped_non_fallback`, `rows_skipped_invalid`, backup metadata).
+  - Expanded tests for review logic and CLI behavior, and added documentation
+    with PlantUML sources and rendered SVG diagrams:
+    `docs/categorization_review_workflow.md` and `docs/diagrams/*`.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Local `plantuml` binary is still optional; diagrams were rendered via
+    containerized PlantUML for this change set.
+- Next action:
+  - Review/approve CLI safety defaults in real operations, then consider
+    transaction-level override-key expansion as a separate feature.
+
+### 2026-03-02 - codex
 - Branch: `chore/cli-api-split`
 - Completed:
   - Implemented CLI split commands `ingest`, `transform`, and `update`, with
@@ -212,33 +240,3 @@ Success target for the next categorization pass:
 - Next action:
   - Decide policy for near-zero residual handling (`keep strict 0.01` vs scoped
     tolerance exception) for the final HSBC edge case.
-
-### 2026-03-02 - codex
-- Branch: `fix/hsbc-pdf-failures-triage`
-- Completed:
-  - Hardened HSBC amount-token selection to ignore embedded numeric fragments
-    (e.g., `Thur9.15`) and retain the actual transaction amount token.
-  - Added ATM continuation handling for `BNKM CHG` fragments so cash-withdrawal
-    blocks select the final withdrawal amount row instead of intermediate charge
-    fragments.
-  - Added parser regressions for embedded-decimal payee text and two
-    `ATM CASH ... BNKM CHG` continuation patterns.
-  - Validated PDF-only workflow run in
-    `/tmp/finance_pdf_only_20260302-220923`; HSBC fail set reduced from `4` to
-    `1` (remaining `2019-11-27`, diff `-0.03`).
-- Checks:
-  - `uv run pytest tests/test_parser.py -q`: pass
-  - `uv run pytest tests/test_hsbc_fixtures.py -q`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=... env -u FINANCE_HSBC_CSV_PATH FINANCE_PROCESSED_PATH=/tmp/finance_pdf_only_20260302-220923 FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
-- Open items:
-  - Remaining HSBC reconciliation residual is `2019-11-27` at `-0.03` under
-    strict `0.01` tolerance.
-  - Phase 2 migration work (remove HSBC CSV ingestion/merge code paths) is not
-    yet implemented.
-- Next action:
-  - Execute Phase 2 by removing HSBC CSV source integration while preserving
-    PDF-only reconciliation behavior.
