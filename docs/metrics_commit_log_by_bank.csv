@@ -11,3 +11,7 @@ generated_at,commit,branch,bank,transactions_count,categorized_count,uncategoriz
 2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,HSBC,4842,679,4163,14.0231,85.9769
 2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,LaBanquePostale,2561,212,2349,8.2780,91.7220
 2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,Revolut,2481,117,2364,4.7158,95.2842
+2026-03-02T20:36:21.404529+00:00,e5370d3,chore/incremental-ingestion-stability-plan,Boursobank,2394,503,1891,21.0109,78.9891
+2026-03-02T20:36:21.404529+00:00,e5370d3,chore/incremental-ingestion-stability-plan,HSBC,4823,2240,2583,46.4441,53.5559
+2026-03-02T20:36:21.404529+00:00,e5370d3,chore/incremental-ingestion-stability-plan,LaBanquePostale,2543,285,2258,11.2072,88.7928
+2026-03-02T20:36:21.404529+00:00,e5370d3,chore/incremental-ingestion-stability-plan,Revolut,2410,1723,687,71.4938,28.5062

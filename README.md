@@ -83,6 +83,22 @@ Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
 `<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet` (or override path via
 `FINANCE_INGEST_TEXT_CACHE_PATH`) and speed up repeated runs.
 
+## Workflow Diagrams
+
+PlantUML source diagrams for the workflow live in:
+
+- `docs/workflow_full_corpus.puml`
+- `docs/workflow_incremental_ingestion.puml`
+
+They document the full-corpus execution path and the incremental ingestion path
+(stateful file classification, closed-period handling, snapshots, and guardrails).
+
+If you have PlantUML available locally, you can render them with:
+
+```bash
+plantuml docs/workflow_full_corpus.puml docs/workflow_incremental_ingestion.puml
+```
+
 ## Statement Workflow
 
 The workflow reads environment variables from `.env` in the repository root (if present),

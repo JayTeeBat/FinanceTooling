@@ -1,0 +1,41 @@
+@startuml
+title Finance Tooling - Full Corpus Workflow
+
+skinparam shadowing false
+skinparam monochrome true
+skinparam defaultFontName Courier
+
+start
+
+:Load settings from env/.env;
+:Resolve input/output/category/fx paths;
+
+:Discover all statement PDFs recursively;
+:Prepare extraction (cache hit/miss) and parser selection diagnostics;
+:Parse all discovered statements;
+
+if (HSBC CSV path configured?) then (yes)
+  :Discover HSBC CSV files;
+  :Import CSV transactions;
+  :Map CSV rows to statement months via parsed period windows;
+  :Adaptive month selection\n(CSV vs PDF by reconciliation mismatch);
+endif
+
+:Merge selected parsed transactions;
+:Run categorization\n(rules -> overrides -> fallback);
+:Apply FX conversion and source-file mtime enrichment;
+
+:Compute completeness report and reconciliation metrics;
+:Upsert canonical transactions into master parquet;
+:Export normalized CSV + JSON;
+:Render dashboard HTML;
+:Write run_summary.json and completeness_report.json;
+
+if (Guardrail violations and strict mode?) then (yes)
+  :Return non-zero exit code;
+else (no)
+  :Return success;
+endif
+
+stop
+@enduml

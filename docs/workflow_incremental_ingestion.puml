@@ -1,0 +1,56 @@
+@startuml
+title Finance Tooling - Incremental Ingestion Workflow
+
+skinparam shadowing false
+skinparam monochrome true
+skinparam defaultFontName Courier
+
+start
+
+:Load settings and ingestion controls;
+:Discover all source PDFs;
+:Load ingest_state.json;
+:Load period_status.json;
+
+:Compute source signatures\n(path,size,mtime,sha256);
+:Classify each source as new/changed/unchanged;
+:Select files by ingest_mode\n(new|changed|new-or-changed|all);
+
+if (allow_closed_period_ingest == false?) then (yes)
+  :Infer statement month\n(state month, filename token, or booking-date max fallback);
+  :Skip files mapped to closed periods;
+endif
+
+if (snapshot_before_run?) then (yes)
+  :Create snapshot under snapshots/<run_id>\n(master/state/period/rules/overrides);
+endif
+
+:Parse only selected files;
+
+if (HSBC CSV configured?) then (yes)
+  :Import HSBC CSV and perform adaptive month source selection;
+endif
+
+:Apply transform stages\n(categorization + FX);
+:Persist outputs and summaries;
+
+if (replace_source_on_reingest?) then (yes)
+  :Remove existing rows for changed source_file(s)\nbefore insert;
+endif
+
+:Evaluate guardrails\n(run/global scope);
+
+if (strict guardrails violated?) then (yes)
+  :Fail run;
+  stop
+endif
+
+:Update ingest_state.json only after successful persistence;
+
+if (restate command?) then (yes)
+  :Bypass closed-period block for target range;
+  :Append restatement_log.jsonl event;
+endif
+
+stop
+@enduml

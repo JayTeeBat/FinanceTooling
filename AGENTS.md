@@ -89,6 +89,14 @@ categorization, and reporting.
   formats or edge cases.
 - Strict lint/type gates apply to package modules and tests.
 
+## Workflow Documentation
+
+- Keep workflow diagrams updated when orchestration changes:
+  - `docs/workflow_full_corpus.puml`
+  - `docs/workflow_incremental_ingestion.puml`
+- Diagrams should reflect current command flow, ingest/transform boundaries,
+  incremental controls, and persistence/reporting semantics.
+
 ## Session Hand-Off Protocol
 
 When ending a session, update `## Hand-Off Log` with one new entry containing:
@@ -169,6 +177,27 @@ Success target for the next categorization pass:
 ### 2026-03-02 - codex
 - Branch: `chore/incremental-ingestion-stability-plan`
 - Completed:
+  - Added PlantUML workflow diagrams:
+    `docs/workflow_full_corpus.puml` and
+    `docs/workflow_incremental_ingestion.puml`.
+  - Updated `README.md` with a new `Workflow Diagrams` section and render
+    command example.
+  - Updated `AGENTS.md` with a `Workflow Documentation` section referencing the
+    new diagram sources.
+- Checks:
+  - `uv run ruff check .`: not run (docs-only changes)
+  - `uv run ty check src/finance_tooling tests`: not run (docs-only changes)
+  - `uv run pytest`: not run (docs-only changes)
+- Open items:
+  - Keep diagram nodes aligned with any future CLI split into explicit
+    `ingest` / `transform` / `update` commands.
+- Next action:
+  - Implement planned CLI split and revise diagrams to match final command
+    boundaries.
+
+### 2026-03-02 - codex
+- Branch: `chore/incremental-ingestion-stability-plan`
+- Completed:
   - Implemented stateful incremental ingestion controls (`new`/`changed`/`new-or-changed`/`all`) with configurable state path, closed-period enforcement, snapshot-before-run, and source-level replace-on-reingest persistence semantics.
   - Added period status management commands (`periods set`, `periods list`) and explicit restatement workflow (`restate --from --to --reason [--dry-run]`) with append-only restatement logging.
   - Extended run summaries with run/global categorization scope blocks, selection/control metadata, and replacement counters while preserving existing top-level metrics compatibility.
@@ -207,27 +236,3 @@ Success target for the next categorization pass:
 - Next action:
   - Decide whether to keep strict reconciliation tolerance (`0.01`) or accept
     this residual as operationally negligible.
-
-### 2026-03-01 - codex
-- Branch: `fix/hsbc-reconciliation-next`
-- Completed:
-  - Hardened HSBC FX cluster parsing for compact markers (`VisaRate`,
-    `TransactionFee`) and broadened FX cluster detection to scan the full
-    continuation cluster, not only the first continuation line.
-  - Added parser regression coverage for compact FX lines that previously
-    selected EUR nominal amounts instead of GBP `VisaRate` amounts.
-  - Validated full-corpus impact in isolated run
-    `/tmp/hsbc_recon_fixverify2_20260301-010651`: fixed `2016-12-29` and
-    reduced HSBC fails from `4` to `1`.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest tests/test_parser.py -q`: pass
-  - `uv run pytest`: pass
-  - `uv run python -m finance_tooling.perf_check` (isolated temp output): pass
-- Open items:
-  - Remaining HSBC fail: `2019-11-27` with diff `-0.03`.
-  - Decide whether reconciliation tolerance should remain strict at `0.01` or
-    be relaxed for near-zero residuals.
-- Next action:
-  - Triage `2019-11-27` row-level residual and decide tolerance policy.
