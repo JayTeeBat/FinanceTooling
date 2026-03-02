@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from finance_tooling.categorization_review import (
@@ -17,7 +18,13 @@ from finance_tooling.metrics_log import (
     upsert_bank_snapshots,
     upsert_snapshot,
 )
-from finance_tooling.pipeline import run_workflow
+from finance_tooling.models import WorkflowResult
+from finance_tooling.pipeline import (
+    IngestExecutionResult,
+    run_ingest,
+    run_transform,
+    run_update,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -27,7 +34,39 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    run_parser = subparsers.add_parser("run", help="Run the statement processing workflow.")
+    ingest_parser = subparsers.add_parser(
+        "ingest",
+        help="Run ingest stage and write staged transactions.",
+    )
+    ingest_parser.set_defaults(command="ingest")
+
+    transform_parser = subparsers.add_parser(
+        "transform",
+        help="Run transform stage from staged transactions.",
+    )
+    transform_parser.add_argument(
+        "--input-staged-path",
+        type=Path,
+        default=None,
+        help="Path to staged transactions parquet (defaults to configured staged path).",
+    )
+
+    update_parser = subparsers.add_parser(
+        "update",
+        help="Run ingest then transform (or a single stage with flags).",
+    )
+    update_parser.add_argument(
+        "--ingest-only",
+        action="store_true",
+        help="Run ingest stage only.",
+    )
+    update_parser.add_argument(
+        "--transform-only",
+        action="store_true",
+        help="Run transform stage only from staged transactions.",
+    )
+
+    run_parser = subparsers.add_parser("run", help="Deprecated alias for `update`.")
     run_parser.set_defaults(command="run")
 
     review_export = subparsers.add_parser(
@@ -107,14 +146,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_workflow_command() -> int:
-    try:
-        settings = load_settings_from_env()
-    except ValueError as exc:
-        print(f"Configuration error: {exc}")
-        return 1
-
-    result = run_workflow(settings)
+def _print_workflow_result(result: WorkflowResult) -> int:
     print(f"Scanned files: {result.files_scanned}")
     print(f"Failed files: {result.files_failed}")
     print(f"Parsed transactions: {result.transactions_parsed}")
@@ -152,8 +184,78 @@ def _run_workflow_command() -> int:
 
     if result.transactions_parsed == 0 and result.total_rows == 0:
         return 2
-
     return 0
+
+
+def _print_ingest_result(result: IngestExecutionResult) -> int:
+    print(f"Scanned files: {result.files_scanned}")
+    print(f"Failed files: {result.files_failed}")
+    print(f"Staged transactions: {result.transactions_parsed}")
+    print(f"Staged parquet: {result.staged_path}")
+    print(f"Ingest summary: {result.ingest_summary_path}")
+    print(f"HSBC CSV files scanned: {result.hsbc_csv_files_scanned}")
+    print(f"Parser low-confidence files: {result.parser_low_confidence_file_count}")
+
+    if result.warnings:
+        print("Warnings:")
+        for warning in result.warnings:
+            print(f"- {warning}")
+
+    if result.files_scanned == 0 and result.transactions_parsed == 0:
+        return 2
+    return 0
+
+
+def _run_ingest_command() -> int:
+    try:
+        settings = load_settings_from_env()
+    except ValueError as exc:
+        print(f"Configuration error: {exc}")
+        return 1
+
+    try:
+        result = run_ingest(settings)
+    except (RuntimeError, ValueError) as exc:
+        print(f"Ingest error: {exc}")
+        return 1
+    return _print_ingest_result(result)
+
+
+def _run_transform_command(input_staged_path: Path | None) -> int:
+    try:
+        settings = load_settings_from_env()
+    except ValueError as exc:
+        print(f"Configuration error: {exc}")
+        return 1
+
+    try:
+        result = run_transform(settings, staged_path=input_staged_path)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        print(f"Transform error: {exc}")
+        return 1
+    return _print_workflow_result(result)
+
+
+def _run_update_command(*, ingest_only: bool, transform_only: bool) -> int:
+    try:
+        settings = load_settings_from_env()
+    except ValueError as exc:
+        print(f"Configuration error: {exc}")
+        return 1
+
+    try:
+        result = run_update(
+            settings,
+            ingest_only=ingest_only,
+            transform_only=transform_only,
+        )
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        print(f"Update error: {exc}")
+        return 1
+
+    if isinstance(result, IngestExecutionResult):
+        return _print_ingest_result(result)
+    return _print_workflow_result(result)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -162,8 +264,25 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     command = args.command or "run"
 
+    if command == "ingest":
+        return _run_ingest_command()
+
+    if command == "transform":
+        return _run_transform_command(args.input_staged_path)
+
+    if command == "update":
+        return _run_update_command(
+            ingest_only=bool(args.ingest_only),
+            transform_only=bool(args.transform_only),
+        )
+
     if command == "run":
-        return _run_workflow_command()
+        print(
+            "Warning: `run` is deprecated and will be removed in a future release. "
+            "Use `update` instead.",
+            file=sys.stderr,
+        )
+        return _run_update_command(ingest_only=False, transform_only=False)
 
     if command == "review-export":
         exported = export_fallback_review_rows(args.normalized_path, args.output_path)

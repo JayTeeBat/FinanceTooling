@@ -15,7 +15,20 @@ bank statements and expanding toward categorization, reconciliation, and reporti
 
 ```bash
 uv sync --all-groups
-uv run python -m finance_tooling
+uv run python -m finance_tooling update
+```
+
+Stage-oriented workflow commands:
+
+```bash
+# ingest only -> writes staged parquet + ingest_summary.json
+uv run python -m finance_tooling ingest
+
+# transform only -> consumes staged parquet and writes final artifacts
+uv run python -m finance_tooling transform
+
+# combined run (default full workflow)
+uv run python -m finance_tooling update
 ```
 
 Manual categorization review roundtrip:
@@ -101,6 +114,7 @@ export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
 export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
 export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"
 export FINANCE_EXPORT_JSON_PATH="/path/to/output/transactions_normalized.json"
+export FINANCE_STAGED_TRANSACTIONS_PATH="/path/to/output/staged_transactions.parquet"
 export FINANCE_BASE_CURRENCY="EUR"
 export FINANCE_FX_CACHE_PATH="/path/to/output/fx_rates_history.parquet"
 export FINANCE_FX_AUTO_FETCH="true"
@@ -110,18 +124,24 @@ export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet
 export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
 export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"
 
-uv run python -m finance_tooling
+uv run python -m finance_tooling update
 ```
 
 `FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required.
 Per-file output env vars remain optional; when omitted, artifacts are written under
 `FINANCE_PROCESSED_PATH`.
 
-The workflow recursively scans statement PDFs, uses bank-specific parsers
+The `update` workflow recursively scans statement PDFs, uses bank-specific parsers
 (LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies
 transactions, auto-fetches historical daily ECB FX rates and applies conversion
 using transaction booking dates (with previous business-day fallback), upserts into
 a canonical parquet store, and generates dashboard + exports.
+
+`ingest` writes `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet` and
+`${FINANCE_PROCESSED_PATH}/ingest_summary.json` without running enrichment or
+final reporting outputs. `transform` reads staged parquet input (defaulting to
+`FINANCE_STAGED_TRANSACTIONS_PATH` or `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`)
+and writes final artifacts.
 
 Categorization is deterministic and rules-first. When no categorization env vars are
 set, the workflow expects:

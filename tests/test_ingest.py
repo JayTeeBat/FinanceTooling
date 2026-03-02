@@ -51,6 +51,7 @@ def _settings(tmp_path: Path, *, ingest_workers: int) -> Settings:
         master_parquet_path=tmp_path / "transactions_master.parquet",
         export_csv_path=tmp_path / "transactions_normalized.csv",
         export_json_path=tmp_path / "transactions_normalized.json",
+        staged_transactions_path=tmp_path / "staged_transactions.parquet",
         summary_json_path=tmp_path / "run_summary.json",
         completeness_json_path=tmp_path / "completeness_report.json",
         base_currency="EUR",

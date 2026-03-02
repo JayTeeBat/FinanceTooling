@@ -13,6 +13,7 @@ MASTER_PARQUET_ENV = "FINANCE_MASTER_PARQUET_PATH"
 BASE_CURRENCY_ENV = "FINANCE_BASE_CURRENCY"
 EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
+STAGED_TRANSACTIONS_PATH_ENV = "FINANCE_STAGED_TRANSACTIONS_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
 INGEST_WORKERS_ENV = "FINANCE_INGEST_WORKERS"
@@ -32,6 +33,7 @@ class Settings:
     master_parquet_path: Path
     export_csv_path: Path
     export_json_path: Path
+    staged_transactions_path: Path
     summary_json_path: Path
     completeness_json_path: Path
     base_currency: str
@@ -125,6 +127,9 @@ def load_settings_from_env() -> Settings:
     export_json_path = _resolve_path_from_env(EXPORT_JSON_PATH_ENV) or (
         processed_dir / "transactions_normalized.json"
     )
+    staged_transactions_path = _resolve_path_from_env(STAGED_TRANSACTIONS_PATH_ENV) or (
+        processed_dir / "staged_transactions.parquet"
+    )
     summary_json_path = processed_dir / "run_summary.json"
     completeness_json_path = processed_dir / "completeness_report.json"
 
@@ -154,6 +159,7 @@ def load_settings_from_env() -> Settings:
         master_parquet_path=master_parquet_path,
         export_csv_path=export_csv_path,
         export_json_path=export_json_path,
+        staged_transactions_path=staged_transactions_path,
         summary_json_path=summary_json_path,
         completeness_json_path=completeness_json_path,
         base_currency=base_currency,

@@ -18,6 +18,7 @@ def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
         master_parquet_path=processed_dir / "transactions_master.parquet",
         export_csv_path=processed_dir / "transactions_normalized.csv",
         export_json_path=processed_dir / "transactions_normalized.json",
+        staged_transactions_path=processed_dir / "staged_transactions.parquet",
         summary_json_path=processed_dir / "run_summary.json",
         completeness_json_path=processed_dir / "completeness_report.json",
         base_currency="EUR",
