@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 from finance_tooling.categorization_review import (
@@ -17,7 +18,17 @@ from finance_tooling.metrics_log import (
     upsert_bank_snapshots,
     upsert_snapshot,
 )
-from finance_tooling.pipeline import run_workflow
+from finance_tooling.pipeline import run_restatement, run_workflow
+from finance_tooling.workflow.periods import list_period_statuses, set_period_status
+
+
+def _parse_bool_choice(raw_value: str) -> bool:
+    normalized = raw_value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    raise ValueError(f"Invalid boolean value: {raw_value}")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -29,6 +40,47 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Run the statement processing workflow.")
     run_parser.set_defaults(command="run")
+    run_parser.add_argument(
+        "--ingest-mode",
+        choices=["new", "changed", "new-or-changed", "all"],
+        default=None,
+        help="Incremental selection mode.",
+    )
+    run_parser.add_argument(
+        "--state-path",
+        type=Path,
+        default=None,
+        help="Path to ingest state JSON file.",
+    )
+    run_parser.add_argument(
+        "--replace-source-on-reingest",
+        choices=["true", "false"],
+        default=None,
+        help="Whether changed-source runs replace existing rows by source_file.",
+    )
+    run_parser.add_argument(
+        "--metrics-scope",
+        choices=["both", "run", "global"],
+        default=None,
+        help="Scope used for guardrail checks.",
+    )
+    run_parser.add_argument(
+        "--allow-closed-period-ingest",
+        action="store_true",
+        help="Allow ingestion for months marked closed.",
+    )
+    run_parser.add_argument(
+        "--snapshot-before-run",
+        choices=["true", "false"],
+        default=None,
+        help="Create pre-run snapshot before persistence.",
+    )
+    run_parser.add_argument(
+        "--strict-guardrails",
+        choices=["true", "false"],
+        default=None,
+        help="Fail run when guardrails are violated.",
+    )
 
     review_export = subparsers.add_parser(
         "review-export",
@@ -104,17 +156,69 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional branch override (defaults to current git branch).",
     )
 
+    periods_parser = subparsers.add_parser(
+        "periods",
+        help="Manage period open/closed statuses.",
+    )
+    periods_sub = periods_parser.add_subparsers(dest="periods_command")
+    periods_set = periods_sub.add_parser("set", help="Set month status.")
+    periods_set.add_argument("--month", required=True, help="Month in YYYY-MM format.")
+    periods_set.add_argument(
+        "--status",
+        required=True,
+        choices=["open", "closed"],
+        help="Period status value.",
+    )
+    periods_sub.add_parser("list", help="List month statuses.")
+
+    restate_parser = subparsers.add_parser(
+        "restate",
+        help="Run explicit month-range restatement.",
+    )
+    restate_parser.add_argument("--from", dest="from_month", required=True)
+    restate_parser.add_argument("--to", dest="to_month", required=True)
+    restate_parser.add_argument("--reason", required=True)
+    restate_parser.add_argument("--dry-run", action="store_true")
+
     return parser
 
 
-def _run_workflow_command() -> int:
+def _run_workflow_command(args: argparse.Namespace) -> int:
     try:
         settings = load_settings_from_env()
     except ValueError as exc:
         print(f"Configuration error: {exc}")
         return 1
 
-    result = run_workflow(settings)
+    if args.ingest_mode is not None:
+        settings = replace(settings, ingest_mode=args.ingest_mode)
+    if args.state_path is not None:
+        settings = replace(settings, ingest_state_path=args.state_path)
+    if args.replace_source_on_reingest is not None:
+        settings = replace(
+            settings,
+            replace_source_on_reingest=_parse_bool_choice(args.replace_source_on_reingest),
+        )
+    if args.metrics_scope is not None:
+        settings = replace(settings, metrics_scope=args.metrics_scope)
+    if args.allow_closed_period_ingest:
+        settings = replace(settings, allow_closed_period_ingest=True)
+    if args.snapshot_before_run is not None:
+        settings = replace(
+            settings,
+            snapshot_before_run=_parse_bool_choice(args.snapshot_before_run),
+        )
+    if args.strict_guardrails is not None:
+        settings = replace(
+            settings,
+            strict_guardrails=_parse_bool_choice(args.strict_guardrails),
+        )
+
+    try:
+        result = run_workflow(settings)
+    except RuntimeError as exc:
+        print(f"Run failed: {exc}")
+        return 1
     print(f"Scanned files: {result.files_scanned}")
     print(f"Failed files: {result.files_failed}")
     print(f"Parsed transactions: {result.transactions_parsed}")
@@ -163,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     command = args.command or "run"
 
     if command == "run":
-        return _run_workflow_command()
+        return _run_workflow_command(args)
 
     if command == "review-export":
         exported = export_fallback_review_rows(args.normalized_path, args.output_path)
@@ -230,6 +334,61 @@ def main(argv: list[str] | None = None) -> int:
             f"{snapshot.commit}: {args.log_path_by_bank}"
         )
         print(f"- bank rows for commit: {bank_rows}")
+        return 0
+
+    if command == "periods":
+        try:
+            settings = load_settings_from_env()
+        except ValueError as exc:
+            print(f"Configuration error: {exc}")
+            return 1
+        if args.periods_command == "set":
+            statuses = set_period_status(
+                settings.period_status_path,
+                month=args.month,
+                status=args.status,
+            )
+            print(f"Updated {args.month} -> {args.status} ({len(statuses)} total entries)")
+            return 0
+        if args.periods_command == "list":
+            rows = list_period_statuses(settings.period_status_path)
+            if not rows:
+                print("No period statuses configured.")
+                return 0
+            for month, status in rows:
+                print(f"{month},{status}")
+            return 0
+        print("Usage: periods {set|list}")
+        return 1
+
+    if command == "restate":
+        try:
+            settings = load_settings_from_env()
+        except ValueError as exc:
+            print(f"Configuration error: {exc}")
+            return 1
+        try:
+            execution = run_restatement(
+                settings,
+                from_month=args.from_month,
+                to_month=args.to_month,
+                reason=args.reason,
+                dry_run=args.dry_run,
+            )
+        except (ValueError, RuntimeError) as exc:
+            print(f"Restatement failed: {exc}")
+            return 1
+        print(
+            f"Restatement selection: {execution.from_month}..{execution.to_month}, "
+            f"files={len(execution.selected_files)}"
+        )
+        if execution.dry_run:
+            print("Dry-run only. No files were mutated.")
+            return 0
+        assert execution.workflow_result is not None
+        print(f"Inserted rows: {execution.workflow_result.new_rows}")
+        print(f"Total rows in parquet: {execution.workflow_result.total_rows}")
+        print(f"Summary: {execution.workflow_result.summary_path}")
         return 0
 
     parser.print_help()

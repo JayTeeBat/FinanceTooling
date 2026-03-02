@@ -138,6 +138,14 @@ def _write_json(path: Path, payload: PerformanceSummaryPayload) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def _upsert_adapter(parquet_path: Path, transactions, replace_source_files):
+    return upsert_transactions(
+        parquet_path,
+        transactions,
+        replace_source_files=replace_source_files,
+    )
+
+
 def run_perf_check(settings: Settings) -> PerfCheckResult:
     """Run the full workflow while recording stage-level performance timings."""
     total_started_at = perf_counter()
@@ -197,7 +205,7 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         ingest_text_cache_write_count=ingest.text_cache_write_count,
         classification_diagnostics=enrichment.classification_diagnostics,
         warnings=warnings,
-        upsert_transactions_fn=upsert_transactions,
+        upsert_transactions_fn=_upsert_adapter,
         render_dashboard_html_fn=render_dashboard_html,
     )
     reporting_duration = perf_counter() - reporting_started_at

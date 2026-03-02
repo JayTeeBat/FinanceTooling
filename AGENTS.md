@@ -166,6 +166,25 @@ Success target for the next categorization pass:
 
 ## Hand-Off Log
 
+### 2026-03-02 - codex
+- Branch: `chore/incremental-ingestion-stability-plan`
+- Completed:
+  - Implemented stateful incremental ingestion controls (`new`/`changed`/`new-or-changed`/`all`) with configurable state path, closed-period enforcement, snapshot-before-run, and source-level replace-on-reingest persistence semantics.
+  - Added period status management commands (`periods set`, `periods list`) and explicit restatement workflow (`restate --from --to --reason [--dry-run]`) with append-only restatement logging.
+  - Extended run summaries with run/global categorization scope blocks, selection/control metadata, and replacement counters while preserving existing top-level metrics compatibility.
+  - Added incremental support modules (`incremental_state`, `periods`, `restatement`, `snapshots`, `guardrails`) and updated pipeline/CLI/config/reporting/store integration.
+  - Updated tests for new `Settings` and `UpsertResult` contracts and validated full quality gates.
+- Checks:
+  - `uv run ruff format .`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Guardrail thresholds are currently static defaults in code; add env-configurable thresholds if operational tuning is needed.
+  - `metrics_scope` currently controls guardrail evaluation scope; summary still emits both run/global blocks for observability.
+- Next action:
+  - Run the new incremental `run` and `restate` commands against the real corpus and calibrate period-lock/guardrail policies from observed output.
+
 ### 2026-03-01 - codex
 - Branch: `fix/hsbc-reconciliation-next`
 - Completed:
@@ -212,36 +231,3 @@ Success target for the next categorization pass:
     be relaxed for near-zero residuals.
 - Next action:
   - Triage `2019-11-27` row-level residual and decide tolerance policy.
-
-### 2026-03-01 - codex
-- Branch: `fix/hsbc-reconciliation-next`
-- Completed:
-  - Implemented HSBC parser hardening to preserve legitimate repeated adjacent
-    transactions instead of collapsing rows when only one carries a running
-    balance token.
-  - Expanded HSBC FX `Visa Rate` extraction coverage to include `VIS CASH`
-    non-sterling clusters (not only `INT'L` contexts), preventing foreign
-    nominal amount selection (`EUR 50.00` vs GBP `Visa Rate 45.02`).
-  - Added parser regressions for repeated `REVOLUT 500.00` rows and `VIS CASH`
-    FX `Visa Rate` handling.
-  - Validated full-corpus impact in isolated run
-    `/tmp/hsbc_recon_fixverify_20260301-005301`:
-    HSBC failed reconciliations reduced from `9` to `4`, and target months
-    `2019-05-27`, `2019-06-27`, `2019-07-27` now reconcile with `0.0` diff.
-- Checks:
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `uv run pytest tests/test_parser.py -q`: pass
-  - `uv run python -m finance_tooling.perf_check` (isolated temp output): pass
-- Open items:
-  - Residual HSBC fails remain for:
-    `2016-05-28` (`-2.12`), `2016-12-29` (`-10.71`),
-    `2017-04-29` (`-5.89`), `2019-11-27` (`-0.03`).
-  - HSBC CSV exports for some months still omit duplicated card rows that exist
-    in PDFs; adaptive selection now correctly prefers PDF where it reduces
-    reconciliation error.
-- Next action:
-  - Triage the remaining four low-diff HSBC months and decide whether to adjust
-    tolerance policy for near-zero residuals (`|diff| <= 0.03`) or keep strict.

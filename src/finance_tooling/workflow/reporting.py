@@ -33,6 +33,18 @@ def write_json(path: Path, payload: dict[str, object] | SummaryPayload) -> None:
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
+def _upsert_default(
+    parquet_path: Path,
+    transactions: list[Transaction],
+    replace_source_files: set[str] | None,
+) -> UpsertResult:
+    return upsert_transactions(
+        parquet_path,
+        transactions,
+        replace_source_files=replace_source_files,
+    )
+
+
 def persist_and_report(
     *,
     settings: Settings,
@@ -58,7 +70,16 @@ def persist_and_report(
     ingest_text_cache_write_count: int,
     classification_diagnostics: ClassificationDiagnostics,
     warnings: list[str],
-    upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
+    replace_source_files: set[str] | None = None,
+    ingest_controls: dict[str, object] | None = None,
+    selection_counters: dict[str, int] | None = None,
+    state_path: Path | None = None,
+    period_status_path: Path | None = None,
+    snapshot_path: Path | None = None,
+    restatement_context: dict[str, object] | None = None,
+    upsert_transactions_fn: Callable[[Path, list[Transaction], set[str] | None], UpsertResult] = (
+        _upsert_default
+    ),
     render_dashboard_html_fn: Callable[..., Path] = render_dashboard_html,
 ) -> tuple[WorkflowResult, SummaryPayload]:
     """Persist artifacts and return final workflow result plus summary payload."""
@@ -90,7 +111,11 @@ def persist_and_report(
 
     write_json(settings.completeness_json_path, completeness_report)
 
-    upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
+    upsert = upsert_transactions_fn(
+        settings.master_parquet_path,
+        transactions,
+        replace_source_files,
+    )
 
     settings.export_csv_path.parent.mkdir(parents=True, exist_ok=True)
     settings.export_json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,37 +132,73 @@ def persist_and_report(
         new_rows=upsert.new_rows,
     )
 
-    category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"transactions_count": 0, "categorized_count": 0, "uncategorized_count": 0}
-    )
-    for tx in transactions:
-        bank = tx.bank.strip() if tx.bank.strip() else "UNKNOWN"
-        counters = category_metrics_by_bank_counters[bank]
-        counters["transactions_count"] += 1
-        is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
-            (tx.category_source or "").strip().lower() == "fallback"
+    def _category_snapshot_from_rows(rows: list[dict[str, object]]) -> dict[str, object]:
+        categorized_count = 0
+        uncategorized_count = 0
+        category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"transactions_count": 0, "categorized_count": 0, "uncategorized_count": 0}
         )
-        if is_uncategorized:
-            counters["uncategorized_count"] += 1
-        else:
-            counters["categorized_count"] += 1
+        for row in rows:
+            bank = str(row.get("bank") or "UNKNOWN").strip() or "UNKNOWN"
+            category = str(row.get("category") or "")
+            category_source = str(row.get("category_source") or "")
+            is_uncategorized = category.strip().lower() == "uncategorized" or (
+                category_source.strip().lower() == "fallback"
+            )
+            counters = category_metrics_by_bank_counters[bank]
+            counters["transactions_count"] += 1
+            if is_uncategorized:
+                uncategorized_count += 1
+                counters["uncategorized_count"] += 1
+            else:
+                categorized_count += 1
+                counters["categorized_count"] += 1
 
-    category_metrics_by_bank = []
-    for bank in sorted(category_metrics_by_bank_counters):
-        counters = category_metrics_by_bank_counters[bank]
-        total = counters["transactions_count"]
-        categorized_pct = (counters["categorized_count"] / total) * 100.0 if total > 0 else 0.0
-        uncategorized_pct = (counters["uncategorized_count"] / total) * 100.0 if total > 0 else 0.0
-        category_metrics_by_bank.append(
-            {
-                "bank": bank,
-                "transactions_count": total,
-                "categorized_count": counters["categorized_count"],
-                "uncategorized_count": counters["uncategorized_count"],
-                "categorized_pct": round(categorized_pct, 4),
-                "uncategorized_pct": round(uncategorized_pct, 4),
-            }
-        )
+        total = categorized_count + uncategorized_count
+        uncategorized_ratio = (uncategorized_count / total) if total > 0 else 0.0
+        category_metrics_by_bank = []
+        for bank_name in sorted(category_metrics_by_bank_counters):
+            counters = category_metrics_by_bank_counters[bank_name]
+            bank_total = counters["transactions_count"]
+            categorized_pct = (
+                (counters["categorized_count"] / bank_total) * 100.0 if bank_total > 0 else 0.0
+            )
+            uncategorized_pct = (
+                (counters["uncategorized_count"] / bank_total) * 100.0 if bank_total > 0 else 0.0
+            )
+            category_metrics_by_bank.append(
+                {
+                    "bank": bank_name,
+                    "transactions_count": bank_total,
+                    "categorized_count": counters["categorized_count"],
+                    "uncategorized_count": counters["uncategorized_count"],
+                    "categorized_pct": round(categorized_pct, 4),
+                    "uncategorized_pct": round(uncategorized_pct, 4),
+                }
+            )
+        return {
+            "transactions_count": total,
+            "categorized_count": categorized_count,
+            "uncategorized_count": uncategorized_count,
+            "uncategorized_ratio": uncategorized_ratio,
+            "category_metrics_by_bank": category_metrics_by_bank,
+        }
+
+    run_rows = [
+        {
+            "bank": tx.bank,
+            "category": tx.category,
+            "category_source": tx.category_source,
+        }
+        for tx in transactions
+    ]
+    global_frame = dataframe.copy()
+    for column in ("bank", "category", "category_source"):
+        if column not in global_frame.columns:
+            global_frame[column] = None
+    global_rows = global_frame[["bank", "category", "category_source"]].to_dict(orient="records")
+    run_scope = _category_snapshot_from_rows(run_rows)
+    global_scope = _category_snapshot_from_rows(global_rows)
 
     summary_payload: SummaryPayload = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -145,6 +206,8 @@ def persist_and_report(
         "files_failed": files_failed,
         "transactions_parsed": len(transactions),
         "new_rows": upsert.new_rows,
+        "replaced_rows": upsert.replaced_rows,
+        "replaced_source_files_count": upsert.replaced_source_files_count,
         "total_rows": upsert.total_rows,
         "parquet_path": str(upsert.parquet_path),
         "dashboard_path": str(dashboard_path),
@@ -225,15 +288,25 @@ def persist_and_report(
         "ingest_text_cache_hits": ingest_text_cache_hits,
         "ingest_text_cache_misses": ingest_text_cache_misses,
         "ingest_text_cache_write_count": ingest_text_cache_write_count,
-        "categorized_count": classification_diagnostics.categorized_count,
-        "uncategorized_count": classification_diagnostics.uncategorized_count,
-        "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
+        "categorized_count": cast(int, global_scope["categorized_count"]),
+        "uncategorized_count": cast(int, global_scope["uncategorized_count"]),
+        "uncategorized_ratio": cast(float, global_scope["uncategorized_ratio"]),
         "category_source_counts": classification_diagnostics.category_source_counts,
-        "category_metrics_by_bank": category_metrics_by_bank,
+        "category_metrics_by_bank": cast(
+            list[dict[str, object]], global_scope["category_metrics_by_bank"]
+        ),
         "top_uncategorized_descriptions": (
             classification_diagnostics.top_uncategorized_descriptions
         ),
         "top_rules_by_hits": classification_diagnostics.top_rules_by_hits,
+        "run_scope": run_scope,
+        "global_scope": global_scope,
+        "ingest_controls": ingest_controls or {},
+        "selection_counters": selection_counters or {},
+        "state_path": str(state_path) if state_path is not None else None,
+        "period_status_path": str(period_status_path) if period_status_path is not None else None,
+        "snapshot_path": str(snapshot_path) if snapshot_path is not None else None,
+        "restatement_context": restatement_context or {},
         "category_rules_path": str(settings.category_rules_path),
         "category_overrides_path": str(settings.category_overrides_path),
         "fx_cache_path": str(settings.fx_cache_path),

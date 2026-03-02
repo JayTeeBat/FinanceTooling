@@ -83,6 +83,8 @@ class SummaryPayload(TypedDict):
     files_failed: int
     transactions_parsed: int
     new_rows: int
+    replaced_rows: int
+    replaced_source_files_count: int
     total_rows: int
     parquet_path: str
     dashboard_path: str
@@ -142,6 +144,14 @@ class SummaryPayload(TypedDict):
     category_metrics_by_bank: list[dict[str, object]]
     top_uncategorized_descriptions: list[dict[str, object]]
     top_rules_by_hits: list[dict[str, object]]
+    run_scope: dict[str, object]
+    global_scope: dict[str, object]
+    ingest_controls: dict[str, object]
+    selection_counters: dict[str, int]
+    state_path: str | None
+    period_status_path: str | None
+    snapshot_path: str | None
+    restatement_context: dict[str, object]
     category_rules_path: str
     category_overrides_path: str
     fx_cache_path: str

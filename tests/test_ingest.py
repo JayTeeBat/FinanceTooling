@@ -63,6 +63,16 @@ def _settings(tmp_path: Path, *, ingest_workers: int) -> Settings:
         hsbc_csv_path=None,
         category_rules_path=tmp_path / "category_rules.yaml",
         category_overrides_path=tmp_path / "category_overrides.yaml",
+        ingest_mode="new-or-changed",
+        ingest_state_path=tmp_path / "ingest_state.json",
+        replace_source_on_reingest=True,
+        metrics_scope="both",
+        allow_closed_period_ingest=False,
+        snapshot_before_run=True,
+        strict_guardrails=False,
+        period_status_path=tmp_path / "period_status.json",
+        restatement_log_path=tmp_path / "restatement_log.jsonl",
+        snapshot_dir=tmp_path / "snapshots",
     )
 
 

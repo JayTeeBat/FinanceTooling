@@ -73,6 +73,16 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         hsbc_csv_path=None,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
+        ingest_mode="new-or-changed",
+        ingest_state_path=input_dir / "ingest_state.json",
+        replace_source_on_reingest=True,
+        metrics_scope="both",
+        allow_closed_period_ingest=False,
+        snapshot_before_run=True,
+        strict_guardrails=False,
+        period_status_path=input_dir / "period_status.json",
+        restatement_log_path=input_dir / "restatement_log.jsonl",
+        snapshot_dir=input_dir / "snapshots",
     )
 
     monkeypatch.setattr(
@@ -123,11 +133,13 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     )
     monkeypatch.setattr(
         "finance_tooling.pipeline.upsert_transactions",
-        lambda *_: UpsertResult(
+        lambda *_, **__: UpsertResult(
             parquet_path=settings.master_parquet_path,
             dataframe=dataframe,
             new_rows=1,
             total_rows=1,
+            replaced_rows=0,
+            replaced_source_files_count=0,
         ),
     )
 
@@ -286,6 +298,16 @@ def test_run_workflow_prefers_hsbc_csv_for_same_statement_month(
         hsbc_csv_path=hsbc_csv,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
+        ingest_mode="new-or-changed",
+        ingest_state_path=input_dir / "ingest_state.json",
+        replace_source_on_reingest=True,
+        metrics_scope="both",
+        allow_closed_period_ingest=False,
+        snapshot_before_run=True,
+        strict_guardrails=False,
+        period_status_path=input_dir / "period_status.json",
+        restatement_log_path=input_dir / "restatement_log.jsonl",
+        snapshot_dir=input_dir / "snapshots",
     )
 
     monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
@@ -332,7 +354,13 @@ def test_run_workflow_prefers_hsbc_csv_for_same_statement_month(
 
     captured: dict[str, object] = {}
 
-    def _capture_upsert(_path: Path, transactions: list[Transaction]) -> UpsertResult:
+    def _capture_upsert(
+        _path: Path,
+        transactions: list[Transaction],
+        *,
+        replace_source_files: set[str] | None = None,
+    ) -> UpsertResult:
+        del replace_source_files
         captured["transactions"] = transactions
         dataframe = pd.DataFrame(
             [
@@ -362,6 +390,8 @@ def test_run_workflow_prefers_hsbc_csv_for_same_statement_month(
             dataframe=dataframe,
             new_rows=len(transactions),
             total_rows=len(transactions),
+            replaced_rows=0,
+            replaced_source_files_count=0,
         )
 
     monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)
@@ -412,6 +442,16 @@ def test_run_workflow_keeps_pdf_fallback_and_csv_only_statements(
         hsbc_csv_path=hsbc_csv,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
+        ingest_mode="new-or-changed",
+        ingest_state_path=input_dir / "ingest_state.json",
+        replace_source_on_reingest=True,
+        metrics_scope="both",
+        allow_closed_period_ingest=False,
+        snapshot_before_run=True,
+        strict_guardrails=False,
+        period_status_path=input_dir / "period_status.json",
+        restatement_log_path=input_dir / "restatement_log.jsonl",
+        snapshot_dir=input_dir / "snapshots",
     )
 
     monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
@@ -458,7 +498,13 @@ def test_run_workflow_keeps_pdf_fallback_and_csv_only_statements(
 
     captured: dict[str, object] = {}
 
-    def _capture_upsert(_path: Path, transactions: list[Transaction]) -> UpsertResult:
+    def _capture_upsert(
+        _path: Path,
+        transactions: list[Transaction],
+        *,
+        replace_source_files: set[str] | None = None,
+    ) -> UpsertResult:
+        del replace_source_files
         captured["transactions"] = transactions
         dataframe = pd.DataFrame(
             [
@@ -488,6 +534,8 @@ def test_run_workflow_keeps_pdf_fallback_and_csv_only_statements(
             dataframe=dataframe,
             new_rows=len(transactions),
             total_rows=len(transactions),
+            replaced_rows=0,
+            replaced_source_files_count=0,
         )
 
     monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)
@@ -537,6 +585,16 @@ def test_run_workflow_uses_pdf_balances_to_adaptively_select_source(
         hsbc_csv_path=hsbc_csv,
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
+        ingest_mode="new-or-changed",
+        ingest_state_path=input_dir / "ingest_state.json",
+        replace_source_on_reingest=True,
+        metrics_scope="both",
+        allow_closed_period_ingest=False,
+        snapshot_before_run=True,
+        strict_guardrails=False,
+        period_status_path=input_dir / "period_status.json",
+        restatement_log_path=input_dir / "restatement_log.jsonl",
+        snapshot_dir=input_dir / "snapshots",
     )
 
     class _ValidatingHsbcParser:
@@ -615,7 +673,13 @@ def test_run_workflow_uses_pdf_balances_to_adaptively_select_source(
         lambda *args, **kwargs: settings.output_path,
     )
 
-    def _capture_upsert(_path: Path, transactions: list[Transaction]) -> UpsertResult:
+    def _capture_upsert(
+        _path: Path,
+        transactions: list[Transaction],
+        *,
+        replace_source_files: set[str] | None = None,
+    ) -> UpsertResult:
+        del replace_source_files
         dataframe = pd.DataFrame(
             [
                 {
@@ -644,6 +708,8 @@ def test_run_workflow_uses_pdf_balances_to_adaptively_select_source(
             dataframe=dataframe,
             new_rows=len(transactions),
             total_rows=len(transactions),
+            replaced_rows=0,
+            replaced_source_files_count=0,
         )
 
     monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)

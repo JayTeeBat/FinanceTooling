@@ -337,6 +337,7 @@ def ingest_statements(
     select_parser_with_diagnostics: Callable[[Path, str], ParserSelection],
     discover_csv_files: Callable[[Path], list[Path]],
     load_hsbc_csv_transactions: Callable[[list[Path]], HsbcCsvImportResult],
+    selected_source_files: list[Path] | None = None,
 ) -> IngestResult:
     """Run ingestion stage from raw source discovery through optional CSV import."""
     warnings: list[str] = []
@@ -374,7 +375,11 @@ def ingest_statements(
     text_cache_misses = 0
     text_cache_write_count = 0
 
-    files = discover_statement_pdfs(settings.input_path)
+    files = (
+        sorted(selected_source_files)
+        if selected_source_files is not None
+        else discover_statement_pdfs(settings.input_path)
+    )
     prepared_cache_hits: list[_PreparedStatement] = []
     cache_write_rows: list[CachedExtractionRow] = []
     files_for_prepare = files

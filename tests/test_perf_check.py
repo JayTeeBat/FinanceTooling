@@ -29,6 +29,16 @@ def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
         hsbc_csv_path=None,
         category_rules_path=processed_dir / "category_rules.yaml",
         category_overrides_path=processed_dir / "category_overrides.yaml",
+        ingest_mode="new-or-changed",
+        ingest_state_path=processed_dir / "ingest_state.json",
+        replace_source_on_reingest=True,
+        metrics_scope="both",
+        allow_closed_period_ingest=False,
+        snapshot_before_run=True,
+        strict_guardrails=False,
+        period_status_path=processed_dir / "period_status.json",
+        restatement_log_path=processed_dir / "restatement_log.jsonl",
+        snapshot_dir=processed_dir / "snapshots",
     )
 
 

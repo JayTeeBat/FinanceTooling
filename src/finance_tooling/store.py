@@ -20,6 +20,8 @@ class UpsertResult:
     dataframe: pd.DataFrame
     new_rows: int
     total_rows: int
+    replaced_rows: int
+    replaced_source_files_count: int
 
 
 def _require_parquet_engine() -> None:
@@ -104,10 +106,21 @@ def _atomic_write_parquet(dataframe: pd.DataFrame, destination: Path) -> None:
     temp_path.replace(destination)
 
 
-def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> UpsertResult:
+def upsert_transactions(
+    parquet_path: Path,
+    transactions: list[Transaction],
+    *,
+    replace_source_files: set[str] | None = None,
+) -> UpsertResult:
     """Upsert transactions by stable transaction id and return merged dataframe."""
     incoming = _frame_from_transactions(transactions)
     existing = _read_existing(parquet_path)
+    replaced_rows = 0
+    replace_source_files = replace_source_files or set()
+    if not existing.empty and replace_source_files:
+        replace_mask = existing["source_file"].isin(replace_source_files)
+        replaced_rows = int(replace_mask.sum())
+        existing = existing[~replace_mask]
 
     if existing.empty:
         merged = incoming.drop_duplicates(subset=["transaction_id"], keep="first")
@@ -126,4 +139,6 @@ def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> 
         dataframe=merged,
         new_rows=new_rows,
         total_rows=len(merged),
+        replaced_rows=replaced_rows,
+        replaced_source_files_count=len(replace_source_files),
     )

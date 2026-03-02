@@ -21,6 +21,13 @@ INGEST_TEXT_CACHE_PATH_ENV = "FINANCE_INGEST_TEXT_CACHE_PATH"
 HSBC_CSV_PATH_ENV = "FINANCE_HSBC_CSV_PATH"
 CATEGORY_RULES_PATH_ENV = "FINANCE_CATEGORY_RULES_PATH"
 CATEGORY_OVERRIDES_PATH_ENV = "FINANCE_CATEGORY_OVERRIDES_PATH"
+INGEST_MODE_ENV = "FINANCE_INGEST_MODE"
+INGEST_STATE_PATH_ENV = "FINANCE_INGEST_STATE_PATH"
+REPLACE_SOURCE_ON_REINGEST_ENV = "FINANCE_REPLACE_SOURCE_ON_REINGEST"
+METRICS_SCOPE_ENV = "FINANCE_METRICS_SCOPE"
+ALLOW_CLOSED_PERIOD_INGEST_ENV = "FINANCE_ALLOW_CLOSED_PERIOD_INGEST"
+SNAPSHOT_BEFORE_RUN_ENV = "FINANCE_SNAPSHOT_BEFORE_RUN"
+STRICT_GUARDRAILS_ENV = "FINANCE_STRICT_GUARDRAILS"
 DOTENV_PATH = Path(".env")
 
 
@@ -44,6 +51,16 @@ class Settings:
     hsbc_csv_path: Path | None
     category_rules_path: Path
     category_overrides_path: Path
+    ingest_mode: str
+    ingest_state_path: Path
+    replace_source_on_reingest: bool
+    metrics_scope: str
+    allow_closed_period_ingest: bool
+    snapshot_before_run: bool
+    strict_guardrails: bool
+    period_status_path: Path
+    restatement_log_path: Path
+    snapshot_dir: Path
 
 
 def _resolve_path_from_env(env_name: str) -> Path | None:
@@ -103,6 +120,16 @@ def _load_dotenv(path: Path = DOTENV_PATH) -> None:
         os.environ.setdefault(key, value)
 
 
+def _parse_choice(raw_value: str | None, *, default: str, valid: set[str]) -> str:
+    if raw_value is None:
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized not in valid:
+        choices = ", ".join(sorted(valid))
+        raise ValueError(f"Invalid value: {raw_value}. Expected one of: {choices}")
+    return normalized
+
+
 def load_settings_from_env() -> Settings:
     """Load workflow settings from environment variables."""
     _load_dotenv()
@@ -152,6 +179,38 @@ def load_settings_from_env() -> Settings:
     category_overrides_path = _resolve_path_from_env(CATEGORY_OVERRIDES_PATH_ENV) or (
         processed_dir / "category_overrides.yaml"
     )
+    ingest_mode = _parse_choice(
+        os.environ.get(INGEST_MODE_ENV),
+        default="new-or-changed",
+        valid={"new", "changed", "new-or-changed", "all"},
+    )
+    ingest_state_path = _resolve_path_from_env(INGEST_STATE_PATH_ENV) or (
+        processed_dir / "ingest_state.json"
+    )
+    replace_source_on_reingest = _parse_bool(
+        os.environ.get(REPLACE_SOURCE_ON_REINGEST_ENV),
+        default=True,
+    )
+    metrics_scope = _parse_choice(
+        os.environ.get(METRICS_SCOPE_ENV),
+        default="both",
+        valid={"both", "run", "global"},
+    )
+    allow_closed_period_ingest = _parse_bool(
+        os.environ.get(ALLOW_CLOSED_PERIOD_INGEST_ENV),
+        default=False,
+    )
+    snapshot_before_run = _parse_bool(
+        os.environ.get(SNAPSHOT_BEFORE_RUN_ENV),
+        default=True,
+    )
+    strict_guardrails = _parse_bool(
+        os.environ.get(STRICT_GUARDRAILS_ENV),
+        default=True,
+    )
+    period_status_path = processed_dir / "period_status.json"
+    restatement_log_path = processed_dir / "restatement_log.jsonl"
+    snapshot_dir = processed_dir / "snapshots"
 
     return Settings(
         input_path=input_path,
@@ -170,4 +229,14 @@ def load_settings_from_env() -> Settings:
         hsbc_csv_path=hsbc_csv_path,
         category_rules_path=category_rules_path,
         category_overrides_path=category_overrides_path,
+        ingest_mode=ingest_mode,
+        ingest_state_path=ingest_state_path,
+        replace_source_on_reingest=replace_source_on_reingest,
+        metrics_scope=metrics_scope,
+        allow_closed_period_ingest=allow_closed_period_ingest,
+        snapshot_before_run=snapshot_before_run,
+        strict_guardrails=strict_guardrails,
+        period_status_path=period_status_path,
+        restatement_log_path=restatement_log_path,
+        snapshot_dir=snapshot_dir,
     )
