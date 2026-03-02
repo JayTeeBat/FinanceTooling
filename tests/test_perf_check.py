@@ -26,7 +26,6 @@ def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
         ingest_workers=1,
         ingest_text_cache_enabled=False,
         ingest_text_cache_path=processed_dir / "ingest_text_cache.parquet",
-        hsbc_csv_path=None,
         category_rules_path=processed_dir / "category_rules.yaml",
         category_overrides_path=processed_dir / "category_overrides.yaml",
     )

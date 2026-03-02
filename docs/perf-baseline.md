@@ -13,7 +13,6 @@ PERF_PROCESSED_PATH="/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/dat
 
 FINANCE_STATEMENTS_PATH="/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw" \
 FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
-FINANCE_HSBC_CSV_PATH="/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/raw" \
 FINANCE_FX_AUTO_FETCH=false \
 FINANCE_INGEST_WORKERS=4 \
 uv run python -m finance_tooling.perf_check

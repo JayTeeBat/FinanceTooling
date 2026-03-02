@@ -108,6 +108,7 @@ _TABLE_HEADER_MARKERS = (
 _BOUNDARY_STATE_OUTSIDE = "OUTSIDE_TABLE"
 _BOUNDARY_STATE_IN = "IN_TABLE"
 _BOUNDARY_STATE_AFTER = "AFTER_TABLE"
+_ATM_CASH_PREFIXES = ("ATM CASH", "DR CASH")
 
 
 @dataclass(frozen=True)
@@ -476,6 +477,15 @@ def _rows_from_block(
             continue
 
         fallback_context = " ".join(part for part in pending_context_parts if part).strip()
+        if _should_defer_atm_charge_fragment(
+            fallback_context=fallback_context,
+            line=line,
+            continuation_lines=block.continuation_lines,
+            current_index=index,
+        ):
+            index += 1
+            continue
+
         parsed_fx = _parse_fx_rows_from_context(
             raw_date=block.raw_date,
             fallback_context=fallback_context,
@@ -553,7 +563,8 @@ def _parse_statement_row_candidate(
     matches = list(_AMOUNT_TOKEN_PATTERN.finditer(rest))
     if not matches:
         return None
-    selected = _select_transaction_match(rest, matches)
+    candidate_matches = _candidate_transaction_matches(rest, matches)
+    selected = _select_transaction_match(rest, candidate_matches)
     if selected is None:
         return None
 
@@ -586,8 +597,8 @@ def _parse_statement_row_candidate(
         return None
     amount_absolute = abs(amount)
     running_balance: Decimal | None = None
-    if len(matches) > 1:
-        running_balance = _parse_amount_token(matches[-1].group("amount"))
+    if len(candidate_matches) > 1:
+        running_balance = _parse_amount_token(candidate_matches[-1].group("amount"))
     column_sign_marker = _infer_column_sign_marker(
         normalized_rest=rest,
         raw_rest=raw_rest,
@@ -812,6 +823,51 @@ def _is_non_transaction_line(line: str) -> bool:
     if any(upper.startswith(prefix) for prefix in _NOISE_PREFIXES):
         return True
     if any(marker in upper for marker in _NOISE_SUBSTRINGS):
+        return True
+    return False
+
+
+def _should_defer_atm_charge_fragment(
+    *,
+    fallback_context: str,
+    line: str,
+    continuation_lines: list[str],
+    current_index: int,
+) -> bool:
+    if not _looks_like_atm_cash_context(fallback_context):
+        return False
+    if "BNKM CHG" not in line.upper():
+        return False
+    if len(list(_AMOUNT_TOKEN_PATTERN.finditer(line))) != 1:
+        return False
+    next_index = current_index + 1
+    if next_index >= len(continuation_lines):
+        return False
+    next_line = continuation_lines[next_index]
+    if _starts_with_transaction_prefix(next_line):
+        return False
+    return len(list(_AMOUNT_TOKEN_PATTERN.finditer(next_line))) >= 2
+
+
+def _looks_like_atm_cash_context(context: str) -> bool:
+    upper = context.upper().strip()
+    return upper.startswith(_ATM_CASH_PREFIXES)
+
+
+def _candidate_transaction_matches(
+    line: str,
+    matches: list[re.Match[str]],
+) -> list[re.Match[str]]:
+    candidates = [match for match in matches if not _is_embedded_amount_match(line, match)]
+    return candidates if candidates else matches
+
+
+def _is_embedded_amount_match(line: str, match: re.Match[str]) -> bool:
+    start = match.start()
+    end = match.end()
+    if start > 0 and line[start - 1].isalnum():
+        return True
+    if end < len(line) and line[end].isalnum():
         return True
     return False
 

@@ -172,7 +172,7 @@ def persist_and_report(
         "hsbc_pdf_balance_validation_fail_count": hsbc_merge_metrics[
             "hsbc_pdf_balance_validation_fail_count"
         ],
-        "hsbc_selection_policy": "adaptive_reconciliation",
+        "hsbc_selection_policy": "pdf_only",
         "hsbc_adaptive_source_switch_count": hsbc_merge_metrics[
             "hsbc_adaptive_source_switch_count"
         ],
