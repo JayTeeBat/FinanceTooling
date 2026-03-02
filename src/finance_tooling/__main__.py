@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from finance_tooling.categorization_review import (
@@ -54,14 +55,20 @@ def _build_parser() -> argparse.ArgumentParser:
     review_import.add_argument(
         "--review-path",
         type=Path,
-        required=True,
-        help="Reviewed categorization file (.csv/.json/.parquet).",
+        default=None,
+        help=(
+            "Reviewed categorization file (.csv/.json/.parquet). "
+            "Defaults to FINANCE_REVIEW_IMPORT_PATH when set."
+        ),
     )
     review_import.add_argument(
         "--overrides-path",
         type=Path,
-        default=Path("config/category_overrides.yaml"),
-        help="Override config destination (.yaml/.yml/.json).",
+        default=None,
+        help=(
+            "Override config destination (.yaml/.yml/.json). "
+            "Defaults to FINANCE_CATEGORY_OVERRIDES_PATH when configured."
+        ),
     )
     review_import.add_argument(
         "--include-account-label-scope",
@@ -171,13 +178,43 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if command == "review-import":
-        overrides, warnings = load_override_store(args.overrides_path)
+        settings = None
+        if args.review_path is None or args.overrides_path is None:
+            try:
+                settings = load_settings_from_env()
+            except ValueError:
+                settings = None
+
+        review_path = args.review_path
+        if review_path is None:
+            env_review_path = os.environ.get("FINANCE_REVIEW_IMPORT_PATH")
+            if env_review_path:
+                review_path = Path(env_review_path).expanduser().resolve()
+            elif settings is not None:
+                review_path = settings.export_csv_path.parent / "fallback_category_review.csv"
+            else:
+                print(
+                    "Configuration error: provide --review-path or set FINANCE_REVIEW_IMPORT_PATH."
+                )
+                return 1
+
+        overrides_path = args.overrides_path
+        if overrides_path is None:
+            env_overrides_path = os.environ.get("FINANCE_CATEGORY_OVERRIDES_PATH")
+            if env_overrides_path:
+                overrides_path = Path(env_overrides_path).expanduser().resolve()
+            elif settings is not None:
+                overrides_path = settings.category_overrides_path
+            else:
+                overrides_path = Path("config/category_overrides.yaml")
+
+        overrides, warnings = load_override_store(overrides_path)
         if warnings:
             for warning in warnings:
                 print(f"Warning: {warning}")
         result = import_review_into_overrides(
-            review_path=args.review_path,
-            overrides_path=args.overrides_path,
+            review_path=review_path,
+            overrides_path=overrides_path,
             existing_store=overrides,
             include_account_label_scope=args.include_account_label_scope,
         )
