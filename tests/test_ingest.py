@@ -8,7 +8,6 @@ from typing import cast
 
 from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText, extract_text_from_pdf
-from finance_tooling.importers.hsbc_csv import HsbcCsvImportResult
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import ParserOutput, StatementParser
 from finance_tooling.parsers.registry import (
@@ -60,7 +59,6 @@ def _settings(tmp_path: Path, *, ingest_workers: int) -> Settings:
         ingest_workers=ingest_workers,
         ingest_text_cache_enabled=False,
         ingest_text_cache_path=tmp_path / "ingest_text_cache.parquet",
-        hsbc_csv_path=None,
         category_rules_path=tmp_path / "category_rules.yaml",
         category_overrides_path=tmp_path / "category_overrides.yaml",
     )
@@ -115,12 +113,6 @@ def test_ingest_statements_parallel_prepare_path_collects_parser_timings(
         discover_statement_pdfs=lambda _: [pdf_path],
         extract_text_from_pdf=extract_text_from_pdf,
         select_parser_with_diagnostics=select_parser_with_diagnostics,
-        discover_csv_files=lambda _: [],
-        load_hsbc_csv_transactions=lambda _: HsbcCsvImportResult(
-            transactions=[],
-            warnings=[],
-            files_scanned=0,
-        ),
     )
 
     assert result.files_failed == 0
@@ -166,12 +158,6 @@ def test_ingest_statements_uses_sequential_prepare_for_custom_callables(
                 ParserScoreItem(parser_name="generic", score=0),
             ),
         ),
-        discover_csv_files=lambda _: [],
-        load_hsbc_csv_transactions=lambda _: HsbcCsvImportResult(
-            transactions=[],
-            warnings=[],
-            files_scanned=0,
-        ),
     )
 
     assert calls["sequential"] == 1
@@ -203,12 +189,6 @@ def test_ingest_statements_uses_text_cache_hit_without_extraction(
             AssertionError("extract should not run")
         ),
         select_parser_with_diagnostics=_selection_for_dummy,
-        discover_csv_files=lambda _: [],
-        load_hsbc_csv_transactions=lambda _: HsbcCsvImportResult(
-            transactions=[],
-            warnings=[],
-            files_scanned=0,
-        ),
     )
 
     assert result.text_cache_enabled is True
@@ -238,12 +218,6 @@ def test_ingest_statements_writes_text_cache_on_miss(monkeypatch, tmp_path: Path
         discover_statement_pdfs=lambda _: [pdf_path],
         extract_text_from_pdf=lambda _: ExtractedPdfText(first_page_text="fp", full_text="full"),
         select_parser_with_diagnostics=_selection_for_dummy,
-        discover_csv_files=lambda _: [],
-        load_hsbc_csv_transactions=lambda _: HsbcCsvImportResult(
-            transactions=[],
-            warnings=[],
-            files_scanned=0,
-        ),
     )
 
     assert captured["path"] == settings.ingest_text_cache_path

@@ -70,7 +70,6 @@ FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
 FINANCE_FX_AUTO_FETCH=false \
 FINANCE_INGEST_WORKERS=4 \
 FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
-FINANCE_HSBC_CSV_PATH="${FINANCE_STATEMENTS_PATH}" \
 uv run python -m finance_tooling.perf_check
 ```
 
@@ -108,7 +107,6 @@ export FINANCE_FX_AUTO_FETCH="true"
 export FINANCE_INGEST_WORKERS="1"
 export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
 export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet"
-export FINANCE_HSBC_CSV_PATH="/path/to/hsbc.csv_or_folder"
 export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
 export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"
 
@@ -140,21 +138,9 @@ Supported formats for both files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
 standard categorization rules.
 
-When `FINANCE_HSBC_CSV_PATH` is set, the workflow also imports HSBC CSV files and
-merges HSBC sources by statement month (`YYYY-MM-DD` in file names). For months where
-both HSBC CSV and PDF transactions exist, source selection is adaptive: the pipeline
-compares reconciliation error against PDF opening/closing balances and keeps the source
-with lower absolute mismatch. HSBC PDF parsing is used as fallback when no monthly CSV
-is available, and a CSV-only month is retained when no matching PDF exists.
-
-Before overlap selection, HSBC CSV transactions are remapped to statement months using
-PDF statement periods (booking date in statement `start -> end` window). This prevents
-month-boundary spillover from CSV export file boundaries.
-
-For each HSBC month with a matching PDF statement, opening/closing balances extracted
-from the PDF are used to validate the selected transaction set (CSV or PDF fallback).
-Balance mismatches are emitted as warnings and included in run summary reconciliation
-metrics.
+HSBC ingestion is PDF-only. For each HSBC statement month, opening/closing balances
+extracted from the PDF are used to validate parsed transaction totals. Balance
+mismatches are emitted as warnings and included in run-summary reconciliation metrics.
 
 ## Outputs
 

@@ -18,10 +18,9 @@ from finance_tooling.config import (
 )
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
-from finance_tooling.importers import load_hsbc_csv_transactions
 from finance_tooling.models import WorkflowResult
 from finance_tooling.parsers import select_parser_with_diagnostics
-from finance_tooling.scanner import discover_csv_files, discover_statement_pdfs
+from finance_tooling.scanner import discover_statement_pdfs
 from finance_tooling.store import upsert_transactions
 from finance_tooling.workflow.enrichment import enrich_transactions
 from finance_tooling.workflow.hsbc_merge import merge_hsbc_sources
@@ -148,8 +147,6 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         discover_statement_pdfs=discover_statement_pdfs,
         extract_text_from_pdf=extract_text_from_pdf,
         select_parser_with_diagnostics=select_parser_with_diagnostics,
-        discover_csv_files=discover_csv_files,
-        load_hsbc_csv_transactions=load_hsbc_csv_transactions,
     )
     ingest_duration = perf_counter() - ingest_started_at
 

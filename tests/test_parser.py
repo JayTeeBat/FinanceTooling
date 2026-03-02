@@ -580,6 +580,59 @@ def test_hsbc_parser_uses_compact_visa_rate_and_transaction_fee_markers() -> Non
     assert result.validation.difference == Decimal("0.93")
 
 
+def test_hsbc_parser_ignores_embedded_decimal_in_continuation_payee() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 1500.00
+    17 May 21 BP Anne Martin
+               Henry Thur9.15 40.00 1460.00
+    Closing Balance 1460.00
+    """
+
+    result = parser.parse(Path("HSBC_2021_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-40.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_defers_bnkm_charge_fragment_to_withdrawal_amount_june() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 11614.40
+    16 Jun 18 ATM CASH BNKM JUN16
+               BNKM CHG 1.95
+               MRH - STUDLE@11:48 61.95 11,552.45
+    Closing Balance 11552.45
+    """
+
+    result = parser.parse(Path("HSBC_2018_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-61.95")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_hsbc_parser_defers_bnkm_charge_fragment_to_withdrawal_amount_october() -> None:
+    parser = HsbcParser()
+    text = """
+    Opening Balance 14679.96
+    11 Oct 18 ATM CASH BNKM OCT11
+               BNKM CHG 2.00
+               ALEXANDRA PA@16:50 52.00 14,627.96
+    Closing Balance 14627.96
+    """
+
+    result = parser.parse(Path("HSBC_2018_statement.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-52.00")
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
 def test_hsbc_parser_keeps_dr_cr_fx_reversal_rows_separate() -> None:
     parser = HsbcParser()
     text = """

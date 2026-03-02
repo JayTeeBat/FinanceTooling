@@ -18,7 +18,6 @@ from tqdm import tqdm
 from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.extract import extract_text_from_pdf as default_extract_text_from_pdf
-from finance_tooling.importers.hsbc_csv import HsbcCsvImportResult
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import StatementParser, StatementValidation
 from finance_tooling.parsers.generic import GenericParser
@@ -335,10 +334,8 @@ def ingest_statements(
     discover_statement_pdfs: Callable[[Path], list[Path]],
     extract_text_from_pdf: Callable[[Path], ExtractedPdfText],
     select_parser_with_diagnostics: Callable[[Path, str], ParserSelection],
-    discover_csv_files: Callable[[Path], list[Path]],
-    load_hsbc_csv_transactions: Callable[[list[Path]], HsbcCsvImportResult],
 ) -> IngestResult:
-    """Run ingestion stage from raw source discovery through optional CSV import."""
+    """Run ingestion stage from raw source discovery through PDF parsing."""
     warnings: list[str] = []
     files_failed = 0
     extracted: list[Transaction] = []
@@ -624,13 +621,6 @@ def ingest_statements(
         except Exception as exc:
             files_failed += 1
             warnings.append(f"Failed to process {prepared.source_file}: {exc}")
-
-    if settings.hsbc_csv_path is not None:
-        hsbc_csv_files = discover_csv_files(settings.hsbc_csv_path)
-        csv_import_result = load_hsbc_csv_transactions(hsbc_csv_files)
-        hsbc_csv_files_scanned = csv_import_result.files_scanned
-        extracted.extend(csv_import_result.transactions)
-        warnings.extend(csv_import_result.warnings)
 
     return IngestResult(
         source_files=files,

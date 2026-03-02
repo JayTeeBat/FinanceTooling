@@ -166,6 +166,62 @@ Success target for the next categorization pass:
 
 ## Hand-Off Log
 
+### 2026-03-02 - codex
+- Branch: `fix/hsbc-pdf-failures-triage`
+- Completed:
+  - Removed HSBC CSV integration from runtime config and ingestion path
+    (`FINANCE_HSBC_CSV_PATH` and CSV importer hook removed).
+  - Simplified HSBC merge stage to PDF-only validation/diagnostics while
+    preserving summary metric compatibility keys (CSV counters stay `0`).
+  - Removed HSBC CSV importer module and CSV-specific tests; updated pipeline,
+    perf-check, ingest, config, and docs for PDF-only operation.
+  - Validated full corpus run in
+    `/tmp/finance_pdf_only_phase2_20260302-222228` with
+    `hsbc_selection_policy=pdf_only`, `hsbc_csv_files_scanned=0`, and remaining
+    HSBC fail still limited to `2019-11-27` (`-0.03`).
+- Checks:
+  - `uv run ruff format .`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+  - `FINANCE_STATEMENTS_PATH=... FINANCE_PROCESSED_PATH=/tmp/finance_pdf_only_phase2_20260302-222228 FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
+- Open items:
+  - Strict reconciliation tolerance (`0.01`) still leaves known HSBC residual:
+    `2019-11-27` (`-0.03`).
+- Next action:
+  - Decide policy for near-zero residual handling (`keep strict 0.01` vs scoped
+    tolerance exception) for the final HSBC edge case.
+
+### 2026-03-02 - codex
+- Branch: `fix/hsbc-pdf-failures-triage`
+- Completed:
+  - Hardened HSBC amount-token selection to ignore embedded numeric fragments
+    (e.g., `Thur9.15`) and retain the actual transaction amount token.
+  - Added ATM continuation handling for `BNKM CHG` fragments so cash-withdrawal
+    blocks select the final withdrawal amount row instead of intermediate charge
+    fragments.
+  - Added parser regressions for embedded-decimal payee text and two
+    `ATM CASH ... BNKM CHG` continuation patterns.
+  - Validated PDF-only workflow run in
+    `/tmp/finance_pdf_only_20260302-220923`; HSBC fail set reduced from `4` to
+    `1` (remaining `2019-11-27`, diff `-0.03`).
+- Checks:
+  - `uv run pytest tests/test_parser.py -q`: pass
+  - `uv run pytest tests/test_hsbc_fixtures.py -q`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+  - `FINANCE_STATEMENTS_PATH=... env -u FINANCE_HSBC_CSV_PATH FINANCE_PROCESSED_PATH=/tmp/finance_pdf_only_20260302-220923 FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
+- Open items:
+  - Remaining HSBC reconciliation residual is `2019-11-27` at `-0.03` under
+    strict `0.01` tolerance.
+  - Phase 2 migration work (remove HSBC CSV ingestion/merge code paths) is not
+    yet implemented.
+- Next action:
+  - Execute Phase 2 by removing HSBC CSV source integration while preserving
+    PDF-only reconciliation behavior.
+
 ### 2026-03-01 - codex
 - Branch: `fix/hsbc-reconciliation-next`
 - Completed:
@@ -188,60 +244,3 @@ Success target for the next categorization pass:
 - Next action:
   - Decide whether to keep strict reconciliation tolerance (`0.01`) or accept
     this residual as operationally negligible.
-
-### 2026-03-01 - codex
-- Branch: `fix/hsbc-reconciliation-next`
-- Completed:
-  - Hardened HSBC FX cluster parsing for compact markers (`VisaRate`,
-    `TransactionFee`) and broadened FX cluster detection to scan the full
-    continuation cluster, not only the first continuation line.
-  - Added parser regression coverage for compact FX lines that previously
-    selected EUR nominal amounts instead of GBP `VisaRate` amounts.
-  - Validated full-corpus impact in isolated run
-    `/tmp/hsbc_recon_fixverify2_20260301-010651`: fixed `2016-12-29` and
-    reduced HSBC fails from `4` to `1`.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest tests/test_parser.py -q`: pass
-  - `uv run pytest`: pass
-  - `uv run python -m finance_tooling.perf_check` (isolated temp output): pass
-- Open items:
-  - Remaining HSBC fail: `2019-11-27` with diff `-0.03`.
-  - Decide whether reconciliation tolerance should remain strict at `0.01` or
-    be relaxed for near-zero residuals.
-- Next action:
-  - Triage `2019-11-27` row-level residual and decide tolerance policy.
-
-### 2026-03-01 - codex
-- Branch: `fix/hsbc-reconciliation-next`
-- Completed:
-  - Implemented HSBC parser hardening to preserve legitimate repeated adjacent
-    transactions instead of collapsing rows when only one carries a running
-    balance token.
-  - Expanded HSBC FX `Visa Rate` extraction coverage to include `VIS CASH`
-    non-sterling clusters (not only `INT'L` contexts), preventing foreign
-    nominal amount selection (`EUR 50.00` vs GBP `Visa Rate 45.02`).
-  - Added parser regressions for repeated `REVOLUT 500.00` rows and `VIS CASH`
-    FX `Visa Rate` handling.
-  - Validated full-corpus impact in isolated run
-    `/tmp/hsbc_recon_fixverify_20260301-005301`:
-    HSBC failed reconciliations reduced from `9` to `4`, and target months
-    `2019-05-27`, `2019-06-27`, `2019-07-27` now reconcile with `0.0` diff.
-- Checks:
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `uv run pytest tests/test_parser.py -q`: pass
-  - `uv run python -m finance_tooling.perf_check` (isolated temp output): pass
-- Open items:
-  - Residual HSBC fails remain for:
-    `2016-05-28` (`-2.12`), `2016-12-29` (`-10.71`),
-    `2017-04-29` (`-5.89`), `2019-11-27` (`-0.03`).
-  - HSBC CSV exports for some months still omit duplicated card rows that exist
-    in PDFs; adaptive selection now correctly prefers PDF where it reduces
-    reconciliation error.
-- Next action:
-  - Triage the remaining four low-diff HSBC months and decide whether to adjust
-    tolerance policy for near-zero residuals (`|diff| <= 0.03`) or keep strict.

@@ -8,7 +8,6 @@ from finance_tooling.config import (
     EXPORT_JSON_PATH_ENV,
     FX_AUTO_FETCH_ENV,
     FX_CACHE_PATH_ENV,
-    HSBC_CSV_PATH_ENV,
     INGEST_TEXT_CACHE_ENABLED_ENV,
     INGEST_TEXT_CACHE_PATH_ENV,
     INGEST_WORKERS_ENV,
@@ -37,7 +36,6 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(INGEST_WORKERS_ENV, raising=False)
     monkeypatch.delenv(INGEST_TEXT_CACHE_ENABLED_ENV, raising=False)
     monkeypatch.delenv(INGEST_TEXT_CACHE_PATH_ENV, raising=False)
-    monkeypatch.delenv(HSBC_CSV_PATH_ENV, raising=False)
     monkeypatch.delenv(CATEGORY_RULES_PATH_ENV, raising=False)
     monkeypatch.delenv(CATEGORY_OVERRIDES_PATH_ENV, raising=False)
     monkeypatch.delenv(BASE_CURRENCY_ENV, raising=False)
@@ -62,7 +60,6 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
         settings.ingest_text_cache_path
         == (raw_dir.parent / "cache" / "ingest_text_cache.parquet").resolve()
     )
-    assert settings.hsbc_csv_path is None
 
 
 def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: Path) -> None:
@@ -84,11 +81,9 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     monkeypatch.setenv(INGEST_WORKERS_ENV, "4")
     monkeypatch.setenv(INGEST_TEXT_CACHE_ENABLED_ENV, "true")
     monkeypatch.setenv(INGEST_TEXT_CACHE_PATH_ENV, str(custom_dir / "ingest_cache.parquet"))
-    monkeypatch.setenv(HSBC_CSV_PATH_ENV, str(custom_dir / "hsbc.csv"))
     monkeypatch.setenv(CATEGORY_RULES_PATH_ENV, str(custom_dir / "category_rules.yaml"))
     monkeypatch.setenv(CATEGORY_OVERRIDES_PATH_ENV, str(custom_dir / "category_overrides.yaml"))
     monkeypatch.setenv(BASE_CURRENCY_ENV, "gbp")
-    (custom_dir / "hsbc.csv").write_text("Date,Payee,Amount\n", encoding="utf-8")
 
     settings = load_settings_from_env()
 
@@ -106,7 +101,6 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.ingest_workers == 4
     assert settings.ingest_text_cache_enabled is True
     assert settings.ingest_text_cache_path == (custom_dir / "ingest_cache.parquet").resolve()
-    assert settings.hsbc_csv_path == (custom_dir / "hsbc.csv").resolve()
 
 
 def test_load_settings_requires_input_and_processed_env(monkeypatch, tmp_path: Path) -> None:
