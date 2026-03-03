@@ -25,6 +25,7 @@ from finance_tooling.pipeline import (
     run_transform,
     run_update,
 )
+from finance_tooling.transaction_overrides import load_transaction_override_store
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -101,6 +102,12 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Override config destination (.yaml/.yml/.json).",
+    )
+    review_import.add_argument(
+        "--transaction-overrides-path",
+        type=Path,
+        default=None,
+        help="Transaction override destination (.yaml/.yml/.json).",
     )
     review_import.add_argument(
         "--include-account-label-scope",
@@ -322,21 +329,35 @@ def _resolve_review_export_paths(
 def _resolve_review_import_paths(
     review_path: Path | None,
     overrides_path: Path | None,
-) -> tuple[Path, Path]:
+    transaction_overrides_path: Path | None,
+) -> tuple[Path, Path, Path]:
     settings = _try_load_settings_for_review_defaults()
+    settings_category_overrides = (
+        getattr(settings, "category_overrides_path", None) if settings is not None else None
+    )
+    settings_transaction_overrides = (
+        getattr(settings, "transaction_overrides_path", None) if settings is not None else None
+    )
     resolved_overrides = (
-        overrides_path
-        or (settings.category_overrides_path if settings is not None else None)
-        or Path("config/category_overrides.yaml")
+        overrides_path or settings_category_overrides or Path("config/category_overrides.yaml")
+    )
+    resolved_transaction_overrides = (
+        transaction_overrides_path
+        or settings_transaction_overrides
+        or Path("config/transaction_overrides.yaml")
     )
     if review_path is not None:
-        return review_path, resolved_overrides
+        return review_path, resolved_overrides, resolved_transaction_overrides
     if settings is None:
         raise ValueError(
             "Missing --review-path; provide explicit path or configure .env "
             "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
         )
-    return settings.summary_json_path.parent / "fallback_category_review.csv", resolved_overrides
+    return (
+        settings.summary_json_path.parent / "fallback_category_review.csv",
+        resolved_overrides,
+        resolved_transaction_overrides,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -380,26 +401,37 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "review-import":
         try:
-            review_path, overrides_path = _resolve_review_import_paths(
+            review_path, overrides_path, transaction_overrides_path = _resolve_review_import_paths(
                 args.review_path,
                 args.overrides_path,
+                args.transaction_overrides_path,
             )
             overrides, warnings = load_override_store(overrides_path)
-            if warnings and not args.allow_load_warnings:
+            transaction_overrides, transaction_warnings = load_transaction_override_store(
+                transaction_overrides_path
+            )
+            has_warnings = bool(warnings or transaction_warnings)
+            if has_warnings and not args.allow_load_warnings:
                 for warning in warnings:
+                    print(f"Warning: {warning}")
+                for warning in transaction_warnings:
                     print(f"Warning: {warning}")
                 print(
                     "Review import error: override load warnings detected; "
                     "fix the override file or rerun with --allow-load-warnings."
                 )
                 return 1
-            if warnings:
+            if has_warnings:
                 for warning in warnings:
+                    print(f"Warning: {warning}")
+                for warning in transaction_warnings:
                     print(f"Warning: {warning}")
             result = import_review_into_overrides(
                 review_path=review_path,
                 overrides_path=overrides_path,
                 existing_store=overrides,
+                transaction_overrides_path=transaction_overrides_path,
+                existing_transaction_store=transaction_overrides,
                 include_account_label_scope=args.include_account_label_scope,
                 allow_non_fallback_import=bool(args.allow_non_fallback_import),
                 dry_run=bool(args.dry_run),
@@ -413,13 +445,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Overrides upserted: {result.overrides_upserted}")
         print(f"Updated: {result.overrides_updated}")
         print(f"Inserted: {result.overrides_inserted}")
+        print(f"Transaction overrides upserted: {result.transaction_overrides_upserted}")
+        print(f"Transaction updated: {result.transaction_overrides_updated}")
+        print(f"Transaction inserted: {result.transaction_overrides_inserted}")
+        print(f"Project tags applied: {result.project_tags_applied}")
         print(f"Skipped rows: {result.rows_skipped}")
         print(f"Skipped non-fallback rows: {result.rows_skipped_non_fallback}")
         print(f"Skipped invalid rows: {result.rows_skipped_invalid}")
+        print(f"Skipped invalid category rows: {result.rows_skipped_invalid_category}")
+        print(f"Skipped invalid project rows: {result.rows_skipped_invalid_project_tags}")
         if args.dry_run:
             print("Dry run: no override file was written.")
-        elif result.backup_path is not None:
-            print(f"Backup: {result.backup_path}")
+        else:
+            if result.backup_path is not None:
+                print(f"Category backup: {result.backup_path}")
+            if result.transaction_backup_path is not None:
+                print(f"Transaction backup: {result.transaction_backup_path}")
         return 0
 
     if command == "metrics-log-update":

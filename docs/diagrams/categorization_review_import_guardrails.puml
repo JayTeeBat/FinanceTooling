@@ -2,8 +2,9 @@
 title review-import Guardrails and Decision Flow
 
 start
-:Resolve review + overrides paths;
-:Load override store;
+:Resolve review + category + transaction paths;
+:Load category override store;
+:Load transaction override store;
 
 if (override load warnings?) then (yes)
   if (--allow-load-warnings?) then (yes)
@@ -29,26 +30,45 @@ repeat
         :Skip row (non-fallback);
       endif
     endif
-    if (description/category valid?) then (yes)
-      :Build override entry;
-    else (no)
-      :Skip row (invalid);
+    if (category edit requested?) then (yes)
+      if (override_level valid?) then (yes)
+        if (override_level == category_override?) then (yes)
+          :Build category override entry;
+        else (no)
+          if (override_level == transaction_override?) then (yes)
+            :Build transaction category override entry;
+          else (no)
+            :Skip category action;
+          endif
+        endif
+      else (no)
+        :Skip row (invalid category action);
+      endif
+    endif
+
+    if (project_tags populated?) then (yes)
+      if (transaction_id present?) then (yes)
+        :Build transaction project-tags entry;
+      else (no)
+        :Skip row (invalid project tags);
+      endif
     endif
   endif
 repeat while (more rows?) is (yes)
 
-:Upsert entries in-memory;
+:Upsert category entries in-memory;
+:Upsert transaction entries in-memory;
 if (--dry-run?) then (yes)
   :Return counters only;\nNo write;
   stop
 endif
 
 if (--backup?) then (yes)
-  :Create backup (default timestamp\nor --backup-path);
+  :Create backup for changed files\n(default timestamp or --backup-path);
 endif
 
-:Write merged overrides file;
-:Return counters and backup path;
+:Write merged category and transaction overrides files;
+:Return counters and backup paths;
 stop
 
 @enduml

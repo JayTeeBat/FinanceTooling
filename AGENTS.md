@@ -184,6 +184,35 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-03 - codex
+- Branch: `chore/review-export-import-audit`
+- Completed:
+  - Implemented review CSV v2 semantics in
+    `src/finance_tooling/categorization_review.py` with independent category and
+    project handling columns: `override_level`, `project_tags`,
+    `existing_project_tags`.
+  - Added import routing so category edits can upsert either category overrides
+    or transaction overrides, while project tags always upsert to
+    transaction-level overrides.
+  - Added/validated transaction-override upsert + write helpers in
+    `src/finance_tooling/transaction_overrides.py` and wired CLI
+    `review-import` defaults to both override paths (including
+    `--transaction-overrides-path`) in `src/finance_tooling/__main__.py`.
+  - Expanded tests for v2 review behavior and dual-store CLI import flows.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - End-to-end manual review run against full 2026 months is still pending on
+    real statement data.
+  - `plantuml` is not available in PATH; `.puml` sources were updated but SVG
+    diagrams were not regenerated in this session.
+- Next action:
+  - Execute `review-export` -> manual edits -> `review-import` on the latest
+    2026 corpus and validate resulting override files and categorized deltas.
+
+### 2026-03-03 - codex
 - Branch: `feature/offline-interactive-dashboard`
 - Completed:
   - Implemented interactive self-contained dashboard rendering in
@@ -233,51 +262,3 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Execute Jan-Feb 2026 categorization pass using new project tags and
     transaction overrides, then inspect `run_summary.json` deltas.
-
-### 2026-03-03 - codex
-- Branch: `chore/review-export-import-audit`
-- Completed:
-  - Refocused `AGENTS.md` away from stale HSBC-specific parser snapshot data and
-    toward current high-level workflow development/troubleshooting guidance.
-  - Updated `## Next Agent Recommendations` to mark review roundtrip work as
-    completed and set 2026 statement categorization validation as the top active
-    focus.
-  - Kept hand-off retention compliant by preserving only the latest three
-    entries.
-- Checks:
-  - `uv run ruff check .`: not run (docs-only update)
-  - `uv run ty check src/finance_tooling tests`: not run (docs-only update)
-  - `uv run pytest`: not run (docs-only update)
-- Open items:
-  - Convert 2026 categorization progress into periodic metrics-log updates once
-    monthly/quarterly review cycles are executed.
-- Next action:
-  - Open PR for review-workflow hardening and AGENTS.md focus refresh.
-
-### 2026-03-02 - codex
-- Branch: `chore/review-export-import-audit`
-- Completed:
-  - Hardened categorization review import/export flow with safer defaults:
-    `.env`-resolved default paths, fallback-row normalization, fallback-only
-    import filtering by default, and clean CLI error handling for review
-    subcommands.
-  - Added review-import guardrails and controls:
-    `--allow-load-warnings`, `--allow-non-fallback-import`, `--dry-run`,
-    `--backup/--no-backup`, and `--backup-path`; import now aborts by default
-    on override-load warnings.
-  - Added backup and dry-run behavior in review import, plus detailed counters
-    (`rows_skipped_non_fallback`, `rows_skipped_invalid`, backup metadata).
-  - Expanded tests for review logic and CLI behavior, and added documentation
-    with PlantUML sources and rendered SVG diagrams:
-    `docs/categorization_review_workflow.md` and `docs/diagrams/*`.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Local `plantuml` binary is still optional; diagrams were rendered via
-    containerized PlantUML for this change set.
-- Next action:
-  - Review/approve CLI safety defaults in real operations, then consider
-    transaction-level override-key expansion as a separate feature.

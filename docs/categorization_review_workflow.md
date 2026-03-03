@@ -1,15 +1,14 @@
 # Categorization Review Workflow
 
-This document defines the human-in-the-loop flow for manual category review and
-override upserts.
+This document defines the human-in-the-loop flow for manual category review,
+transaction-level overrides, and project tagging.
 
 ## Purpose
 
 - Export fallback-classified rows with full transaction detail for review.
-- Let an analyst set categories/subcategories manually.
+- Let an analyst edit category/subcategory and project tags independently.
 - Re-import reviewed rows into persistent overrides safely.
 - Re-run transform to apply new overrides and reduce fallback volume.
-- Optionally apply transaction-level overrides and project tags for edge cases.
 
 ## Flow Overview
 
@@ -28,6 +27,7 @@ Assumes `.env` has at least:
 Optional:
 
 - `FINANCE_CATEGORY_OVERRIDES_PATH`
+- `FINANCE_TRANSACTION_OVERRIDES_PATH`
 
 ### 1. Export fallback review rows
 
@@ -45,13 +45,20 @@ Default input/output paths when flags are omitted:
 Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`:
 
 - Keep `description`, `bank`, `account_label` unchanged.
-- Set `category` and optional `subcategory`.
+- Set `category` and optional `subcategory` when a category correction is needed.
 - Keep `category_source` as `fallback` for standard import mode.
 - Use extra transaction columns (for example `booking_date`, `amount_native`,
   `currency`, `source_file`) to disambiguate similar descriptions when needed.
-- If a correction should apply only to one specific transaction (not all rows
-  sharing the same fingerprint), keep that change out of category overrides and
-  add it to `config/transaction_overrides.yaml` instead (see step 6).
+- Use `override_level` for category behavior:
+  - `category_override`: write into `category_overrides.yaml`
+  - `transaction_override`: write into `transaction_overrides.yaml`
+  - `skip`: do not import category change for that row
+- `override_level` defaults to `transaction_override` when left blank.
+- Use `project_tags` for manual project tagging on unique transactions.
+  - `project_tags` is independent from category edits.
+  - Leave blank to skip project tagging.
+  - Requires `transaction_id`.
+- `existing_project_tags` is informational; do not edit.
 
 ### 3. Dry-run import (recommended)
 
@@ -70,16 +77,22 @@ uv run python -m finance_tooling review-import
 Default path resolution:
 
 - review input: `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`
-- overrides destination:
+- category overrides destination:
   - `--overrides-path` if provided
   - else `FINANCE_CATEGORY_OVERRIDES_PATH` from settings
   - else `config/category_overrides.yaml`
+- transaction overrides destination:
+  - `--transaction-overrides-path` if provided
+  - else `FINANCE_TRANSACTION_OVERRIDES_PATH` from settings
+  - else `config/transaction_overrides.yaml`
 
 Default safety behavior:
 
-- abort on override-load warnings (unless `--allow-load-warnings`)
+- abort on override-load warnings for either override file (unless
+  `--allow-load-warnings`)
 - skip rows not marked `category_source=fallback` (unless `--allow-non-fallback-import`)
-- create timestamped backup before writing (disable with `--no-backup`)
+- create timestamped backup before writing changed files (disable with
+  `--no-backup`)
 
 ### 5. Re-run transform
 
@@ -87,15 +100,15 @@ Default safety behavior:
 uv run python -m finance_tooling transform
 ```
 
-### 6. Optional: transaction-level overrides and project tags
+### 6. Optional: direct override editing outside CSV review
 
-Use `config/transaction_overrides.yaml` for one-off corrections that should not
-be generalized into fingerprint-level category overrides.
+Use `config/transaction_overrides.yaml` for direct one-off edits or bulk edits
+outside the review CSV.
 
-Use `config/project_overrides.yaml` to assign `project_tags`:
+Use `config/project_overrides.yaml` for reusable project-tag automation:
 
-- `rules`: reusable pattern-based project tagging.
-- `overrides`: fingerprint-scoped project tagging (override-first).
+- `rules`: reusable pattern-based tagging.
+- `overrides`: fingerprint-scoped tagging (override-first).
 
 Precedence during transform:
 
@@ -121,7 +134,15 @@ Review file must include:
 ### Row filtering
 
 - Non-fallback rows are skipped by default.
-- Rows missing `description` or `category` are skipped as invalid.
+- In legacy rows (without `override_level`), missing `description` or
+  `category` are skipped as invalid.
+- In v2 rows (with `override_level`):
+  - category import is skipped when `category=Uncategorized` and subcategory is
+    empty.
+  - `override_level` must be one of:
+    `skip`, `category_override`, `transaction_override`.
+  - blank `override_level` defaults to `transaction_override`.
+- `project_tags` import requires `transaction_id`.
 - If multiple rows map to the same override key (`fingerprint`, `bank`,
   `account_label`), import keeps the last row (last-row wins).
 
@@ -132,6 +153,7 @@ Review file must include:
 - `--dry-run`: preview only, no writes.
 - `--backup/--no-backup`: enable/disable pre-write backup.
 - `--backup-path`: custom backup destination.
+- `--transaction-overrides-path`: optional explicit transaction-override target.
 
 ## Rendering Diagrams
 

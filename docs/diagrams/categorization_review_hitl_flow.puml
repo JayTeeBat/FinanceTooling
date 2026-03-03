@@ -6,6 +6,7 @@ participant "finance_tooling CLI" as CLI
 database "transactions_normalized.csv" as NORMALIZED
 participant "fallback_category_review.csv" as REVIEW <<file>>
 database "category_overrides.yaml" as OVERRIDES
+database "transaction_overrides.yaml" as TX_OVERRIDES
 participant "transform stage" as TRANSFORM
 
 group Review Export
@@ -19,28 +20,43 @@ CLI --> Analyst: Export summary\n(row count + output path)
 end
 
 group Manual Review
-Analyst -> REVIEW: Edit category/subcategory
+Analyst -> REVIEW: Edit category/subcategory,\noverride_level, project_tags
 note right of Analyst
 Keep key fields stable:
 - description
 - bank
 - account_label
+Use override_level:
+- category_override
+- transaction_override
+- skip
+Leave blank => transaction_override
 end note
 end
 
 group Review Import
 Analyst -> CLI: review-import\n[with flags OR defaults]
 alt flags omitted
-CLI -> CLI: Resolve defaults from .env\n(processed + overrides paths)
+CLI -> CLI: Resolve defaults from .env\n(processed + category + transaction paths)
 end
 CLI -> OVERRIDES: Load existing overrides
+CLI -> TX_OVERRIDES: Load existing transaction overrides
 CLI -> REVIEW: Read reviewed rows
-CLI -> CLI: Validate and filter rows
+CLI -> CLI: Validate rows + route actions
+alt category row (override_level=category_override)
+CLI -> OVERRIDES: Upsert category override
+else category row (override_level blank/transaction_override)
+CLI -> TX_OVERRIDES: Upsert transaction category override
+else project_tags set
+CLI -> TX_OVERRIDES: Upsert transaction project tags
+end
 alt dry-run enabled
 CLI --> Analyst: Preview upsert counters\n(no file write)
 else apply import
 CLI -> OVERRIDES: Backup existing file
+CLI -> TX_OVERRIDES: Backup existing file
 CLI -> OVERRIDES: Upsert overrides and write file
+CLI -> TX_OVERRIDES: Upsert overrides and write file
 CLI --> Analyst: Import summary\n(updated/inserted/skipped)
 end
 end
@@ -48,6 +64,7 @@ end
 group Apply New Overrides
 Analyst -> TRANSFORM: Run transform
 TRANSFORM -> OVERRIDES: Load updated overrides
+TRANSFORM -> TX_OVERRIDES: Load updated overrides
 TRANSFORM --> Analyst: New categorized outputs
 end
 

@@ -7,6 +7,7 @@ from typing import Any
 from finance_tooling.__main__ import main
 from finance_tooling.categorization_review import ReviewImportResult
 from finance_tooling.classify import OverrideStore
+from finance_tooling.transaction_overrides import TransactionOverrideStore
 
 
 def test_run_alias_emits_deprecation_and_dispatches_update(monkeypatch, capsys) -> None:
@@ -75,9 +76,11 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
     overrides_path = tmp_path / "config" / "category_overrides.yaml"
+    transaction_overrides_path = tmp_path / "config" / "transaction_overrides.yaml"
     settings = SimpleNamespace(
         summary_json_path=processed_dir / "run_summary.json",
         category_overrides_path=overrides_path,
+        transaction_overrides_path=transaction_overrides_path,
     )
     captured: dict[str, object] = {}
 
@@ -99,6 +102,10 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         "finance_tooling.__main__.load_override_store",
         lambda path: (OverrideStore(entries=()), []),
     )
+    monkeypatch.setattr(
+        "finance_tooling.__main__.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
+    )
     monkeypatch.setattr("finance_tooling.__main__.import_review_into_overrides", _import)
 
     exit_code = main(["review-import", "--dry-run"])
@@ -107,6 +114,7 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     assert exit_code == 0
     assert captured["review_path"] == processed_dir / "fallback_category_review.csv"
     assert captured["overrides_path"] == overrides_path
+    assert captured["transaction_overrides_path"] == transaction_overrides_path
     assert captured["dry_run"] is True
     assert "Dry run: no override file was written." in stdio.out
 
@@ -131,6 +139,10 @@ def test_review_import_aborts_on_override_load_warnings(monkeypatch, capsys) -> 
     monkeypatch.setattr(
         "finance_tooling.__main__.load_override_store",
         lambda path: (OverrideStore(entries=()), [f"bad override file: {path}"]),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.__main__.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
     )
     monkeypatch.setattr("finance_tooling.__main__.import_review_into_overrides", _import)
 
@@ -170,6 +182,10 @@ def test_review_import_allows_override_load_warnings_with_flag(monkeypatch, caps
     monkeypatch.setattr(
         "finance_tooling.__main__.load_override_store",
         lambda path: (OverrideStore(entries=()), [f"bad override file: {path}"]),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.__main__.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
     )
     monkeypatch.setattr("finance_tooling.__main__.import_review_into_overrides", _import)
 
@@ -215,6 +231,10 @@ def test_review_import_returns_clean_error_without_traceback(monkeypatch, capsys
     monkeypatch.setattr(
         "finance_tooling.__main__.load_override_store",
         lambda path: (OverrideStore(entries=()), []),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.__main__.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
     )
     monkeypatch.setattr(
         "finance_tooling.__main__.import_review_into_overrides",

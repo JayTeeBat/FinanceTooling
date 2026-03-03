@@ -70,6 +70,21 @@ class TransactionOverrideStore:
     entries: tuple[TransactionOverrideEntry, ...]
 
 
+def transaction_override_entry_key(entry: TransactionOverrideEntry) -> tuple[str, ...]:
+    """Build a deterministic dedupe/upsert key for transaction overrides."""
+    if entry.transaction_id is not None:
+        return ("transaction_id", entry.transaction_id)
+    return (
+        "selector",
+        entry.fingerprint or "",
+        entry.booking_date.isoformat() if entry.booking_date is not None else "",
+        str(entry.amount_native) if entry.amount_native is not None else "",
+        entry.currency or "",
+        entry.bank or "",
+        entry.account_label or "",
+    )
+
+
 def _load_payload(path: Path) -> object:
     content = path.read_text(encoding="utf-8")
     suffix = path.suffix.lower()
@@ -234,6 +249,116 @@ def load_transaction_override_store(path: Path) -> tuple[TransactionOverrideStor
         return TransactionOverrideStore(entries=()), [
             f"Failed to load transaction overrides from {path}: {exc}"
         ]
+
+
+def merge_transaction_override_entries(
+    existing: TransactionOverrideEntry,
+    incoming: TransactionOverrideEntry,
+) -> TransactionOverrideEntry:
+    """Merge two entries targeting the same key with incoming precedence."""
+    merged = replace(
+        existing,
+        override_id=incoming.override_id or existing.override_id,
+        transaction_id=incoming.transaction_id or existing.transaction_id,
+        fingerprint=incoming.fingerprint or existing.fingerprint,
+        booking_date=incoming.booking_date or existing.booking_date,
+        amount_native=incoming.amount_native or existing.amount_native,
+        currency=incoming.currency or existing.currency,
+        bank=incoming.bank or existing.bank,
+        account_label=incoming.account_label or existing.account_label,
+    )
+    if incoming.set_category:
+        merged = replace(merged, category=incoming.category, set_category=True)
+    if incoming.set_subcategory:
+        merged = replace(merged, subcategory=incoming.subcategory, set_subcategory=True)
+    if incoming.set_project:
+        merged = replace(merged, project=incoming.project, set_project=True)
+    if incoming.set_project_tags:
+        merged = replace(
+            merged,
+            project_tags=incoming.project_tags,
+            set_project_tags=True,
+        )
+    return merged
+
+
+def upsert_transaction_override_entries(
+    existing_store: TransactionOverrideStore,
+    incoming_entries: list[TransactionOverrideEntry],
+) -> tuple[TransactionOverrideStore, int, int]:
+    """Upsert transaction-level override entries by selector key."""
+    merged_entries: dict[tuple[str, ...], TransactionOverrideEntry] = {
+        transaction_override_entry_key(entry): entry for entry in existing_store.entries
+    }
+
+    updated = 0
+    inserted = 0
+    for incoming in incoming_entries:
+        key = transaction_override_entry_key(incoming)
+        existing = merged_entries.get(key)
+        if existing is None:
+            merged_entries[key] = incoming
+            inserted += 1
+            continue
+        merged_entries[key] = merge_transaction_override_entries(existing, incoming)
+        updated += 1
+
+    sorted_entries = tuple(
+        entry for _, entry in sorted(merged_entries.items(), key=lambda item: item[0])
+    )
+    return TransactionOverrideStore(entries=sorted_entries), updated, inserted
+
+
+def write_transaction_override_store(path: Path, store: TransactionOverrideStore) -> None:
+    """Persist transaction-level overrides to YAML/JSON."""
+    payload = {
+        "version": 1,
+        "overrides": [],
+    }
+    overrides_payload: list[dict[str, object]] = []
+    for entry in store.entries:
+        row: dict[str, object] = {}
+        if entry.override_id is not None:
+            row["id"] = entry.override_id
+        if entry.transaction_id is not None:
+            row["transaction_id"] = entry.transaction_id
+        if entry.fingerprint is not None:
+            row["fingerprint"] = entry.fingerprint
+        if entry.booking_date is not None:
+            row["booking_date"] = entry.booking_date.isoformat()
+        if entry.amount_native is not None:
+            row["amount_native"] = str(entry.amount_native)
+        if entry.currency is not None:
+            row["currency"] = entry.currency
+        if entry.bank is not None:
+            row["bank"] = entry.bank
+        if entry.account_label is not None:
+            row["account_label"] = entry.account_label
+        if entry.set_category:
+            row["category"] = entry.category
+        if entry.set_subcategory:
+            row["subcategory"] = entry.subcategory
+        if entry.set_project:
+            row["project"] = entry.project
+        if entry.set_project_tags:
+            row["project_tags"] = list(entry.project_tags)
+        overrides_payload.append(row)
+
+    payload["overrides"] = overrides_payload
+    path.parent.mkdir(parents=True, exist_ok=True)
+    suffix = path.suffix.lower()
+    if suffix in {".yaml", ".yml"}:
+        path.write_text(
+            yaml.safe_dump(payload, sort_keys=False, allow_unicode=False),
+            encoding="utf-8",
+        )
+        return
+    if suffix == ".json":
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return
+    raise ValueError(
+        f"Unsupported transaction override format for {path}; expected .yaml, .yml, or .json"
+    )
 
 
 def apply_transaction_overrides(
