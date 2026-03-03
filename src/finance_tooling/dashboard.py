@@ -488,6 +488,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     <section class="layout-two">
       <article class="card chart-area">
         <h2>Year-over-Year Spending</h2>
+        <p class="empty">YoY uses full selected years and category/project filters.</p>
         <div id="yoy-chart" class="bar-list"></div>
       </article>
       <article class="card chart-area">
@@ -748,6 +749,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         });
       }
 
+      function filterByCategoryProject(state) {
+        return transactions.filter((tx) => {
+          if (state.categories.size > 0 && !state.categories.has(tx.category)) {
+            return false;
+          }
+          if (state.projects.size > 0 && !state.projects.has(tx.project)) {
+            return false;
+          }
+          return true;
+        });
+      }
+
       function aggregateMonthlyNet(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
@@ -993,6 +1006,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         const filtered = filterTransactions(state);
+        const categoryProjectFiltered = filterByCategoryProject(state);
         let income = 0;
         let expense = 0;
         let net = 0;
@@ -1037,9 +1051,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           }
         );
 
-        const years = collectYears(filtered);
+        const years = collectYears(categoryProjectFiltered);
         const selectedYear = syncYearOptions(years);
-        renderYoY(aggregateYoY(filtered, selectedYear), selectedYear);
+        renderYoY(aggregateYoY(categoryProjectFiltered, selectedYear), selectedYear);
 
         const budgetRows = buildBudgetRows(filtered, state);
         renderBudgetTable(budgetRows);
