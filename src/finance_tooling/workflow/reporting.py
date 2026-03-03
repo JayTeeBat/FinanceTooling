@@ -105,6 +105,8 @@ def persist_and_report(
         files_scanned=len(source_files),
         files_failed=files_failed,
         new_rows=upsert.new_rows,
+        project_rules_path=settings.project_rules_path,
+        budget_targets_path=settings.budget_targets_path,
     )
 
     category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
@@ -236,6 +238,8 @@ def persist_and_report(
         "top_rules_by_hits": classification_diagnostics.top_rules_by_hits,
         "category_rules_path": str(settings.category_rules_path),
         "category_overrides_path": str(settings.category_overrides_path),
+        "project_rules_path": str(settings.project_rules_path),
+        "budget_targets_path": str(settings.budget_targets_path),
         "fx_cache_path": str(settings.fx_cache_path),
         "warnings": warnings,
     }

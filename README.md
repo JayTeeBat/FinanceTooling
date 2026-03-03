@@ -144,6 +144,8 @@ export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
 export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet"
 export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
 export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"
+export FINANCE_PROJECT_RULES_PATH="/path/to/output/project_rules.yaml"
+export FINANCE_BUDGET_TARGETS_PATH="/path/to/output/budget_targets.yaml"
 
 uv run python -m finance_tooling update
 ```
@@ -174,10 +176,15 @@ The repository includes starter templates:
 
 - `config/category_rules.yaml`
 - `config/category_overrides.yaml`
+- `config/project_rules.yaml`
+- `config/budget_targets.yaml`
 
-Supported formats for both files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
+Supported formats for all four config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
 standard categorization rules.
+Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
+from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
+to `Unassigned` projects and no budget targets).
 
 HSBC ingestion is PDF-only. For each HSBC statement month, opening/closing balances
 extracted from the PDF are used to validate parsed transaction totals. Balance
@@ -185,7 +192,7 @@ mismatches are emitted as warnings and included in run-summary reconciliation me
 
 ## Outputs
 
-- HTML dashboard
+- Self-contained interactive HTML dashboard (offline, single-file)
 - Canonical parquet master store (`transactions_master.parquet`)
 - FX history cache (`fx_rates_history.parquet`)
 - Normalized CSV + JSON exports

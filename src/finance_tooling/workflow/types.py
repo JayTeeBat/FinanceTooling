@@ -144,6 +144,8 @@ class SummaryPayload(TypedDict):
     top_rules_by_hits: list[dict[str, object]]
     category_rules_path: str
     category_overrides_path: str
+    project_rules_path: str
+    budget_targets_path: str
     fx_cache_path: str
     warnings: list[str]
 
