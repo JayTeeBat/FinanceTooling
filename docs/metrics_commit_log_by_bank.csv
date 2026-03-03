@@ -11,3 +11,11 @@ generated_at,commit,branch,bank,transactions_count,categorized_count,uncategoriz
 2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,HSBC,4842,679,4163,14.0231,85.9769
 2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,LaBanquePostale,2561,212,2349,8.2780,91.7220
 2026-03-01T00:21:43.024169+00:00,d06eb7a,fix/hsbc-reconciliation-next,Revolut,2481,117,2364,4.7158,95.2842
+2026-03-03T21:33:17.114676+00:00,c869736,feature/offline-interactive-dashboard,Boursobank,2451,510,1941,20.8078,79.1922
+2026-03-03T21:33:17.114676+00:00,c869736,feature/offline-interactive-dashboard,HSBC,4841,2486,2355,51.3530,48.6470
+2026-03-03T21:33:17.114676+00:00,c869736,feature/offline-interactive-dashboard,LaBanquePostale,2594,294,2300,11.3338,88.6662
+2026-03-03T21:33:17.114676+00:00,c869736,feature/offline-interactive-dashboard,Revolut,2483,1790,693,72.0902,27.9098
+2026-03-03T21:45:56.348676+00:00,f937f1f,feature/offline-interactive-dashboard,Boursobank,2451,510,1941,20.8078,79.1922
+2026-03-03T21:45:56.348676+00:00,f937f1f,feature/offline-interactive-dashboard,HSBC,4841,2486,2355,51.3530,48.6470
+2026-03-03T21:45:56.348676+00:00,f937f1f,feature/offline-interactive-dashboard,LaBanquePostale,2594,294,2300,11.3338,88.6662
+2026-03-03T21:45:56.348676+00:00,f937f1f,feature/offline-interactive-dashboard,Revolut,2483,1790,693,72.0902,27.9098

@@ -1,0 +1,22 @@
+version: 1
+currency: EUR
+targets:
+  - month: "2026-01"
+    category: Groceries
+    project: null
+    amount: 650.0
+
+  - month: "2026-01"
+    category: Transport
+    project: Mobility
+    amount: 250.0
+
+  - month: "2026-02"
+    category: Groceries
+    project: null
+    amount: 650.0
+
+  - month: "2026-02"
+    category: Transport
+    project: Mobility
+    amount: 250.0

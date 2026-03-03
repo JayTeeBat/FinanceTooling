@@ -62,6 +62,8 @@ def _settings(tmp_path: Path, *, ingest_workers: int) -> Settings:
         ingest_text_cache_path=tmp_path / "ingest_text_cache.parquet",
         category_rules_path=tmp_path / "category_rules.yaml",
         category_overrides_path=tmp_path / "category_overrides.yaml",
+        project_rules_path=tmp_path / "project_rules.yaml",
+        budget_targets_path=tmp_path / "budget_targets.yaml",
     )
 
 

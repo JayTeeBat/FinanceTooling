@@ -2,6 +2,7 @@ from pathlib import Path
 
 from finance_tooling.config import (
     BASE_CURRENCY_ENV,
+    BUDGET_TARGETS_PATH_ENV,
     CATEGORY_OVERRIDES_PATH_ENV,
     CATEGORY_RULES_PATH_ENV,
     EXPORT_CSV_PATH_ENV,
@@ -15,6 +16,7 @@ from finance_tooling.config import (
     MASTER_PARQUET_ENV,
     OUTPUT_PATH_ENV,
     PROCESSED_PATH_ENV,
+    PROJECT_RULES_PATH_ENV,
     STAGED_TRANSACTIONS_PATH_ENV,
     load_settings_from_env,
 )
@@ -25,6 +27,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     raw_dir.mkdir()
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
 
     monkeypatch.setenv(INPUT_PATH_ENV, str(raw_dir))
     monkeypatch.setenv(PROCESSED_PATH_ENV, str(processed_dir))
@@ -40,6 +43,8 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(INGEST_TEXT_CACHE_PATH_ENV, raising=False)
     monkeypatch.delenv(CATEGORY_RULES_PATH_ENV, raising=False)
     monkeypatch.delenv(CATEGORY_OVERRIDES_PATH_ENV, raising=False)
+    monkeypatch.delenv(PROJECT_RULES_PATH_ENV, raising=False)
+    monkeypatch.delenv(BUDGET_TARGETS_PATH_ENV, raising=False)
     monkeypatch.delenv(BASE_CURRENCY_ENV, raising=False)
 
     settings = load_settings_from_env()
@@ -58,6 +63,8 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.fx_cache_path == (processed_dir / "fx_rates_history.parquet").resolve()
     assert settings.category_rules_path == (processed_dir / "category_rules.yaml").resolve()
     assert settings.category_overrides_path == (processed_dir / "category_overrides.yaml").resolve()
+    assert settings.project_rules_path == (Path("config/project_rules.yaml").resolve())
+    assert settings.budget_targets_path == (Path("config/budget_targets.yaml").resolve())
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True
     assert settings.ingest_workers == 1
@@ -75,6 +82,7 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     processed_dir.mkdir()
     custom_dir = tmp_path / "custom_out"
     custom_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
 
     monkeypatch.setenv(INPUT_PATH_ENV, str(raw_dir))
     monkeypatch.setenv(PROCESSED_PATH_ENV, str(processed_dir))
@@ -90,6 +98,8 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     monkeypatch.setenv(INGEST_TEXT_CACHE_PATH_ENV, str(custom_dir / "ingest_cache.parquet"))
     monkeypatch.setenv(CATEGORY_RULES_PATH_ENV, str(custom_dir / "category_rules.yaml"))
     monkeypatch.setenv(CATEGORY_OVERRIDES_PATH_ENV, str(custom_dir / "category_overrides.yaml"))
+    monkeypatch.setenv(PROJECT_RULES_PATH_ENV, str(custom_dir / "project_rules.yaml"))
+    monkeypatch.setenv(BUDGET_TARGETS_PATH_ENV, str(custom_dir / "budget_targets.yaml"))
     monkeypatch.setenv(BASE_CURRENCY_ENV, "gbp")
 
     settings = load_settings_from_env()
@@ -102,6 +112,8 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.fx_cache_path == (custom_dir / "fx.parquet").resolve()
     assert settings.category_rules_path == (custom_dir / "category_rules.yaml").resolve()
     assert settings.category_overrides_path == (custom_dir / "category_overrides.yaml").resolve()
+    assert settings.project_rules_path == (custom_dir / "project_rules.yaml").resolve()
+    assert settings.budget_targets_path == (custom_dir / "budget_targets.yaml").resolve()
     assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.base_currency == "GBP"

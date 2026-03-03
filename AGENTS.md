@@ -173,6 +173,31 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-03 - codex
+- Branch: `feature/offline-interactive-dashboard`
+- Completed:
+  - Implemented interactive self-contained dashboard rendering in
+    `src/finance_tooling/dashboard.py` with client-side date/category/project
+    filters, YoY spending view, and budget-vs-actual tables/charts.
+  - Added project assignment and budget modules
+    (`src/finance_tooling/projecting.py`, `src/finance_tooling/budgeting.py`)
+    with YAML/JSON loading, validation, and deterministic assignment logic.
+  - Extended settings/reporting contracts for project/budget config paths,
+    added starter configs (`config/project_rules.yaml`,
+    `config/budget_targets.yaml`), and added regression coverage for dashboard,
+    projecting, budgeting, and config/main defaults.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Dashboard is read-only in v1; no in-browser editing/export flow for budgets
+    or project assignments yet.
+- Next action:
+  - Run a full real-data `update` pipeline and validate dashboard UX/performance
+    on production-sized outputs.
+
+### 2026-03-03 - codex
 - Branch: `chore/review-export-import-audit`
 - Completed:
   - Refocused `AGENTS.md` away from stale HSBC-specific parser snapshot data and
@@ -219,24 +244,3 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Review/approve CLI safety defaults in real operations, then consider
     transaction-level override-key expansion as a separate feature.
-
-### 2026-03-02 - codex
-- Branch: `chore/cli-api-split`
-- Completed:
-  - Implemented CLI split commands `ingest`, `transform`, and `update`, with
-    deprecated `run` alias routed to `update`.
-  - Refactored orchestration into `run_ingest` / `run_transform` /
-    `run_update`, added staged parquet IO module at
-    `src/finance_tooling/workflow/staging.py`, and added ingest summary output.
-  - Extended config with `FINANCE_STAGED_TRANSACTIONS_PATH` and updated tests
-    for staging, pipeline split behavior, and CLI alias behavior.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Advanced planned flags (`--ingest-mode`, guardrails/snapshot controls,
-    `--metrics-scope`) remain deferred and are not implemented in this branch.
-- Next action:
-  - Implement deferred advanced CLI/control-surface flags as a focused follow-up.

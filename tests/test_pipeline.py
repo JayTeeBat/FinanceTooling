@@ -67,6 +67,8 @@ def _settings(input_dir: Path, *, base_currency: str = "EUR") -> Settings:
         ingest_text_cache_path=input_dir / "ingest_text_cache.parquet",
         category_rules_path=input_dir / "category_rules.json",
         category_overrides_path=input_dir / "category_overrides.json",
+        project_rules_path=input_dir / "project_rules.yaml",
+        budget_targets_path=input_dir / "budget_targets.yaml",
     )
 
 
