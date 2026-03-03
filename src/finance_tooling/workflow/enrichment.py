@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from finance_tooling.classify import (
+    build_classification_diagnostics,
     classify_transactions_with_diagnostics,
     load_classification_rules,
     load_override_store,
@@ -14,6 +15,11 @@ from finance_tooling.classify import (
 from finance_tooling.config import Settings
 from finance_tooling.fx import ensure_fx_cache, resolve_rate
 from finance_tooling.models import Transaction
+from finance_tooling.projecting import assign_projects_to_transactions, load_project_config
+from finance_tooling.transaction_overrides import (
+    apply_transaction_overrides,
+    load_transaction_override_store,
+)
 from finance_tooling.workflow.types import EnrichmentResult
 
 
@@ -81,16 +87,25 @@ def enrich_transactions(transactions: list[Transaction], settings: Settings) -> 
     category_overrides, category_override_warnings = load_override_store(
         settings.category_overrides_path
     )
+    project_config, project_warnings = load_project_config(settings.project_overrides_path)
+    transaction_overrides, transaction_override_warnings = load_transaction_override_store(
+        settings.transaction_overrides_path
+    )
     warnings.extend(category_rule_warnings)
     warnings.extend(category_override_warnings)
+    warnings.extend(project_warnings)
+    warnings.extend(transaction_override_warnings)
 
-    classified, classification_diagnostics = classify_transactions_with_diagnostics(
+    classified, _classification_diagnostics = classify_transactions_with_diagnostics(
         transactions,
         rules=category_rules,
         overrides=category_overrides,
     )
+    projected = assign_projects_to_transactions(classified, project_config)
+    overridden = apply_transaction_overrides(projected, transaction_overrides)
+    classification_diagnostics = build_classification_diagnostics(overridden)
 
-    enriched, fx_warnings = apply_fx_and_mtime(classified, settings)
+    enriched, fx_warnings = apply_fx_and_mtime(overridden, settings)
     warnings.extend(fx_warnings)
 
     return EnrichmentResult(

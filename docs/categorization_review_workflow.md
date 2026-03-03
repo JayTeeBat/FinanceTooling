@@ -9,6 +9,7 @@ override upserts.
 - Let an analyst set categories/subcategories manually.
 - Re-import reviewed rows into persistent overrides safely.
 - Re-run transform to apply new overrides and reduce fallback volume.
+- Optionally apply transaction-level overrides and project tags for edge cases.
 
 ## Flow Overview
 
@@ -48,6 +49,9 @@ Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`:
 - Keep `category_source` as `fallback` for standard import mode.
 - Use extra transaction columns (for example `booking_date`, `amount_native`,
   `currency`, `source_file`) to disambiguate similar descriptions when needed.
+- If a correction should apply only to one specific transaction (not all rows
+  sharing the same fingerprint), keep that change out of category overrides and
+  add it to `config/transaction_overrides.yaml` instead (see step 6).
 
 ### 3. Dry-run import (recommended)
 
@@ -82,6 +86,24 @@ Default safety behavior:
 ```bash
 uv run python -m finance_tooling transform
 ```
+
+### 6. Optional: transaction-level overrides and project tags
+
+Use `config/transaction_overrides.yaml` for one-off corrections that should not
+be generalized into fingerprint-level category overrides.
+
+Use `config/project_overrides.yaml` to assign `project_tags`:
+
+- `rules`: reusable pattern-based project tagging.
+- `overrides`: fingerprint-scoped project tagging (override-first).
+
+Precedence during transform:
+
+- Category fields: transaction override entries can force
+  `category`/`subcategory` with source `transaction_override`.
+- Project fields:
+  `transaction_overrides` > `project_overrides.overrides` >
+  `project_overrides.rules`.
 
 ## Import Guardrails
 

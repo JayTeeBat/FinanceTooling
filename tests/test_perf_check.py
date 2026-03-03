@@ -31,6 +31,8 @@ def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
         category_overrides_path=processed_dir / "category_overrides.yaml",
         project_rules_path=processed_dir / "project_rules.yaml",
         budget_targets_path=processed_dir / "budget_targets.yaml",
+        project_overrides_path=Path("config/project_overrides.yaml").resolve(),
+        transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
     )
 
 

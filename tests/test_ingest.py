@@ -64,6 +64,8 @@ def _settings(tmp_path: Path, *, ingest_workers: int) -> Settings:
         category_overrides_path=tmp_path / "category_overrides.yaml",
         project_rules_path=tmp_path / "project_rules.yaml",
         budget_targets_path=tmp_path / "budget_targets.yaml",
+        project_overrides_path=Path("config/project_overrides.yaml").resolve(),
+        transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
     )
 
 

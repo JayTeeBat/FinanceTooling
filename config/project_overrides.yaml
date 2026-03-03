@@ -1,0 +1,12 @@
+version: 1
+
+# Rule-based project tag assignment.
+#
+# - Use `project_tags` for one or more tags. `project` is supported as a
+#   backward-compatible alias for a single tag.
+# - Matching uses normalized descriptions (lowercase, compact spaces).
+
+rules: []
+
+# Override by normalized description fingerprint (+ optional bank/account scope).
+overrides: []

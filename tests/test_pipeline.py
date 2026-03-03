@@ -69,6 +69,8 @@ def _settings(input_dir: Path, *, base_currency: str = "EUR") -> Settings:
         category_overrides_path=input_dir / "category_overrides.json",
         project_rules_path=input_dir / "project_rules.yaml",
         budget_targets_path=input_dir / "budget_targets.yaml",
+        project_overrides_path=Path("config/project_overrides.yaml").resolve(),
+        transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
     )
 
 
@@ -190,6 +192,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["uncategorized_count"] == 0
     assert summary_payload["uncategorized_ratio"] == 0.0
     assert summary_payload["category_source_counts"]["rule"] == 1
+    assert summary_payload["project_overrides_path"] == str(settings.project_overrides_path)
+    assert summary_payload["transaction_overrides_path"] == str(settings.transaction_overrides_path)
 
     assert result.completeness_path == settings.completeness_json_path
     assert result.completeness_status == "fail"

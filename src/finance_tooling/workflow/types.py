@@ -146,6 +146,8 @@ class SummaryPayload(TypedDict):
     category_overrides_path: str
     project_rules_path: str
     budget_targets_path: str
+    project_overrides_path: str
+    transaction_overrides_path: str
     fx_cache_path: str
     warnings: list[str]
 

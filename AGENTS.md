@@ -130,7 +130,18 @@ Prioritized recommendations for the next worker:
   `--backup/--no-backup`, and `--backup-path`.
 - Added documentation + diagrams for human-in-the-loop operations.
 
-2. Next focus: categorize all 2026 statements to validate workflow end-to-end
+2. Completed: transaction-level overrides + project tags pipeline support
+- Added config-backed transaction overrides:
+  `config/transaction_overrides.yaml` (or
+  `FINANCE_TRANSACTION_OVERRIDES_PATH`).
+- Added config-backed project tagging rules/overrides:
+  `config/project_overrides.yaml` (or `FINANCE_PROJECT_OVERRIDES_PATH`).
+- Enrichment now applies precedence:
+  category rule/override -> project rule/override -> transaction override.
+- Transaction overrides can set `category`, `subcategory`, `project`,
+  `project_tags` with `category_source`/`project_source=transaction_override`.
+
+3. Next focus: categorize all 2026 statements to validate workflow end-to-end
 - Run monthly or quarterly review cycles for Jan-Dec 2026 using:
   `review-export` -> manual review -> `review-import` -> `transform`.
 - Track before/after month-scoped `uncategorized_count` and
@@ -140,7 +151,7 @@ Prioritized recommendations for the next worker:
 - Capture high-frequency residual fingerprints discovered during 2026 review
   and feed them into rule/override updates.
 
-3. Apply second-pass residual rule/override batch for current uncategorized leaders
+4. Apply second-pass residual rule/override batch for current uncategorized leaders
 - Target the latest high-frequency residual fingerprints:
   - `visa rate`
   - `cr marschocolateuk cr marker`
@@ -153,12 +164,12 @@ Prioritized recommendations for the next worker:
   - `vis revolut revolut com`
   - `so curt park 29heronsforde`
 
-4. Add run-to-run categorization delta reporting
+5. Add run-to-run categorization delta reporting
 - Compare current vs prior run counters (`categorized_count`,
   `uncategorized_count`, `uncategorized_ratio`) in a compact summary for faster
   iteration decisions.
 
-5. Keep quality gates mandatory
+6. Keep quality gates mandatory
 - Continue enforcing:
   - `uv run ruff check .`
   - `uv run ruff format .`
@@ -196,6 +207,32 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Run a full real-data `update` pipeline and validate dashboard UX/performance
     on production-sized outputs.
+
+### 2026-03-03 - codex
+- Branch: `chore/review-export-import-audit`
+- Completed:
+  - Added transaction-level override support with YAML/JSON loading and apply
+    logic (`src/finance_tooling/transaction_overrides.py`) and default config
+    template (`config/transaction_overrides.yaml`).
+  - Added project-tag assignment support with rules + overrides
+    (`src/finance_tooling/projecting.py`) and default config template
+    (`config/project_overrides.yaml`).
+  - Integrated project/tag + transaction override application into enrichment,
+    added summary payload path fields, and persisted project fields in staged
+    and canonical outputs.
+  - Added tests for enrichment, projecting, and transaction overrides; updated
+    config/pipeline/staging tests for new settings and project fields.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - New transaction/project override configs are implemented but not yet run on
+    a full 2026 statement review pass.
+- Next action:
+  - Execute Jan-Feb 2026 categorization pass using new project tags and
+    transaction overrides, then inspect `run_summary.json` deltas.
 
 ### 2026-03-03 - codex
 - Branch: `chore/review-export-import-audit`

@@ -22,6 +22,9 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "category_confidence",
     "category_source",
     "category_rule_id",
+    "project",
+    "project_tags",
+    "project_source",
     "bank",
     "account_label",
     "source_file",
@@ -47,6 +50,9 @@ class Transaction:
     category_confidence: float | None = None
     category_source: str | None = None
     category_rule_id: str | None = None
+    project: str | None = None
+    project_tags: tuple[str, ...] = ()
+    project_source: str | None = None
     account_label: str | None = None
     fx_rate_to_eur: Decimal | None = None
     fx_rate_date: date | None = None

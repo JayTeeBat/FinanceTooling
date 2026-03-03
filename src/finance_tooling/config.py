@@ -23,6 +23,8 @@ CATEGORY_RULES_PATH_ENV = "FINANCE_CATEGORY_RULES_PATH"
 CATEGORY_OVERRIDES_PATH_ENV = "FINANCE_CATEGORY_OVERRIDES_PATH"
 PROJECT_RULES_PATH_ENV = "FINANCE_PROJECT_RULES_PATH"
 BUDGET_TARGETS_PATH_ENV = "FINANCE_BUDGET_TARGETS_PATH"
+PROJECT_OVERRIDES_PATH_ENV = "FINANCE_PROJECT_OVERRIDES_PATH"
+TRANSACTION_OVERRIDES_PATH_ENV = "FINANCE_TRANSACTION_OVERRIDES_PATH"
 DOTENV_PATH = Path(".env")
 
 
@@ -48,6 +50,8 @@ class Settings:
     category_overrides_path: Path
     project_rules_path: Path
     budget_targets_path: Path
+    project_overrides_path: Path
+    transaction_overrides_path: Path
 
 
 def _resolve_path_from_env(env_name: str) -> Path | None:
@@ -164,6 +168,14 @@ def load_settings_from_env() -> Settings:
         _resolve_path_from_env(BUDGET_TARGETS_PATH_ENV)
         or Path("config/budget_targets.yaml").resolve()
     )
+    project_overrides_path = (
+        _resolve_path_from_env(PROJECT_OVERRIDES_PATH_ENV)
+        or Path("config/project_overrides.yaml").resolve()
+    )
+    transaction_overrides_path = (
+        _resolve_path_from_env(TRANSACTION_OVERRIDES_PATH_ENV)
+        or Path("config/transaction_overrides.yaml").resolve()
+    )
 
     return Settings(
         input_path=input_path,
@@ -184,4 +196,6 @@ def load_settings_from_env() -> Settings:
         category_overrides_path=category_overrides_path,
         project_rules_path=project_rules_path,
         budget_targets_path=budget_targets_path,
+        project_overrides_path=project_overrides_path,
+        transaction_overrides_path=transaction_overrides_path,
     )
