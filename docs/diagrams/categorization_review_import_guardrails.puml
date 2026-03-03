@@ -1,0 +1,54 @@
+@startuml
+title review-import Guardrails and Decision Flow
+
+start
+:Resolve review + overrides paths;
+:Load override store;
+
+if (override load warnings?) then (yes)
+  if (--allow-load-warnings?) then (yes)
+    :Print warnings and continue;
+  else (no)
+    :Abort import (exit=1);
+    stop
+  endif
+endif
+
+:Read review table;
+:Check required columns;
+
+repeat
+  :Read next review row;
+  if (row exists?) then (yes)
+    if (category_source == fallback?) then (yes)
+      :Continue row validation;
+    else (no)
+      if (--allow-non-fallback-import?) then (yes)
+        :Continue row validation;
+      else (no)
+        :Skip row (non-fallback);
+      endif
+    endif
+    if (description/category valid?) then (yes)
+      :Build override entry;
+    else (no)
+      :Skip row (invalid);
+    endif
+  endif
+repeat while (more rows?) is (yes)
+
+:Upsert entries in-memory;
+if (--dry-run?) then (yes)
+  :Return counters only;\nNo write;
+  stop
+endif
+
+if (--backup?) then (yes)
+  :Create backup (default timestamp\nor --backup-path);
+endif
+
+:Write merged overrides file;
+:Return counters and backup path;
+stop
+
+@enduml

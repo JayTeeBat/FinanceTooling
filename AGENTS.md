@@ -7,26 +7,24 @@ personal finances. The immediate focus is accurate bank statement ingestion and
 normalization. The long-term goal is a maintainable pipeline for analysis,
 categorization, and reporting.
 
-## Parser Performance Snapshot
+## Current Workflow Focus
 
-### HSBC parser (latest full-corpus run: 2026-02-25)
-
-- HSBC statement reconciliation failures: `20` (latest known count).
-- Largest residual outlier: `2017-08` with `|diff|=754.70`.
-- Statements missing parsed period windows: `1`.
-- Recent trajectory:
-  - Prior runs were `69/71` (PDF-only processed run) and `30/71`.
-  - Current run is `20/71` failed/checkable for HSBC validations.
-  - Overall statement reconciliation is `22/193` failed/checkable.
-- Immediate hardening targets: high-diff months (`2017-08`, `2016-12`) and
-  residual mid-diff months (`2019-05`, `2019-06`, `2019-07`).
-- Debug triage reference (2026-02-28):
-  - `docs/hsbc_reconciliation_root_cause_triage_2026-02-28.md`
-  - Includes failed-month root-cause buckets and occurrence counts from
-    `processed_run_20260228-012931`.
-  - `docs/hsbc_failed_statement_diagnostics_2026-02-28_fxfix.md`
-  - Includes post-fix metric evolution (`/tmp/fxfix_20260228-022508`) and
-    detailed divergence maps for remaining 2019-05/2019-06/2019-07 fails.
+- Primary near-term objective: validate and scale the manual categorization
+  review workflow across all 2026 statement months.
+- Keep development focused on stable pipeline behavior, deterministic
+  categorization outcomes, and low-friction review/import operations.
+- Main workflow references:
+  - `docs/categorization_review_workflow.md`
+  - `docs/diagrams/categorization_review_hitl_flow.puml`
+  - `docs/diagrams/categorization_review_import_guardrails.puml`
+- Main troubleshooting checkpoints:
+  - `run_summary.json`:
+    `categorized_count`, `uncategorized_count`, `uncategorized_ratio`,
+    `top_uncategorized_descriptions`, reconciliation counts.
+  - `transactions_normalized.csv`:
+    `category_source` distribution for targeted month windows.
+  - review-import safety behavior:
+    load-warning fail-safe, fallback-row filtering, backup creation.
 
 ## Engineering Standards
 
@@ -124,17 +122,25 @@ Use this template:
 
 Prioritized recommendations for the next worker:
 
-1. Implement manual categorization review roundtrip (export -> review -> import)
-- Add a review export focused on fallback rows (`category_source == "fallback"`)
-  from normalized outputs.
-- Keep review columns explicit: `description`, `bank`, `account_label`,
-  `category`, `subcategory`, `category_source`.
-- Add import/upsert flow into `config/category_overrides.yaml`.
-- Upsert key policy: normalized fingerprint + bank by default, with optional
-  account-label scope.
-- Conflict policy: update matching override; insert when no match.
+1. Completed: manual categorization review roundtrip (export -> review -> import)
+- Implemented review-export/review-import command pair with default path
+  resolution from `.env`/settings.
+- Added import safety controls and guardrails:
+  `--allow-load-warnings`, `--allow-non-fallback-import`, `--dry-run`,
+  `--backup/--no-backup`, and `--backup-path`.
+- Added documentation + diagrams for human-in-the-loop operations.
 
-2. Apply second-pass residual rule/override batch for current uncategorized leaders
+2. Next focus: categorize all 2026 statements to validate workflow end-to-end
+- Run monthly or quarterly review cycles for Jan-Dec 2026 using:
+  `review-export` -> manual review -> `review-import` -> `transform`.
+- Track before/after month-scoped `uncategorized_count` and
+  `uncategorized_ratio` from normalized outputs and `run_summary.json`.
+- Keep override updates centralized in `config/category_overrides.yaml` and
+  avoid ad-hoc local-only override files.
+- Capture high-frequency residual fingerprints discovered during 2026 review
+  and feed them into rule/override updates.
+
+3. Apply second-pass residual rule/override batch for current uncategorized leaders
 - Target the latest high-frequency residual fingerprints:
   - `visa rate`
   - `cr marschocolateuk cr marker`
@@ -147,24 +153,72 @@ Prioritized recommendations for the next worker:
   - `vis revolut revolut com`
   - `so curt park 29heronsforde`
 
-3. Add run-to-run categorization delta reporting
+4. Add run-to-run categorization delta reporting
 - Compare current vs prior run counters (`categorized_count`,
   `uncategorized_count`, `uncategorized_ratio`) in a compact summary for faster
   iteration decisions.
 
-4. Keep quality gates mandatory
+5. Keep quality gates mandatory
 - Continue enforcing:
   - `uv run ruff check .`
   - `uv run ruff format .`
   - `uv run ty check src/finance_tooling tests`
   - `uv run pytest`
 
-Success target for the next categorization pass:
-- Reduce `uncategorized_ratio` from `0.6617` by at least `0.05` absolute,
-  without worsening reconciliation metrics.
+Success target for the 2026 validation campaign:
+- Process all 2026 months through the review workflow at least once and reduce
+  month-scoped uncategorized ratios without worsening reconciliation metrics.
 
 
 ## Hand-Off Log
+
+### 2026-03-03 - codex
+- Branch: `chore/review-export-import-audit`
+- Completed:
+  - Refocused `AGENTS.md` away from stale HSBC-specific parser snapshot data and
+    toward current high-level workflow development/troubleshooting guidance.
+  - Updated `## Next Agent Recommendations` to mark review roundtrip work as
+    completed and set 2026 statement categorization validation as the top active
+    focus.
+  - Kept hand-off retention compliant by preserving only the latest three
+    entries.
+- Checks:
+  - `uv run ruff check .`: not run (docs-only update)
+  - `uv run ty check src/finance_tooling tests`: not run (docs-only update)
+  - `uv run pytest`: not run (docs-only update)
+- Open items:
+  - Convert 2026 categorization progress into periodic metrics-log updates once
+    monthly/quarterly review cycles are executed.
+- Next action:
+  - Open PR for review-workflow hardening and AGENTS.md focus refresh.
+
+### 2026-03-02 - codex
+- Branch: `chore/review-export-import-audit`
+- Completed:
+  - Hardened categorization review import/export flow with safer defaults:
+    `.env`-resolved default paths, fallback-row normalization, fallback-only
+    import filtering by default, and clean CLI error handling for review
+    subcommands.
+  - Added review-import guardrails and controls:
+    `--allow-load-warnings`, `--allow-non-fallback-import`, `--dry-run`,
+    `--backup/--no-backup`, and `--backup-path`; import now aborts by default
+    on override-load warnings.
+  - Added backup and dry-run behavior in review import, plus detailed counters
+    (`rows_skipped_non_fallback`, `rows_skipped_invalid`, backup metadata).
+  - Expanded tests for review logic and CLI behavior, and added documentation
+    with PlantUML sources and rendered SVG diagrams:
+    `docs/categorization_review_workflow.md` and `docs/diagrams/*`.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Local `plantuml` binary is still optional; diagrams were rendered via
+    containerized PlantUML for this change set.
+- Next action:
+  - Review/approve CLI safety defaults in real operations, then consider
+    transaction-level override-key expansion as a separate feature.
 
 ### 2026-03-02 - codex
 - Branch: `chore/cli-api-split`
@@ -186,59 +240,3 @@ Success target for the next categorization pass:
     `--metrics-scope`) remain deferred and are not implemented in this branch.
 - Next action:
   - Implement deferred advanced CLI/control-surface flags as a focused follow-up.
-
-### 2026-03-02 - codex
-- Branch: `fix/hsbc-pdf-failures-triage`
-- Completed:
-  - Removed HSBC CSV integration from runtime config and ingestion path
-    (`FINANCE_HSBC_CSV_PATH` and CSV importer hook removed).
-  - Simplified HSBC merge stage to PDF-only validation/diagnostics while
-    preserving summary metric compatibility keys (CSV counters stay `0`).
-  - Removed HSBC CSV importer module and CSV-specific tests; updated pipeline,
-    perf-check, ingest, config, and docs for PDF-only operation.
-  - Validated full corpus run in
-    `/tmp/finance_pdf_only_phase2_20260302-222228` with
-    `hsbc_selection_policy=pdf_only`, `hsbc_csv_files_scanned=0`, and remaining
-    HSBC fail still limited to `2019-11-27` (`-0.03`).
-- Checks:
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=... FINANCE_PROCESSED_PATH=/tmp/finance_pdf_only_phase2_20260302-222228 FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
-- Open items:
-  - Strict reconciliation tolerance (`0.01`) still leaves known HSBC residual:
-    `2019-11-27` (`-0.03`).
-- Next action:
-  - Decide policy for near-zero residual handling (`keep strict 0.01` vs scoped
-    tolerance exception) for the final HSBC edge case.
-
-### 2026-03-02 - codex
-- Branch: `fix/hsbc-pdf-failures-triage`
-- Completed:
-  - Hardened HSBC amount-token selection to ignore embedded numeric fragments
-    (e.g., `Thur9.15`) and retain the actual transaction amount token.
-  - Added ATM continuation handling for `BNKM CHG` fragments so cash-withdrawal
-    blocks select the final withdrawal amount row instead of intermediate charge
-    fragments.
-  - Added parser regressions for embedded-decimal payee text and two
-    `ATM CASH ... BNKM CHG` continuation patterns.
-  - Validated PDF-only workflow run in
-    `/tmp/finance_pdf_only_20260302-220923`; HSBC fail set reduced from `4` to
-    `1` (remaining `2019-11-27`, diff `-0.03`).
-- Checks:
-  - `uv run pytest tests/test_parser.py -q`: pass
-  - `uv run pytest tests/test_hsbc_fixtures.py -q`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `FINANCE_STATEMENTS_PATH=... env -u FINANCE_HSBC_CSV_PATH FINANCE_PROCESSED_PATH=/tmp/finance_pdf_only_20260302-220923 FINANCE_FX_AUTO_FETCH=false uv run python -m finance_tooling`: pass
-- Open items:
-  - Remaining HSBC reconciliation residual is `2019-11-27` at `-0.03` under
-    strict `0.01` tolerance.
-  - Phase 2 migration work (remove HSBC CSV ingestion/merge code paths) is not
-    yet implemented.
-- Next action:
-  - Execute Phase 2 by removing HSBC CSV source integration while preserving
-    PDF-only reconciliation behavior.

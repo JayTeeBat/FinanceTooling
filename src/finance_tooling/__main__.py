@@ -11,7 +11,7 @@ from finance_tooling.categorization_review import (
     import_review_into_overrides,
 )
 from finance_tooling.classify import load_override_store
-from finance_tooling.config import load_settings_from_env
+from finance_tooling.config import Settings, load_settings_from_env
 from finance_tooling.metrics_log import (
     build_bank_snapshots,
     build_snapshot,
@@ -76,13 +76,13 @@ def _build_parser() -> argparse.ArgumentParser:
     review_export.add_argument(
         "--normalized-path",
         type=Path,
-        required=True,
+        default=None,
         help="Path to normalized transactions table (.csv/.json/.parquet).",
     )
     review_export.add_argument(
         "--output-path",
         type=Path,
-        required=True,
+        default=None,
         help="Destination review file (.csv or .json).",
     )
 
@@ -93,19 +93,46 @@ def _build_parser() -> argparse.ArgumentParser:
     review_import.add_argument(
         "--review-path",
         type=Path,
-        required=True,
+        default=None,
         help="Reviewed categorization file (.csv/.json/.parquet).",
     )
     review_import.add_argument(
         "--overrides-path",
         type=Path,
-        default=Path("config/category_overrides.yaml"),
+        default=None,
         help="Override config destination (.yaml/.yml/.json).",
     )
     review_import.add_argument(
         "--include-account-label-scope",
         action="store_true",
         help="Use normalized fingerprint + bank + account_label as upsert key.",
+    )
+    review_import.add_argument(
+        "--allow-load-warnings",
+        action="store_true",
+        help="Proceed even when existing override file fails to parse cleanly.",
+    )
+    review_import.add_argument(
+        "--allow-non-fallback-import",
+        action="store_true",
+        help="Import rows whose category_source is not fallback.",
+    )
+    review_import.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview import/upsert counts without writing override files.",
+    )
+    review_import.add_argument(
+        "--backup",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Create a timestamped backup before writing overrides (default: enabled).",
+    )
+    review_import.add_argument(
+        "--backup-path",
+        type=Path,
+        default=None,
+        help="Optional explicit backup destination path.",
     )
 
     metrics_log = subparsers.add_parser(
@@ -258,6 +285,60 @@ def _run_update_command(*, ingest_only: bool, transform_only: bool) -> int:
     return _print_workflow_result(result)
 
 
+def _try_load_settings_for_review_defaults() -> Settings | None:
+    try:
+        return load_settings_from_env()
+    except ValueError:
+        return None
+
+
+def _resolve_review_export_paths(
+    normalized_path: Path | None,
+    output_path: Path | None,
+) -> tuple[Path, Path]:
+    if normalized_path is not None and output_path is not None:
+        return normalized_path, output_path
+
+    settings = _try_load_settings_for_review_defaults()
+    if settings is None:
+        missing_flags: list[str] = []
+        if normalized_path is None:
+            missing_flags.append("--normalized-path")
+        if output_path is None:
+            missing_flags.append("--output-path")
+        joined = ", ".join(missing_flags)
+        raise ValueError(
+            f"Missing {joined}; provide explicit flags or configure .env "
+            "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
+        )
+
+    processed_dir = settings.summary_json_path.parent
+    return (
+        normalized_path or (processed_dir / "transactions_normalized.csv"),
+        output_path or (processed_dir / "fallback_category_review.csv"),
+    )
+
+
+def _resolve_review_import_paths(
+    review_path: Path | None,
+    overrides_path: Path | None,
+) -> tuple[Path, Path]:
+    settings = _try_load_settings_for_review_defaults()
+    resolved_overrides = (
+        overrides_path
+        or (settings.category_overrides_path if settings is not None else None)
+        or Path("config/category_overrides.yaml")
+    )
+    if review_path is not None:
+        return review_path, resolved_overrides
+    if settings is None:
+        raise ValueError(
+            "Missing --review-path; provide explicit path or configure .env "
+            "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
+        )
+    return settings.summary_json_path.parent / "fallback_category_review.csv", resolved_overrides
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run workflow or categorization review subcommands."""
     parser = _build_parser()
@@ -285,26 +366,60 @@ def main(argv: list[str] | None = None) -> int:
         return _run_update_command(ingest_only=False, transform_only=False)
 
     if command == "review-export":
-        exported = export_fallback_review_rows(args.normalized_path, args.output_path)
-        print(f"Exported {exported} fallback review rows to {args.output_path}")
+        try:
+            normalized_path, output_path = _resolve_review_export_paths(
+                args.normalized_path,
+                args.output_path,
+            )
+            exported = export_fallback_review_rows(normalized_path, output_path)
+        except (FileNotFoundError, RuntimeError, ValueError) as exc:
+            print(f"Review export error: {exc}")
+            return 1
+        print(f"Exported {exported} fallback review rows to {output_path}")
         return 0
 
     if command == "review-import":
-        overrides, warnings = load_override_store(args.overrides_path)
-        if warnings:
-            for warning in warnings:
-                print(f"Warning: {warning}")
-        result = import_review_into_overrides(
-            review_path=args.review_path,
-            overrides_path=args.overrides_path,
-            existing_store=overrides,
-            include_account_label_scope=args.include_account_label_scope,
-        )
+        try:
+            review_path, overrides_path = _resolve_review_import_paths(
+                args.review_path,
+                args.overrides_path,
+            )
+            overrides, warnings = load_override_store(overrides_path)
+            if warnings and not args.allow_load_warnings:
+                for warning in warnings:
+                    print(f"Warning: {warning}")
+                print(
+                    "Review import error: override load warnings detected; "
+                    "fix the override file or rerun with --allow-load-warnings."
+                )
+                return 1
+            if warnings:
+                for warning in warnings:
+                    print(f"Warning: {warning}")
+            result = import_review_into_overrides(
+                review_path=review_path,
+                overrides_path=overrides_path,
+                existing_store=overrides,
+                include_account_label_scope=args.include_account_label_scope,
+                allow_non_fallback_import=bool(args.allow_non_fallback_import),
+                dry_run=bool(args.dry_run),
+                backup=bool(args.backup),
+                backup_path=args.backup_path,
+            )
+        except (FileNotFoundError, RuntimeError, ValueError) as exc:
+            print(f"Review import error: {exc}")
+            return 1
         print(f"Imported rows: {result.rows_read}")
         print(f"Overrides upserted: {result.overrides_upserted}")
         print(f"Updated: {result.overrides_updated}")
         print(f"Inserted: {result.overrides_inserted}")
         print(f"Skipped rows: {result.rows_skipped}")
+        print(f"Skipped non-fallback rows: {result.rows_skipped_non_fallback}")
+        print(f"Skipped invalid rows: {result.rows_skipped_invalid}")
+        if args.dry_run:
+            print("Dry run: no override file was written.")
+        elif result.backup_path is not None:
+            print(f"Backup: {result.backup_path}")
         return 0
 
     if command == "metrics-log-update":

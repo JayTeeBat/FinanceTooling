@@ -34,12 +34,23 @@ uv run python -m finance_tooling update
 Manual categorization review roundtrip:
 
 ```bash
+# defaults (requires FINANCE_STATEMENTS_PATH + FINANCE_PROCESSED_PATH in .env)
+uv run python -m finance_tooling review-export
+
+# explicit paths
 uv run python -m finance_tooling review-export \
   --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
   --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv"
 
 # edit fallback_category_review.csv (set category/subcategory)
 
+# defaults (review file from processed path, overrides from FINANCE_CATEGORY_OVERRIDES_PATH)
+uv run python -m finance_tooling review-import
+
+# safe preview before writing
+uv run python -m finance_tooling review-import --dry-run
+
+# explicit paths
 uv run python -m finance_tooling review-import \
   --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
   --overrides-path "config/category_overrides.yaml"
@@ -47,6 +58,16 @@ uv run python -m finance_tooling review-import \
 
 Default upsert key is normalized `description` fingerprint + `bank`. Add
 `--include-account-label-scope` on import to include `account_label` in the key.
+By default, `review-import` aborts when existing override-load warnings are present.
+Use `--allow-load-warnings` only for deliberate recovery flows.
+Rows whose `category_source` is not `fallback` are skipped by default; override with
+`--allow-non-fallback-import`.
+
+Detailed human-in-the-loop guide and diagrams:
+
+- `docs/categorization_review_workflow.md`
+- `docs/diagrams/categorization_review_hitl_flow.puml`
+- `docs/diagrams/categorization_review_import_guardrails.puml`
 
 Commit-to-commit metrics log update:
 
