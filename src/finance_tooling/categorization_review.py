@@ -13,7 +13,7 @@ import yaml
 
 from finance_tooling.classify import OverrideEntry, OverrideStore, normalize_description
 
-REVIEW_COLUMNS: tuple[str, ...] = (
+REQUIRED_REVIEW_COLUMNS: tuple[str, ...] = (
     "description",
     "bank",
     "account_label",
@@ -87,23 +87,18 @@ def _is_fallback_category_source(value: object) -> bool:
 def export_fallback_review_rows(normalized_path: Path, review_output_path: Path) -> int:
     """Export fallback-classified rows for manual review."""
     dataframe = _read_table(normalized_path)
-    missing_columns = [column for column in REVIEW_COLUMNS if column not in dataframe.columns]
+    missing_columns = [
+        column for column in REQUIRED_REVIEW_COLUMNS if column not in dataframe.columns
+    ]
     if missing_columns:
         joined = ", ".join(missing_columns)
         raise ValueError(f"Input table missing required columns: {joined}")
 
     fallback_rows = dataframe.loc[
-        dataframe["category_source"].astype(str).str.strip().str.lower() == "fallback",
-        list(REVIEW_COLUMNS),
-    ]
-    # One row per review key keeps files compact and avoids duplicate corrections.
-    review_rows = (
-        fallback_rows.drop_duplicates(subset=["description", "bank", "account_label"])
-        .sort_values(by=["description", "bank", "account_label"], kind="stable")
-        .reset_index(drop=True)
-    )
-    _write_table(review_output_path, review_rows)
-    return len(review_rows)
+        dataframe["category_source"].astype(str).str.strip().str.lower() == "fallback"
+    ].copy()
+    _write_table(review_output_path, fallback_rows)
+    return len(fallback_rows)
 
 
 def _parse_review_row(
@@ -253,12 +248,14 @@ def import_review_into_overrides(
 ) -> ReviewImportResult:
     """Import reviewed rows and upsert into override config."""
     dataframe = _read_table(review_path)
-    missing_columns = [column for column in REVIEW_COLUMNS if column not in dataframe.columns]
+    missing_columns = [
+        column for column in REQUIRED_REVIEW_COLUMNS if column not in dataframe.columns
+    ]
     if missing_columns:
         joined = ", ".join(missing_columns)
         raise ValueError(f"Review table missing required columns: {joined}")
 
-    raw_rows = dataframe[list(REVIEW_COLUMNS)].to_dict(orient="records")
+    raw_rows = dataframe[list(REQUIRED_REVIEW_COLUMNS)].to_dict(orient="records")
     parsed_entries: dict[tuple[str, str | None, str | None], OverrideEntry] = {}
     skipped_non_fallback = 0
     skipped_invalid = 0

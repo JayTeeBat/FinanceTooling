@@ -5,7 +5,7 @@ override upserts.
 
 ## Purpose
 
-- Export fallback-classified rows into a compact review table.
+- Export fallback-classified rows with full transaction detail for review.
 - Let an analyst set categories/subcategories manually.
 - Re-import reviewed rows into persistent overrides safely.
 - Re-run transform to apply new overrides and reduce fallback volume.
@@ -46,6 +46,8 @@ Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`:
 - Keep `description`, `bank`, `account_label` unchanged.
 - Set `category` and optional `subcategory`.
 - Keep `category_source` as `fallback` for standard import mode.
+- Use extra transaction columns (for example `booking_date`, `amount_native`,
+  `currency`, `source_file`) to disambiguate similar descriptions when needed.
 
 ### 3. Dry-run import (recommended)
 
@@ -98,7 +100,8 @@ Review file must include:
 
 - Non-fallback rows are skipped by default.
 - Rows missing `description` or `category` are skipped as invalid.
-- Duplicate review keys are deduped (`fingerprint`, `bank`, `account_label`) with last-row wins.
+- If multiple rows map to the same override key (`fingerprint`, `bank`,
+  `account_label`), import keeps the last row (last-row wins).
 
 ### Operational switches
 

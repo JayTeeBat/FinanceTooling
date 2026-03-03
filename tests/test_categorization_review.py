@@ -10,50 +10,61 @@ from finance_tooling.categorization_review import (
 from finance_tooling.classify import OverrideEntry, OverrideStore, load_override_store
 
 
-def test_export_fallback_review_rows_filters_and_deduplicates(tmp_path: Path) -> None:
+def test_export_fallback_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> None:
     normalized_path = tmp_path / "transactions_normalized.csv"
     output_path = tmp_path / "review.csv"
-    pd.DataFrame(
+    normalized_df = pd.DataFrame(
         [
             {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
                 "description": "UNKNOWN MERCHANT 123",
+                "amount_native": -10.5,
+                "currency": "EUR",
                 "bank": "REVOLUT",
                 "account_label": None,
                 "category": "Uncategorized",
                 "subcategory": None,
                 "category_source": "fallback",
+                "source_file": "a.pdf",
             },
             {
+                "transaction_id": "tx_2",
+                "booking_date": "2026-01-02",
                 "description": "UNKNOWN MERCHANT 123",
+                "amount_native": -12.0,
+                "currency": "EUR",
                 "bank": "REVOLUT",
                 "account_label": None,
                 "category": "Uncategorized",
                 "subcategory": None,
                 "category_source": "fallback",
+                "source_file": "b.pdf",
             },
             {
+                "transaction_id": "tx_3",
+                "booking_date": "2026-01-03",
                 "description": "CARD UBER",
+                "amount_native": -20.0,
+                "currency": "EUR",
                 "bank": "REVOLUT",
                 "account_label": None,
                 "category": "Transport",
                 "subcategory": "Mobility",
                 "category_source": "rule",
+                "source_file": "c.pdf",
             },
         ]
-    ).to_csv(normalized_path, index=False)
+    )
+    normalized_df.to_csv(normalized_path, index=False)
 
     exported = export_fallback_review_rows(normalized_path, output_path)
 
-    assert exported == 1
+    assert exported == 2
     exported_df = pd.read_csv(output_path)
-    assert exported_df.columns.tolist() == [
-        "description",
-        "bank",
-        "account_label",
-        "category",
-        "subcategory",
-        "category_source",
-    ]
+    assert exported_df.columns.tolist() == normalized_df.columns.tolist()
+    assert exported_df["transaction_id"].tolist() == ["tx_1", "tx_2"]
+    assert exported_df["booking_date"].tolist() == ["2026-01-01", "2026-01-02"]
     assert exported_df.loc[0, "description"] == "UNKNOWN MERCHANT 123"
     assert exported_df.loc[0, "category_source"] == "fallback"
 
