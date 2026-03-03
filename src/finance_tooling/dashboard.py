@@ -433,8 +433,24 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
     <section class="card">
       <h2>Filters</h2>
-      <p>Date range, category, and project filters apply to all charts and tables.</p>
+      <p>Date window, category, and project filters apply to all charts and tables.</p>
       <div class="filters" style="margin-top: 10px;">
+        <div class="field">
+          <label for="window-select">Display Window</label>
+          <select id="window-select">
+            <option value="last_12_months">Last 12 Months</option>
+            <option value="last_3_years">Last 3 Years</option>
+            <option value="last_5_years">Last 5 Years</option>
+            <option value="last_10_years">Last 10 Years</option>
+            <option value="full_history">Full History</option>
+            <option value="specific_year">Specific Year</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="specific-year">Specific Year</label>
+          <select id="specific-year"></select>
+        </div>
         <div class="field">
           <label for="start-date">Start Date</label>
           <input id="start-date" type="date" />
@@ -670,6 +686,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
       const startInput = document.getElementById("start-date");
       const endInput = document.getElementById("end-date");
+      const windowSelect = document.getElementById("window-select");
+      const specificYearSelect = document.getElementById("specific-year");
       const categorySelect = document.getElementById("category-select");
       const projectSelect = document.getElementById("project-select");
       const yoyYearSelect = document.getElementById("yoy-year");
@@ -682,8 +700,40 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
       const minDate = transactions.length > 0 ? transactions[0].bookingDate : formatDate(new Date());
       const maxDate = transactions.length > 0 ? transactions[transactions.length - 1].bookingDate : formatDate(new Date());
+      const allowedWindows = new Set([
+        "last_12_months",
+        "last_3_years",
+        "last_5_years",
+        "last_10_years",
+        "full_history",
+        "specific_year",
+        "custom",
+      ]);
+      const dataYears = Array.from(
+        new Set(
+          transactions
+            .map((tx) => Number(tx.bookingDate.slice(0, 4)))
+            .filter((value) => Number.isFinite(value))
+        )
+      ).sort((left, right) => left - right);
 
-      function defaultRange() {
+      function clampDateRange(startDate, endDate) {
+        let nextStart = startDate;
+        let nextEnd = endDate;
+        if (nextStart < minDate) {
+          nextStart = minDate;
+        }
+        if (nextEnd > maxDate) {
+          nextEnd = maxDate;
+        }
+        if (nextStart > nextEnd) {
+          nextStart = minDate;
+          nextEnd = maxDate;
+        }
+        return { startDate: nextStart, endDate: nextEnd };
+      }
+
+      function rangeForLastMonths(monthCount) {
         if (transactions.length === 0) {
           return { startDate: minDate, endDate: maxDate };
         }
@@ -691,12 +741,57 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         if (!maxParsed) {
           return { startDate: minDate, endDate: maxDate };
         }
-        const proposedStart = new Date(Date.UTC(maxParsed.getUTCFullYear(), maxParsed.getUTCMonth() - 11, 1));
-        const proposedStartString = formatDate(proposedStart);
-        return {
-          startDate: proposedStartString > minDate ? proposedStartString : minDate,
-          endDate: maxDate,
-        };
+        const proposedStart = new Date(Date.UTC(maxParsed.getUTCFullYear(), maxParsed.getUTCMonth() - (monthCount - 1), 1));
+        return clampDateRange(formatDate(proposedStart), maxDate);
+      }
+
+      function rangeForYear(year) {
+        const typedYear = Number(year);
+        if (!Number.isFinite(typedYear)) {
+          return { startDate: minDate, endDate: maxDate };
+        }
+        const startDate = String(typedYear) + "-01-01";
+        const endDate = String(typedYear) + "-12-31";
+        return clampDateRange(startDate, endDate);
+      }
+
+      function setSpecificYearState() {
+        specificYearSelect.disabled = windowSelect.value !== "specific_year" || dataYears.length === 0;
+      }
+
+      function fillSpecificYearOptions() {
+        const previous = Number(specificYearSelect.value);
+        specificYearSelect.innerHTML = dataYears
+          .map((year) => "<option value=\\"" + String(year) + "\\">" + String(year) + "</option>")
+          .join("");
+        if (!dataYears.length) {
+          specificYearSelect.disabled = true;
+          return;
+        }
+        const selected = dataYears.includes(previous) ? previous : dataYears[dataYears.length - 1];
+        specificYearSelect.value = String(selected);
+      }
+
+      function applyWindowSelection(windowValue) {
+        let range = null;
+        if (windowValue === "last_12_months") {
+          range = rangeForLastMonths(12);
+        } else if (windowValue === "last_3_years") {
+          range = rangeForLastMonths(36);
+        } else if (windowValue === "last_5_years") {
+          range = rangeForLastMonths(60);
+        } else if (windowValue === "last_10_years") {
+          range = rangeForLastMonths(120);
+        } else if (windowValue === "full_history") {
+          range = { startDate: minDate, endDate: maxDate };
+        } else if (windowValue === "specific_year") {
+          range = rangeForYear(specificYearSelect.value);
+        }
+        setSpecificYearState();
+        if (range !== null) {
+          startInput.value = range.startDate;
+          endInput.value = range.endDate;
+        }
       }
 
       function renderMeta() {
@@ -1089,15 +1184,19 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
         fillMultiSelect(categorySelect, uniqueSorted(transactions.map((tx) => tx.category)));
         fillMultiSelect(projectSelect, uniqueSorted(transactions.map((tx) => tx.project)));
+        fillSpecificYearOptions();
 
-        const defaults = defaultRange();
-        startInput.value = defaults.startDate;
-        endInput.value = defaults.endDate;
+        const defaultWindow =
+          typeof payload.meta.default_window === "string" && allowedWindows.has(payload.meta.default_window)
+            ? payload.meta.default_window
+            : "last_12_months";
+        windowSelect.value = defaultWindow;
+        applyWindowSelection(defaultWindow);
 
         resetButton.addEventListener("click", function () {
-          const range = defaultRange();
-          startInput.value = range.startDate;
-          endInput.value = range.endDate;
+          windowSelect.value = defaultWindow;
+          fillSpecificYearOptions();
+          applyWindowSelection(defaultWindow);
           for (const option of Array.from(categorySelect.options)) {
             option.selected = false;
           }
@@ -1107,7 +1206,27 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           refreshDashboard();
         });
 
-        for (const node of [startInput, endInput, categorySelect, projectSelect, yoyYearSelect]) {
+        windowSelect.addEventListener("change", function () {
+          applyWindowSelection(windowSelect.value);
+          refreshDashboard();
+        });
+        specificYearSelect.addEventListener("change", function () {
+          if (windowSelect.value === "specific_year") {
+            applyWindowSelection("specific_year");
+          }
+          refreshDashboard();
+        });
+        startInput.addEventListener("change", function () {
+          windowSelect.value = "custom";
+          setSpecificYearState();
+          refreshDashboard();
+        });
+        endInput.addEventListener("change", function () {
+          windowSelect.value = "custom";
+          setSpecificYearState();
+          refreshDashboard();
+        });
+        for (const node of [categorySelect, projectSelect, yoyYearSelect]) {
           node.addEventListener("change", refreshDashboard);
         }
       }

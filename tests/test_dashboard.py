@@ -94,6 +94,13 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
 
     html = destination.read_text(encoding="utf-8")
     assert "Interactive Finance Dashboard" in html
+    assert 'id="window-select"' in html
+    assert "Last 3 Years" in html
+    assert "Last 5 Years" in html
+    assert "Last 10 Years" in html
+    assert "Full History" in html
+    assert "Specific Year" in html
+    assert 'id="specific-year"' in html
 
     payload = _extract_payload(html)
     transactions_raw = payload["transactions"]
