@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -24,6 +25,9 @@ _REQUIRED_STAGED_COLUMNS = (
     "category_confidence",
     "category_source",
     "category_rule_id",
+    "project",
+    "project_tags",
+    "project_source",
     "account_label",
     "fx_rate_to_eur",
     "fx_rate_date",
@@ -50,6 +54,39 @@ def _optional_str(value: object) -> str | None:
     if _is_missing(value):
         return None
     return str(value)
+
+
+def _optional_project_tags(value: object) -> tuple[str, ...]:
+    if _is_missing(value):
+        return ()
+    raw_values: list[str] = []
+    if isinstance(value, list | tuple):
+        raw_values.extend(str(item) for item in value)
+    else:
+        text = str(value).strip()
+        if not text or text.lower() == "nan":
+            return ()
+        try:
+            payload = json.loads(text)
+            if isinstance(payload, list):
+                raw_values.extend(str(item) for item in payload)
+            else:
+                raw_values.append(text)
+        except json.JSONDecodeError:
+            raw_values.extend(part.strip() for part in text.split("|"))
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_values:
+        tag = raw.strip()
+        if not tag:
+            continue
+        marker = tag.casefold()
+        if marker in seen:
+            continue
+        seen.add(marker)
+        normalized.append(tag)
+    return tuple(normalized)
 
 
 def _optional_decimal(value: object) -> Decimal | None:
@@ -89,6 +126,13 @@ def write_staged_transactions(path: Path, transactions: list[Transaction]) -> St
             "category_confidence": tx.category_confidence,
             "category_source": tx.category_source,
             "category_rule_id": tx.category_rule_id,
+            "project": tx.project,
+            "project_tags": (
+                json.dumps(list(tx.project_tags), separators=(",", ":"), ensure_ascii=False)
+                if tx.project_tags
+                else None
+            ),
+            "project_source": tx.project_source,
             "account_label": tx.account_label,
             "fx_rate_to_eur": (str(tx.fx_rate_to_eur) if tx.fx_rate_to_eur is not None else None),
             "fx_rate_date": tx.fx_rate_date.isoformat() if tx.fx_rate_date is not None else None,
@@ -144,6 +188,9 @@ def read_staged_transactions(path: Path) -> list[Transaction]:
                 ),
                 category_source=_optional_str(row["category_source"]),
                 category_rule_id=_optional_str(row["category_rule_id"]),
+                project=_optional_str(row["project"]),
+                project_tags=_optional_project_tags(row["project_tags"]),
+                project_source=_optional_str(row["project_source"]),
                 account_label=_optional_str(row["account_label"]),
                 fx_rate_to_eur=_optional_decimal(row["fx_rate_to_eur"]),
                 fx_rate_date=_optional_date(row["fx_rate_date"]),

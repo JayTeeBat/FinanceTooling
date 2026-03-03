@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,6 +51,12 @@ def compute_transaction_id(transaction: Transaction) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _serialize_project_tags(tags: tuple[str, ...]) -> str | None:
+    if not tags:
+        return None
+    return json.dumps(list(tags), separators=(",", ":"), ensure_ascii=False)
+
+
 def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
     ingested_at = datetime.now(UTC)
     rows = [
@@ -68,6 +75,9 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "category_confidence": tx.category_confidence,
             "category_source": tx.category_source,
             "category_rule_id": tx.category_rule_id,
+            "project": tx.project,
+            "project_tags": _serialize_project_tags(tx.project_tags),
+            "project_source": tx.project_source,
             "bank": tx.bank,
             "account_label": tx.account_label,
             "source_file": str(tx.source_file),

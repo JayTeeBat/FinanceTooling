@@ -63,6 +63,11 @@ Use `--allow-load-warnings` only for deliberate recovery flows.
 Rows whose `category_source` is not `fallback` are skipped by default; override with
 `--allow-non-fallback-import`.
 
+Transaction-level corrections and project tags are configured in:
+
+- `config/transaction_overrides.yaml`
+- `config/project_overrides.yaml`
+
 Detailed human-in-the-loop guide and diagrams:
 
 - `docs/categorization_review_workflow.md`
@@ -146,6 +151,8 @@ export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
 export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"
 export FINANCE_PROJECT_RULES_PATH="/path/to/output/project_rules.yaml"
 export FINANCE_BUDGET_TARGETS_PATH="/path/to/output/budget_targets.yaml"
+export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/config/project_overrides.yaml"
+export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/config/transaction_overrides.yaml"
 
 uv run python -m finance_tooling update
 ```
@@ -171,6 +178,8 @@ set, the workflow expects:
 
 - `<FINANCE_PROCESSED_PATH>/category_rules.yaml`
 - `<FINANCE_PROCESSED_PATH>/category_overrides.yaml`
+- `config/project_overrides.yaml`
+- `config/transaction_overrides.yaml`
 
 The repository includes starter templates:
 
@@ -178,6 +187,8 @@ The repository includes starter templates:
 - `config/category_overrides.yaml`
 - `config/project_rules.yaml`
 - `config/budget_targets.yaml`
+- `config/project_overrides.yaml`
+- `config/transaction_overrides.yaml`
 
 Supported formats for all four config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
@@ -185,6 +196,11 @@ standard categorization rules.
 Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
 from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
 to `Unassigned` projects and no budget targets).
+Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
+from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
+to `Unassigned` projects and no budget targets).
+Project assignment precedence is:
+`transaction_overrides` > `project_overrides.overrides` > `project_overrides.rules`.
 
 HSBC ingestion is PDF-only. For each HSBC statement month, opening/closing balances
 extracted from the PDF are used to validate parsed transaction totals. Balance

@@ -355,6 +355,51 @@ def _rule_confidence(rule: CategoryRule) -> float:
     return 0.75
 
 
+def build_classification_diagnostics(transactions: list[Transaction]) -> ClassificationDiagnostics:
+    """Build summary diagnostics from already-classified transactions."""
+    category_source_counts = Counter[str]()
+    uncategorized_descriptions = Counter[str]()
+    rule_hit_counts = Counter[str]()
+
+    for tx in transactions:
+        source = (tx.category_source or "").strip() or "unknown"
+        category_source_counts[source] += 1
+        if tx.category_rule_id:
+            rule_hit_counts[tx.category_rule_id] += 1
+
+        is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
+            (tx.category_source or "").strip().lower() == "fallback"
+        )
+        if is_uncategorized:
+            normalized_description = normalize_description(tx.description) or "unknown"
+            uncategorized_descriptions[normalized_description] += 1
+
+    uncategorized_count = sum(uncategorized_descriptions.values())
+    categorized_count = len(transactions) - uncategorized_count
+    uncategorized_ratio = (uncategorized_count / len(transactions)) if transactions else 0.0
+    top_uncategorized = [
+        {"description": description, "count": count}
+        for description, count in sorted(
+            uncategorized_descriptions.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:10]
+    ]
+    top_rules = [
+        {"rule_id": rule_id, "count": count}
+        for rule_id, count in sorted(rule_hit_counts.items(), key=lambda item: (-item[1], item[0]))[
+            :10
+        ]
+    ]
+    return ClassificationDiagnostics(
+        categorized_count=categorized_count,
+        uncategorized_count=uncategorized_count,
+        uncategorized_ratio=uncategorized_ratio,
+        category_source_counts=dict(category_source_counts),
+        top_uncategorized_descriptions=top_uncategorized,
+        top_rules_by_hits=top_rules,
+    )
+
+
 def classify_transactions_with_diagnostics(
     transactions: list[Transaction],
     *,
@@ -363,9 +408,6 @@ def classify_transactions_with_diagnostics(
 ) -> tuple[list[Transaction], ClassificationDiagnostics]:
     """Classify transactions and return diagnostics for run summary."""
     classified: list[Transaction] = []
-    category_source_counts = Counter[str]()
-    uncategorized_descriptions = Counter[str]()
-    rule_hit_counts = Counter[str]()
 
     for tx in transactions:
         normalized = normalize_description(tx.description)
@@ -385,7 +427,6 @@ def classify_transactions_with_diagnostics(
                     category_rule_id=None,
                 )
             )
-            category_source_counts["override"] += 1
             continue
 
         matched_rule: CategoryRule | None = None
@@ -395,8 +436,6 @@ def classify_transactions_with_diagnostics(
                 break
 
         if matched_rule is None:
-            normalized_description = normalized or "unknown"
-            uncategorized_descriptions[normalized_description] += 1
             classified.append(
                 replace(
                     tx,
@@ -407,10 +446,8 @@ def classify_transactions_with_diagnostics(
                     category_rule_id=None,
                 )
             )
-            category_source_counts["fallback"] += 1
             continue
 
-        rule_hit_counts[matched_rule.rule_id] += 1
         classified.append(
             replace(
                 tx,
@@ -421,32 +458,7 @@ def classify_transactions_with_diagnostics(
                 category_rule_id=matched_rule.rule_id,
             )
         )
-        category_source_counts["rule"] += 1
-
-    uncategorized_count = sum(uncategorized_descriptions.values())
-    categorized_count = len(classified) - uncategorized_count
-    uncategorized_ratio = (uncategorized_count / len(classified)) if classified else 0.0
-    top_uncategorized = [
-        {"description": description, "count": count}
-        for description, count in sorted(
-            uncategorized_descriptions.items(),
-            key=lambda item: (-item[1], item[0]),
-        )[:10]
-    ]
-    top_rules = [
-        {"rule_id": rule_id, "count": count}
-        for rule_id, count in sorted(rule_hit_counts.items(), key=lambda item: (-item[1], item[0]))[
-            :10
-        ]
-    ]
-    diagnostics = ClassificationDiagnostics(
-        categorized_count=categorized_count,
-        uncategorized_count=uncategorized_count,
-        uncategorized_ratio=uncategorized_ratio,
-        category_source_counts=dict(category_source_counts),
-        top_uncategorized_descriptions=top_uncategorized,
-        top_rules_by_hits=top_rules,
-    )
+    diagnostics = build_classification_diagnostics(classified)
     return classified, diagnostics
 
 

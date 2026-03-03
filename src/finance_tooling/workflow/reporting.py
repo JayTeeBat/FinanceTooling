@@ -240,6 +240,8 @@ def persist_and_report(
         "category_overrides_path": str(settings.category_overrides_path),
         "project_rules_path": str(settings.project_rules_path),
         "budget_targets_path": str(settings.budget_targets_path),
+        "project_overrides_path": str(settings.project_overrides_path),
+        "transaction_overrides_path": str(settings.transaction_overrides_path),
         "fx_cache_path": str(settings.fx_cache_path),
         "warnings": warnings,
     }

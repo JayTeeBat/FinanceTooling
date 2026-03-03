@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal, cast
@@ -13,6 +13,7 @@ import pandas as pd
 import yaml
 
 from finance_tooling.classify import normalize_description
+from finance_tooling.models import Transaction
 
 MatchType = Literal["contains", "exact", "regex"]
 
@@ -31,6 +32,7 @@ class ProjectRule:
     banks: tuple[str, ...]
     account_labels: tuple[str, ...]
     categories: tuple[str, ...]
+    project_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class ProjectOverride:
     project: str
     bank: str | None
     account_label: str | None
+    project_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -98,6 +101,35 @@ def _normalize_lower(value: object) -> str | None:
     return normalized or None
 
 
+def _normalize_project_tags(
+    tags_value: object,
+    *,
+    legacy_project: object,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    if isinstance(tags_value, list):
+        values.extend(str(item).strip() for item in tags_value if str(item).strip())
+    elif isinstance(tags_value, str) and tags_value.strip():
+        text = tags_value.strip()
+        if "|" in text:
+            values.extend(part.strip() for part in text.split("|"))
+        else:
+            values.append(text)
+
+    if not values and isinstance(legacy_project, str) and legacy_project.strip():
+        values.append(legacy_project.strip())
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        marker = value.casefold()
+        if marker in seen:
+            continue
+        seen.add(marker)
+        normalized.append(value)
+    return tuple(normalized)
+
+
 def _parse_project_payload(payload: object) -> ProjectConfig:
     if not isinstance(payload, dict):
         raise ValueError("project config payload must be an object")
@@ -123,10 +155,13 @@ def _parse_project_payload(payload: object) -> ProjectConfig:
         if not isinstance(raw_rule, dict):
             continue
         rule = cast(dict[str, object], raw_rule)
-        project_raw = rule.get("project")
-        project = str(project_raw).strip() if isinstance(project_raw, str) else ""
-        if not project:
+        project_tags = _normalize_project_tags(
+            rule.get("project_tags"),
+            legacy_project=rule.get("project"),
+        )
+        if not project_tags:
             continue
+        project = project_tags[0]
         match_type_raw = rule.get("match_type", rule.get("match"))
         match_type = (
             str(match_type_raw).strip().lower()
@@ -158,6 +193,7 @@ def _parse_project_payload(payload: object) -> ProjectConfig:
                 ),
                 priority=_to_int(rule.get("priority"), default=0),
                 project=project,
+                project_tags=project_tags,
                 match_type=typed_match_type,
                 patterns=patterns,
                 expense_only=bool(rule.get("expense_only")),
@@ -187,14 +223,17 @@ def _parse_project_payload(payload: object) -> ProjectConfig:
             continue
         override = cast(dict[str, object], raw_override)
         fingerprint = normalize_description(str(override.get("fingerprint", "")))
-        project_raw = override.get("project")
-        project = str(project_raw).strip() if isinstance(project_raw, str) else ""
-        if not fingerprint or not project:
+        project_tags = _normalize_project_tags(
+            override.get("project_tags"),
+            legacy_project=override.get("project"),
+        )
+        if not fingerprint or not project_tags:
             continue
         parsed_overrides.append(
             ProjectOverride(
                 fingerprint=fingerprint,
-                project=project,
+                project=project_tags[0],
+                project_tags=project_tags,
                 bank=_normalize_upper(override.get("bank")),
                 account_label=_normalize_upper(override.get("account_label")),
             )
@@ -305,3 +344,69 @@ def assign_projects_to_dataframe(
 
     assigned["project"] = projects
     return assigned
+
+
+def assign_projects_to_transactions(
+    transactions: list[Transaction],
+    config: ProjectConfig,
+) -> list[Transaction]:
+    """Assign project tags to transactions with override-first precedence."""
+    projected: list[Transaction] = []
+    for tx in transactions:
+        normalized_description = normalize_description(tx.description)
+        bank = tx.bank.strip().upper() or "UNKNOWN"
+        account_label = (tx.account_label or "").strip().upper() or None
+        category = tx.category.strip().lower() if tx.category.strip() else "uncategorized"
+        amount_native = tx.amount_native
+
+        matched_project: str | None = None
+        matched_tags: tuple[str, ...] | None = None
+        matched_source: str | None = None
+
+        for override in config.overrides:
+            if override.fingerprint != normalized_description:
+                continue
+            if override.bank is not None and override.bank != bank:
+                continue
+            if override.account_label is not None and override.account_label != account_label:
+                continue
+            matched_project = override.project
+            matched_tags = override.project_tags or (override.project,)
+            matched_source = "project_override"
+            break
+
+        if matched_project is None:
+            for rule in config.rules:
+                if _rule_matches(
+                    rule,
+                    normalized_description=normalized_description,
+                    amount_native=amount_native,
+                    bank=bank,
+                    account_label=account_label,
+                    category=category,
+                ):
+                    matched_project = rule.project
+                    matched_tags = rule.project_tags or (rule.project,)
+                    matched_source = "project_rule"
+                    break
+
+        if matched_project is None:
+            projected.append(
+                replace(
+                    tx,
+                    project=tx.project,
+                    project_tags=tx.project_tags,
+                    project_source=tx.project_source or "project_fallback",
+                )
+            )
+            continue
+
+        projected.append(
+            replace(
+                tx,
+                project=matched_project,
+                project_tags=matched_tags or (matched_project,),
+                project_source=matched_source,
+            )
+        )
+    return projected

@@ -1,0 +1,19 @@
+version: 1
+
+# Transaction-level corrections. Supported selectors:
+# - transaction_id (exact)
+# - fingerprint (normalized description)
+# - booking_date (YYYY-MM-DD)
+# - amount_native
+# - currency
+# - bank
+# - account_label
+#
+# You can also group selectors under `match: { ... }`.
+# Assignment fields:
+# - category
+# - subcategory
+# - project
+# - project_tags
+
+overrides: []
