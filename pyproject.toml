@@ -18,6 +18,14 @@ dependencies = [
   "tqdm>=4.67.0",
 ]
 
+[project.scripts]
+ingest = "finance_tooling.cli_aliases:ingest"
+transform = "finance_tooling.cli_aliases:transform"
+update = "finance_tooling.cli_aliases:update"
+review-export = "finance_tooling.cli_aliases:review_export"
+review-import = "finance_tooling.cli_aliases:review_import"
+metrics-log-update = "finance_tooling.cli_aliases:metrics_log_update"
+
 [dependency-groups]
 dev = [
   "pre-commit>=4.0.0",
