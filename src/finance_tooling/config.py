@@ -154,27 +154,24 @@ def load_settings_from_env() -> Settings:
     ingest_text_cache_path = _resolve_path_from_env(INGEST_TEXT_CACHE_PATH_ENV) or (
         input_path.parent / "cache" / "ingest_text_cache.parquet"
     )
+    config_dir = input_path.parent / "config"
     category_rules_path = _resolve_path_from_env(CATEGORY_RULES_PATH_ENV) or (
-        processed_dir / "category_rules.yaml"
+        config_dir / "category_rules.yaml"
     )
     category_overrides_path = _resolve_path_from_env(CATEGORY_OVERRIDES_PATH_ENV) or (
-        processed_dir / "category_overrides.yaml"
+        config_dir / "category_overrides.yaml"
     )
-    project_rules_path = (
-        _resolve_path_from_env(PROJECT_RULES_PATH_ENV)
-        or Path("config/project_rules.yaml").resolve()
+    project_rules_path = _resolve_path_from_env(PROJECT_RULES_PATH_ENV) or (
+        config_dir / "project_rules.yaml"
     )
-    budget_targets_path = (
-        _resolve_path_from_env(BUDGET_TARGETS_PATH_ENV)
-        or Path("config/budget_targets.yaml").resolve()
+    budget_targets_path = _resolve_path_from_env(BUDGET_TARGETS_PATH_ENV) or (
+        config_dir / "budget_targets.yaml"
     )
-    project_overrides_path = (
-        _resolve_path_from_env(PROJECT_OVERRIDES_PATH_ENV)
-        or Path("config/project_overrides.yaml").resolve()
+    project_overrides_path = _resolve_path_from_env(PROJECT_OVERRIDES_PATH_ENV) or (
+        config_dir / "project_overrides.yaml"
     )
-    transaction_overrides_path = (
-        _resolve_path_from_env(TRANSACTION_OVERRIDES_PATH_ENV)
-        or Path("config/transaction_overrides.yaml").resolve()
+    transaction_overrides_path = _resolve_path_from_env(TRANSACTION_OVERRIDES_PATH_ENV) or (
+        config_dir / "transaction_overrides.yaml"
     )
 
     return Settings(

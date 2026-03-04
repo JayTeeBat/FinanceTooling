@@ -355,20 +355,32 @@ def _resolve_review_import_paths(
     settings_transaction_overrides = (
         getattr(settings, "transaction_overrides_path", None) if settings is not None else None
     )
-    resolved_overrides = (
-        overrides_path or settings_category_overrides or Path("config/category_overrides.yaml")
-    )
-    resolved_transaction_overrides = (
-        transaction_overrides_path
-        or settings_transaction_overrides
-        or Path("config/transaction_overrides.yaml")
-    )
+    review_config_dir: Path | None = None
     if review_path is not None:
+        review_config_dir = review_path.expanduser().resolve().parent.parent / "config"
+    resolved_overrides = overrides_path or settings_category_overrides
+    if resolved_overrides is None and review_config_dir is not None:
+        resolved_overrides = review_config_dir / "category_overrides.yaml"
+    resolved_transaction_overrides = transaction_overrides_path or settings_transaction_overrides
+    if resolved_transaction_overrides is None and review_config_dir is not None:
+        resolved_transaction_overrides = review_config_dir / "transaction_overrides.yaml"
+    if review_path is not None:
+        if resolved_overrides is None or resolved_transaction_overrides is None:
+            raise ValueError(
+                "Missing --overrides-path/--transaction-overrides-path; provide explicit "
+                "paths or configure .env with FINANCE_STATEMENTS_PATH and "
+                "FINANCE_PROCESSED_PATH."
+            )
         return review_path, resolved_overrides, resolved_transaction_overrides
     if settings is None:
         raise ValueError(
             "Missing --review-path; provide explicit path or configure .env "
             "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
+        )
+    if resolved_overrides is None or resolved_transaction_overrides is None:
+        raise ValueError(
+            "Unable to resolve override paths; provide --overrides-path and "
+            "--transaction-overrides-path explicitly."
         )
     return (
         settings.summary_json_path.parent / "fallback_category_review.csv",
