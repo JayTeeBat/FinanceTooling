@@ -177,6 +177,55 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     assert "Dry run: no override file was written." in stdio.out
 
 
+def test_review_import_infers_data_adjacent_paths_from_review_path(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    data_dir = tmp_path / "data"
+    processed_dir = data_dir / "processed"
+    processed_dir.mkdir(parents=True)
+    review_path = processed_dir / "fallback_category_review.csv"
+    review_path.write_text("", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def _import(**kwargs: object) -> ReviewImportResult:
+        captured.update(kwargs)
+        return ReviewImportResult(
+            rows_read=1,
+            overrides_upserted=1,
+            overrides_updated=0,
+            overrides_inserted=1,
+            rows_skipped=0,
+            rows_skipped_non_fallback=0,
+            rows_skipped_invalid=0,
+            backup_path=None,
+        )
+
+    monkeypatch.setattr(
+        "finance_tooling.__main__.load_settings_from_env",
+        lambda: (_ for _ in ()).throw(ValueError("missing settings")),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.__main__.load_override_store",
+        lambda path: (OverrideStore(entries=()), []),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.__main__.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
+    )
+    monkeypatch.setattr("finance_tooling.__main__.import_review_into_overrides", _import)
+
+    exit_code = main(["review-import", "--review-path", str(review_path), "--dry-run"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured["review_path"] == review_path
+    assert captured["overrides_path"] == data_dir / "config" / "category_overrides.yaml"
+    assert captured["transaction_overrides_path"] == (
+        data_dir / "config" / "transaction_overrides.yaml"
+    )
+    assert "Dry run: no override file was written." in stdio.out
+
+
 def test_review_import_aborts_on_override_load_warnings(monkeypatch, capsys) -> None:
     called = {"import_called": False}
 

@@ -65,13 +65,14 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.fx_cache_path == (processed_dir / "fx_rates_history.parquet").resolve()
-    assert settings.category_rules_path == (processed_dir / "category_rules.yaml").resolve()
-    assert settings.category_overrides_path == (processed_dir / "category_overrides.yaml").resolve()
-    assert settings.project_rules_path == (Path("config/project_rules.yaml").resolve())
-    assert settings.budget_targets_path == (Path("config/budget_targets.yaml").resolve())
-    assert settings.project_overrides_path == Path("config/project_overrides.yaml").resolve()
+    config_dir = raw_dir.parent / "config"
+    assert settings.category_rules_path == (config_dir / "category_rules.yaml").resolve()
+    assert settings.category_overrides_path == (config_dir / "category_overrides.yaml").resolve()
+    assert settings.project_rules_path == (config_dir / "project_rules.yaml").resolve()
+    assert settings.budget_targets_path == (config_dir / "budget_targets.yaml").resolve()
+    assert settings.project_overrides_path == (config_dir / "project_overrides.yaml").resolve()
     assert (
-        settings.transaction_overrides_path == Path("config/transaction_overrides.yaml").resolve()
+        settings.transaction_overrides_path == (config_dir / "transaction_overrides.yaml").resolve()
     )
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True

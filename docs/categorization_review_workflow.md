@@ -95,11 +95,15 @@ Default path resolution:
 - category overrides destination:
   - `--overrides-path` if provided
   - else `FINANCE_CATEGORY_OVERRIDES_PATH` from settings
-  - else `config/category_overrides.yaml`
+  - else `${FINANCE_STATEMENTS_PATH}/../config/category_overrides.yaml`
+  - else, when settings are unavailable but `--review-path` is provided:
+    `${REVIEW_PATH_PARENT}/../config/category_overrides.yaml`
 - transaction overrides destination:
   - `--transaction-overrides-path` if provided
   - else `FINANCE_TRANSACTION_OVERRIDES_PATH` from settings
-  - else `config/transaction_overrides.yaml`
+  - else `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
+  - else, when settings are unavailable but `--review-path` is provided:
+    `${REVIEW_PATH_PARENT}/../config/transaction_overrides.yaml`
 
 Default safety behavior:
 
@@ -117,10 +121,11 @@ uv run python -m finance_tooling transform
 
 ### 6. Optional: direct override editing outside CSV review
 
-Use `config/transaction_overrides.yaml` for direct one-off edits or bulk edits
-outside the review CSV.
+Use `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml` for direct
+one-off edits or bulk edits outside the review CSV.
 
-Use `config/project_overrides.yaml` for reusable project-tag automation:
+Use `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml` for reusable
+project-tag automation:
 
 - `rules`: reusable pattern-based tagging.
 - `overrides`: fingerprint-scoped tagging (override-first).

@@ -184,6 +184,31 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-04 - codex
+- Branch: `feature/config-migration-and-rule-review-workflow`
+- Completed:
+  - Migrated runtime default config resolution to data-adjacent paths under
+    `${FINANCE_STATEMENTS_PATH}/../config` for category/project/budget/override
+    configs in `src/finance_tooling/config.py`.
+  - Updated `review-import` path resolution to avoid repo-local `config/...`
+    fallback when settings are unavailable, inferring data-adjacent override
+    paths from `--review-path` when possible (`src/finance_tooling/__main__.py`).
+  - Added a dedicated human-in-the-loop category-rules governance guide at
+    `docs/category_rules_review_workflow.md` covering create/amend/delete flows
+    and explicit handling for previously rule-categorized impacted rows.
+  - Updated tests/docs for the new defaults and review process references.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Existing local data/config artifacts in working tree remain intentionally
+    uncommitted (`config/*.yaml` and backup files under local data workflow).
+- Next action:
+  - Move active runtime configs into `${FINANCE_STATEMENTS_PATH}/../config`,
+    run `update`, and confirm resolved config paths in `run_summary.json`.
+
+### 2026-03-04 - codex
 - Branch: `main`
 - Completed:
   - Fixed persistence merge behavior in `src/finance_tooling/store.py` so
@@ -234,28 +259,3 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Execute `review-export` -> manual edits -> `review-import` on the latest
     2026 corpus and validate resulting override files and categorized deltas.
-
-### 2026-03-03 - codex
-- Branch: `feature/offline-interactive-dashboard`
-- Completed:
-  - Implemented interactive self-contained dashboard rendering in
-    `src/finance_tooling/dashboard.py` with client-side date/category/project
-    filters, YoY spending view, and budget-vs-actual tables/charts.
-  - Added project assignment and budget modules
-    (`src/finance_tooling/projecting.py`, `src/finance_tooling/budgeting.py`)
-    with YAML/JSON loading, validation, and deterministic assignment logic.
-  - Extended settings/reporting contracts for project/budget config paths,
-    added starter configs (`config/project_rules.yaml`,
-    `config/budget_targets.yaml`), and added regression coverage for dashboard,
-    projecting, budgeting, and config/main defaults.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Dashboard is read-only in v1; no in-browser editing/export flow for budgets
-    or project assignments yet.
-- Next action:
-  - Run a full real-data `update` pipeline and validate dashboard UX/performance
-    on production-sized outputs.

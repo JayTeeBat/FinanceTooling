@@ -50,7 +50,7 @@ uv run python -m finance_tooling review-export \
 
 # edit fallback_category_review.csv (set category/subcategory)
 
-# defaults (review file from processed path, overrides from FINANCE_CATEGORY_OVERRIDES_PATH)
+# defaults (review file from processed path, overrides from env or data-adjacent config)
 uv run python -m finance_tooling review-import
 
 # safe preview before writing
@@ -59,7 +59,7 @@ uv run python -m finance_tooling review-import --dry-run
 # explicit paths
 uv run python -m finance_tooling review-import \
   --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
-  --overrides-path "config/category_overrides.yaml"
+  --overrides-path "$FINANCE_STATEMENTS_PATH/../config/category_overrides.yaml"
 ```
 
 Default upsert key is normalized `description` fingerprint + `bank`. Add
@@ -74,11 +74,12 @@ For `review-export`, output remains fallback-only by default; use
 
 Transaction-level corrections and project tags are configured in:
 
-- `config/transaction_overrides.yaml`
-- `config/project_overrides.yaml`
+- `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
+- `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml`
 
 Detailed human-in-the-loop guide and diagrams:
 
+- `docs/category_rules_review_workflow.md`
 - `docs/categorization_review_workflow.md`
 - `docs/diagrams/categorization_review_hitl_flow.puml`
 - `docs/diagrams/categorization_review_import_guardrails.puml`
@@ -156,12 +157,12 @@ export FINANCE_FX_AUTO_FETCH="true"
 export FINANCE_INGEST_WORKERS="1"
 export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
 export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet"
-export FINANCE_CATEGORY_RULES_PATH="/path/to/output/category_rules.yaml"
-export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/output/category_overrides.yaml"
-export FINANCE_PROJECT_RULES_PATH="/path/to/output/project_rules.yaml"
-export FINANCE_BUDGET_TARGETS_PATH="/path/to/output/budget_targets.yaml"
-export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/config/project_overrides.yaml"
-export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/config/transaction_overrides.yaml"
+export FINANCE_CATEGORY_RULES_PATH="/path/to/data/config/category_rules.yaml"
+export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/data/config/category_overrides.yaml"
+export FINANCE_PROJECT_RULES_PATH="/path/to/data/config/project_rules.yaml"
+export FINANCE_BUDGET_TARGETS_PATH="/path/to/data/config/budget_targets.yaml"
+export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/data/config/project_overrides.yaml"
+export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/data/config/transaction_overrides.yaml"
 
 uv run python -m finance_tooling update
 ```
@@ -185,10 +186,12 @@ and writes final artifacts.
 Categorization is deterministic and rules-first. When no categorization env vars are
 set, the workflow expects:
 
-- `<FINANCE_PROCESSED_PATH>/category_rules.yaml`
-- `<FINANCE_PROCESSED_PATH>/category_overrides.yaml`
-- `config/project_overrides.yaml`
-- `config/transaction_overrides.yaml`
+- `<FINANCE_STATEMENTS_PATH>/../config/category_rules.yaml`
+- `<FINANCE_STATEMENTS_PATH>/../config/category_overrides.yaml`
+- `<FINANCE_STATEMENTS_PATH>/../config/project_rules.yaml`
+- `<FINANCE_STATEMENTS_PATH>/../config/budget_targets.yaml`
+- `<FINANCE_STATEMENTS_PATH>/../config/project_overrides.yaml`
+- `<FINANCE_STATEMENTS_PATH>/../config/transaction_overrides.yaml`
 
 The repository includes starter templates:
 
@@ -199,7 +202,7 @@ The repository includes starter templates:
 - `config/project_overrides.yaml`
 - `config/transaction_overrides.yaml`
 
-Supported formats for all four config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
+Supported formats for all six config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
 standard categorization rules.
 Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
