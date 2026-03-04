@@ -1,4 +1,5 @@
 import importlib.util
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -46,3 +47,31 @@ def test_upsert_transactions_is_idempotent(tmp_path: Path) -> None:
     assert first.new_rows == 1
     assert second.new_rows == 0
     assert second.total_rows == 1
+
+
+def test_upsert_transactions_replaces_existing_row_and_preserves_ingested_at(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "sample.pdf"
+    source.write_text("x", encoding="utf-8")
+    parquet_path = tmp_path / "transactions_master.parquet"
+
+    initial = _sample_transaction(source)
+    first = upsert_transactions(parquet_path, [initial])
+    original_ingested_at = first.dataframe.loc[0, "ingested_at"]
+
+    updated = replace(
+        initial,
+        category="House",
+        subcategory="Cleaning",
+        category_confidence=1.0,
+        category_source="transaction_override",
+    )
+    second = upsert_transactions(parquet_path, [updated])
+
+    assert second.new_rows == 0
+    assert second.total_rows == 1
+    assert second.dataframe.loc[0, "category"] == "House"
+    assert second.dataframe.loc[0, "subcategory"] == "Cleaning"
+    assert second.dataframe.loc[0, "category_source"] == "transaction_override"
+    assert second.dataframe.loc[0, "ingested_at"] == original_ingested_at

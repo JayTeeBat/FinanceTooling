@@ -183,6 +183,29 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-04 - codex
+- Branch: `main`
+- Completed:
+  - Fixed persistence merge behavior in `src/finance_tooling/store.py` so
+    `transform` replaces existing rows by `transaction_id` instead of
+    append-only semantics.
+  - Preserved existing `ingested_at` values for matched transaction IDs while
+    still applying new enrichment fields (category/subcategory/project metadata).
+  - Added regression coverage in `tests/test_store.py` and `tests/test_pipeline.py`
+    to prove recategorization changes for existing rows are persisted into
+    normalized outputs.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - `review-import` counters still report key-level updates even when no semantic
+    value change occurs; this can remain confusing during manual review cycles.
+- Next action:
+  - Re-run `review-import` + `transform` on the latest edited review CSV and
+    confirm last-month rows now flip from `fallback` to override-driven categories.
+
 ### 2026-03-03 - codex
 - Branch: `chore/review-export-import-audit`
 - Completed:
@@ -236,29 +259,3 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Run a full real-data `update` pipeline and validate dashboard UX/performance
     on production-sized outputs.
-
-### 2026-03-03 - codex
-- Branch: `chore/review-export-import-audit`
-- Completed:
-  - Added transaction-level override support with YAML/JSON loading and apply
-    logic (`src/finance_tooling/transaction_overrides.py`) and default config
-    template (`config/transaction_overrides.yaml`).
-  - Added project-tag assignment support with rules + overrides
-    (`src/finance_tooling/projecting.py`) and default config template
-    (`config/project_overrides.yaml`).
-  - Integrated project/tag + transaction override application into enrichment,
-    added summary payload path fields, and persisted project fields in staged
-    and canonical outputs.
-  - Added tests for enrichment, projecting, and transaction overrides; updated
-    config/pipeline/staging tests for new settings and project fields.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - New transaction/project override configs are implemented but not yet run on
-    a full 2026 statement review pass.
-- Next action:
-  - Execute Jan-Feb 2026 categorization pass using new project tags and
-    transaction overrides, then inspect `run_summary.json` deltas.

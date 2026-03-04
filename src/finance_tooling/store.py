@@ -121,16 +121,37 @@ def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> 
 
     if existing.empty:
         merged = incoming.drop_duplicates(subset=["transaction_id"], keep="first")
+        new_rows = len(merged)
     elif incoming.empty:
         merged = existing
+        new_rows = 0
     else:
-        unseen = incoming[~incoming["transaction_id"].isin(existing["transaction_id"])]
-        merged = pd.concat([existing, unseen], ignore_index=True)
+        incoming_deduped = incoming.drop_duplicates(subset=["transaction_id"], keep="first").copy()
+        existing_ids = set(existing["transaction_id"])
+        incoming_ids = set(incoming_deduped["transaction_id"])
+        overlapping_ids = existing_ids & incoming_ids
+        new_rows = len(incoming_ids - existing_ids)
+
+        if overlapping_ids:
+            existing_ingested_at = (
+                existing.loc[
+                    existing["transaction_id"].isin(overlapping_ids),
+                    ["transaction_id", "ingested_at"],
+                ]
+                .drop_duplicates(subset=["transaction_id"], keep="first")
+                .set_index("transaction_id")["ingested_at"]
+            )
+            mask = incoming_deduped["transaction_id"].isin(overlapping_ids)
+            incoming_deduped.loc[mask, "ingested_at"] = incoming_deduped.loc[
+                mask, "transaction_id"
+            ].map(existing_ingested_at)
+
+        retained_existing = existing[~existing["transaction_id"].isin(incoming_ids)]
+        merged = pd.concat([retained_existing, incoming_deduped], ignore_index=True)
 
     merged = merged.sort_values(by=["booking_date", "transaction_id"]).reset_index(drop=True)
     _atomic_write_parquet(merged, parquet_path)
 
-    new_rows = 0 if incoming.empty else len(merged) - len(existing)
     return UpsertResult(
         parquet_path=parquet_path,
         dataframe=merged,
