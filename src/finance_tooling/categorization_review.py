@@ -208,6 +208,12 @@ def export_fallback_review_rows(
         review_rows[EXISTING_PROJECT_TAGS_COLUMN] = None
     review_rows[PROJECT_TAGS_COLUMN] = None
     review_rows[OVERRIDE_LEVEL_COLUMN] = None
+    if "project_source" in review_rows.columns:
+        columns = review_rows.columns.tolist()
+        columns.remove(OVERRIDE_LEVEL_COLUMN)
+        project_source_index = columns.index("project_source")
+        columns.insert(project_source_index + 1, OVERRIDE_LEVEL_COLUMN)
+        review_rows = review_rows.loc[:, columns]
     _write_table(review_output_path, review_rows)
     return len(review_rows)
 
