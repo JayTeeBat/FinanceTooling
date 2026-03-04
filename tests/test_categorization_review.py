@@ -106,6 +106,35 @@ def test_export_fallback_review_rows_accepts_whitespace_and_case_variants(tmp_pa
     assert exported_df.loc[0, "description"] == "UNKNOWN MERCHANT 999"
 
 
+def test_export_fallback_review_rows_places_override_level_after_project_source(
+    tmp_path: Path,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN MERCHANT 123",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+                "project_source": "project_fallback",
+            }
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_fallback_review_rows(normalized_path, output_path)
+
+    assert exported == 1
+    exported_df = pd.read_csv(output_path)
+    columns = exported_df.columns.tolist()
+    assert columns.index("override_level") == columns.index("project_source") + 1
+
+
 def test_export_fallback_review_rows_include_categorized_option_includes_non_fallback(
     tmp_path: Path,
 ) -> None:
