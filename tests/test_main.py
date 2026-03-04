@@ -53,11 +53,21 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
     settings = SimpleNamespace(summary_json_path=processed_dir / "run_summary.json")
-    captured: dict[str, Path] = {}
+    captured: dict[str, Path | bool | str | None] = {}
 
-    def _export(normalized_path: Path, output_path: Path) -> int:
+    def _export(
+        normalized_path: Path,
+        output_path: Path,
+        *,
+        include_categorized: bool = False,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> int:
         captured["normalized_path"] = normalized_path
         captured["output_path"] = output_path
+        captured["include_categorized"] = include_categorized
+        captured["start_date"] = start_date
+        captured["end_date"] = end_date
         return 4
 
     monkeypatch.setattr("finance_tooling.__main__.load_settings_from_env", lambda: settings)
@@ -69,7 +79,55 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     assert exit_code == 0
     assert captured["normalized_path"] == processed_dir / "transactions_normalized.csv"
     assert captured["output_path"] == processed_dir / "fallback_category_review.csv"
+    assert captured["include_categorized"] is False
+    assert captured["start_date"] is None
+    assert captured["end_date"] is None
     assert "Exported 4 fallback review rows" in stdio.out
+
+
+def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None:
+    captured: dict[str, Path | bool | str | None] = {}
+
+    def _export(
+        normalized_path: Path,
+        output_path: Path,
+        *,
+        include_categorized: bool = False,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> int:
+        captured["normalized_path"] = normalized_path
+        captured["output_path"] = output_path
+        captured["include_categorized"] = include_categorized
+        captured["start_date"] = start_date
+        captured["end_date"] = end_date
+        return 1
+
+    monkeypatch.setattr("finance_tooling.__main__.export_fallback_review_rows", _export)
+
+    exit_code = main(
+        [
+            "review-export",
+            "--normalized-path",
+            "transactions_normalized.csv",
+            "--output-path",
+            "fallback_category_review.csv",
+            "--include-categorized",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-01-31",
+        ]
+    )
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured["normalized_path"] == Path("transactions_normalized.csv")
+    assert captured["output_path"] == Path("fallback_category_review.csv")
+    assert captured["include_categorized"] is True
+    assert captured["start_date"] == "2026-01-01"
+    assert captured["end_date"] == "2026-01-31"
+    assert "Exported 1 fallback review rows" in stdio.out
 
 
 def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -205,8 +263,15 @@ def test_review_import_allows_override_load_warnings_with_flag(monkeypatch, caps
 
 
 def test_review_export_returns_clean_error_without_traceback(monkeypatch, capsys) -> None:
-    def _export(normalized_path: Path, output_path: Path) -> int:
-        del normalized_path, output_path
+    def _export(
+        normalized_path: Path,
+        output_path: Path,
+        *,
+        include_categorized: bool = False,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> int:
+        del normalized_path, output_path, include_categorized, start_date, end_date
         raise ValueError("boom")
 
     monkeypatch.setattr("finance_tooling.__main__.export_fallback_review_rows", _export)

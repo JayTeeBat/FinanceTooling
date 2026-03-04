@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from finance_tooling.categorization_review import (
     export_fallback_review_rows,
@@ -103,6 +104,145 @@ def test_export_fallback_review_rows_accepts_whitespace_and_case_variants(tmp_pa
     assert exported == 1
     exported_df = pd.read_csv(output_path)
     assert exported_df.loc[0, "description"] == "UNKNOWN MERCHANT 999"
+
+
+def test_export_fallback_review_rows_include_categorized_option_includes_non_fallback(
+    tmp_path: Path,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN MERCHANT 123",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+            {
+                "transaction_id": "tx_2",
+                "booking_date": "2026-01-02",
+                "description": "CARD UBER",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Transport",
+                "subcategory": "Mobility",
+                "category_source": "rule",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_fallback_review_rows(
+        normalized_path,
+        output_path,
+        include_categorized=True,
+    )
+
+    assert exported == 2
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == ["tx_1", "tx_2"]
+
+
+def test_export_fallback_review_rows_booking_date_filters_are_inclusive(tmp_path: Path) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_early",
+                "booking_date": "2025-12-31",
+                "description": "UNKNOWN EARLY",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+            {
+                "transaction_id": "tx_start",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN START",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+            {
+                "transaction_id": "tx_end",
+                "booking_date": "2026-01-02",
+                "description": "UNKNOWN END",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+            {
+                "transaction_id": "tx_late",
+                "booking_date": "2026-01-03",
+                "description": "UNKNOWN LATE",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_fallback_review_rows(
+        normalized_path,
+        output_path,
+        start_date="2026-01-01",
+        end_date="2026-01-02",
+    )
+
+    assert exported == 2
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == ["tx_start", "tx_end"]
+
+
+@pytest.mark.parametrize(
+    ("start_date", "end_date"),
+    [
+        ("bad-date", None),
+        (None, "bad-date"),
+    ],
+)
+def test_export_fallback_review_rows_invalid_date_filters_raise_value_error(
+    tmp_path: Path,
+    start_date: str | None,
+    end_date: str | None,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN MERCHANT 123",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            }
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    with pytest.raises(ValueError):
+        export_fallback_review_rows(
+            normalized_path,
+            output_path,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
 
 def test_import_review_into_overrides_upserts_default_scope(tmp_path: Path) -> None:

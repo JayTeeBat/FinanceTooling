@@ -86,6 +86,23 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Destination review file (.csv or .json).",
     )
+    review_export.add_argument(
+        "--include-categorized",
+        action="store_true",
+        help="Include already-categorized rows in addition to fallback rows.",
+    )
+    review_export.add_argument(
+        "--start-date",
+        type=str,
+        default=None,
+        help="Optional inclusive lower booking_date bound (YYYY-MM-DD).",
+    )
+    review_export.add_argument(
+        "--end-date",
+        type=str,
+        default=None,
+        help="Optional inclusive upper booking_date bound (YYYY-MM-DD).",
+    )
 
     review_import = subparsers.add_parser(
         "review-import",
@@ -392,7 +409,13 @@ def main(argv: list[str] | None = None) -> int:
                 args.normalized_path,
                 args.output_path,
             )
-            exported = export_fallback_review_rows(normalized_path, output_path)
+            exported = export_fallback_review_rows(
+                normalized_path,
+                output_path,
+                include_categorized=bool(args.include_categorized),
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
         except (FileNotFoundError, RuntimeError, ValueError) as exc:
             print(f"Review export error: {exc}")
             return 1

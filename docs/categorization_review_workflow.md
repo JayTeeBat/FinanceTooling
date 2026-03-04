@@ -40,6 +40,21 @@ Default input/output paths when flags are omitted:
 - normalized input: `${FINANCE_PROCESSED_PATH}/transactions_normalized.csv`
 - review output: `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`
 
+Default export behavior is fallback-only. Optional filters:
+
+- `--include-categorized`: include non-fallback rows in the review export.
+- `--start-date YYYY-MM-DD`: inclusive lower `booking_date` bound.
+- `--end-date YYYY-MM-DD`: inclusive upper `booking_date` bound.
+
+Example scoped export:
+
+```bash
+uv run python -m finance_tooling review-export \
+  --include-categorized \
+  --start-date "2026-01-01" \
+  --end-date "2026-01-31"
+```
+
 ### 2. Analyst review
 
 Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`:

@@ -37,6 +37,12 @@ Manual categorization review roundtrip:
 # defaults (requires FINANCE_STATEMENTS_PATH + FINANCE_PROCESSED_PATH in .env)
 uv run python -m finance_tooling review-export
 
+# include categorized rows and filter by booking_date range
+uv run python -m finance_tooling review-export \
+  --include-categorized \
+  --start-date "2026-01-01" \
+  --end-date "2026-03-31"
+
 # explicit paths
 uv run python -m finance_tooling review-export \
   --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
@@ -62,6 +68,9 @@ By default, `review-import` aborts when existing override-load warnings are pres
 Use `--allow-load-warnings` only for deliberate recovery flows.
 Rows whose `category_source` is not `fallback` are skipped by default; override with
 `--allow-non-fallback-import`.
+For `review-export`, output remains fallback-only by default; use
+`--include-categorized` to include already-categorized rows. Optional
+`--start-date` and `--end-date` apply inclusive `booking_date` filters.
 
 Transaction-level corrections and project tags are configured in:
 
