@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -19,7 +19,7 @@ from finance_tooling.pipeline import (
     run_update,
     run_workflow,
 )
-from finance_tooling.store import UpsertResult
+from finance_tooling.store import UpsertResult, compute_transaction_id, upsert_transactions
 from finance_tooling.workflow.staging import write_staged_transactions
 
 
@@ -465,6 +465,57 @@ def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_
     assert settings.completeness_json_path.exists()
     assert settings.export_csv_path.exists()
     assert settings.export_json_path.exists()
+
+
+def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    source_file = input_dir / "statement_2024.pdf"
+    source_file.write_text("fake", encoding="utf-8")
+    base_settings = _settings(input_dir)
+    settings = replace(
+        base_settings,
+        project_overrides_path=(tmp_path / "project_overrides.yaml"),
+        transaction_overrides_path=(tmp_path / "transaction_overrides.yaml"),
+    )
+    settings.project_overrides_path.write_text(
+        "version: 1\nrules: []\noverrides: []\n",
+        encoding="utf-8",
+    )
+
+    staged_transaction = Transaction(
+        booking_date=date(2024, 5, 6),
+        description="Salary",
+        amount_native=Decimal("100.00"),
+        currency="EUR",
+        source_file=source_file,
+        bank="DummyBank",
+        parser="dummy",
+        category_source="fallback",
+    )
+    tx_id = compute_transaction_id(staged_transaction)
+    settings.transaction_overrides_path.write_text(
+        (
+            "version: 1\n"
+            "overrides:\n"
+            f"- transaction_id: {tx_id}\n"
+            "  category: Work\n"
+            "  subcategory: Salary\n"
+        ),
+        encoding="utf-8",
+    )
+
+    upsert_transactions(settings.master_parquet_path, [staged_transaction])
+    write_staged_transactions(settings.staged_transactions_path, [staged_transaction])
+
+    run_transform(settings)
+
+    dataframe = pd.read_csv(settings.export_csv_path)
+    row = dataframe.loc[dataframe["transaction_id"] == tx_id].iloc[0]
+    assert row["category"] == "Work"
+    assert row["subcategory"] == "Salary"
+    assert row["category_source"] == "transaction_override"
 
 
 def test_run_update_rejects_conflicting_stage_flags(tmp_path: Path) -> None:
