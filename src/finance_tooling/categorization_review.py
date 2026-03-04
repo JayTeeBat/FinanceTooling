@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -150,7 +150,23 @@ def _is_fallback_category_source(value: object) -> bool:
     return normalized.lower() == "fallback"
 
 
-def export_fallback_review_rows(normalized_path: Path, review_output_path: Path) -> int:
+def _parse_filter_date(value: str | None, *, label: str) -> date | None:
+    if value is None:
+        return None
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        raise ValueError(f"Invalid {label}: {value}")
+    return parsed.date()
+
+
+def export_fallback_review_rows(
+    normalized_path: Path,
+    review_output_path: Path,
+    *,
+    include_categorized: bool = False,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> int:
     """Export fallback-classified rows for manual review."""
     dataframe = _read_table(normalized_path)
     missing_columns = [
@@ -160,17 +176,40 @@ def export_fallback_review_rows(normalized_path: Path, review_output_path: Path)
         joined = ", ".join(missing_columns)
         raise ValueError(f"Input table missing required columns: {joined}")
 
-    fallback_rows = dataframe.loc[
-        dataframe["category_source"].astype(str).str.strip().str.lower() == "fallback"
-    ].copy()
-    if PROJECT_TAGS_COLUMN in fallback_rows.columns:
-        fallback_rows[EXISTING_PROJECT_TAGS_COLUMN] = fallback_rows[PROJECT_TAGS_COLUMN]
+    start_date_value = _parse_filter_date(start_date, label="start_date")
+    end_date_value = _parse_filter_date(end_date, label="end_date")
+    if (
+        start_date_value is not None
+        and end_date_value is not None
+        and start_date_value > end_date_value
+    ):
+        raise ValueError("start_date must be <= end_date")
+
+    filtered_rows = dataframe
+    if not include_categorized:
+        filtered_rows = filtered_rows.loc[
+            filtered_rows["category_source"].astype(str).str.strip().str.lower() == "fallback"
+        ]
+
+    if start_date_value is not None or end_date_value is not None:
+        if "booking_date" not in filtered_rows.columns:
+            raise ValueError("Input table missing required columns: booking_date")
+        booking_dates = pd.to_datetime(filtered_rows["booking_date"], errors="coerce")
+        if start_date_value is not None:
+            filtered_rows = filtered_rows.loc[booking_dates >= pd.Timestamp(start_date_value)]
+            booking_dates = booking_dates.loc[filtered_rows.index]
+        if end_date_value is not None:
+            filtered_rows = filtered_rows.loc[booking_dates <= pd.Timestamp(end_date_value)]
+
+    review_rows = filtered_rows.copy()
+    if PROJECT_TAGS_COLUMN in review_rows.columns:
+        review_rows[EXISTING_PROJECT_TAGS_COLUMN] = review_rows[PROJECT_TAGS_COLUMN]
     else:
-        fallback_rows[EXISTING_PROJECT_TAGS_COLUMN] = None
-    fallback_rows[PROJECT_TAGS_COLUMN] = None
-    fallback_rows[OVERRIDE_LEVEL_COLUMN] = None
-    _write_table(review_output_path, fallback_rows)
-    return len(fallback_rows)
+        review_rows[EXISTING_PROJECT_TAGS_COLUMN] = None
+    review_rows[PROJECT_TAGS_COLUMN] = None
+    review_rows[OVERRIDE_LEVEL_COLUMN] = None
+    _write_table(review_output_path, review_rows)
+    return len(review_rows)
 
 
 def _parse_category_override_row(
