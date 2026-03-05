@@ -25,13 +25,11 @@ categorization.
 
 ### 1) Ingest (parse and stage)
 
-- What it does:
-  - scans statements under `FINANCE_STATEMENTS_PATH`
-  - parses and normalizes raw transaction records
-  - writes staged data to
-    `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`
-  - writes ingest diagnostics to
-    `${FINANCE_PROCESSED_PATH}/ingest_summary.json`
+What it does:
+- Scans statements under `FINANCE_STATEMENTS_PATH`.
+- Parses and normalizes raw transaction records.
+- Writes staged data to `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`.
+- Writes ingest diagnostics to `${FINANCE_PROCESSED_PATH}/ingest_summary.json`.
 
 ```bash
 uv run ingest
@@ -60,10 +58,8 @@ uv run review-import
 
 Detailed guides:
 
-- Transaction review import/export workflow:
-  - `docs/categorization_review_workflow.md`
-- Category rule creation/amend/delete workflow:
-  - `docs/category_rules_review_workflow.md`
+- Transaction review import/export workflow: `docs/categorization_review_workflow.md`
+- Category rule create/amend/delete workflow: `docs/category_rules_review_workflow.md`
 
 ### 3) Transform (apply rules/overrides and build final outputs)
 
@@ -71,17 +67,16 @@ Detailed guides:
 uv run transform
 ```
 
-- What it does:
-  - reads staged data
-  - applies category rules, category overrides, project rules, and transaction
-    overrides
-  - writes canonical outputs (`transactions_master.parquet`,
-    `transactions_normalized.csv/json`, `run_summary.json`, dashboard)
+What it does:
+- Reads staged data.
+- Applies category rules, category overrides, project rules, and transaction overrides.
+- Writes canonical outputs (`transactions_master.parquet`,
+  `transactions_normalized.csv/json`, `run_summary.json`, dashboard).
 
 ### 4) Dashboard
 
-- Dashboard output:
-  - `${FINANCE_PROCESSED_PATH}/finance_dashboard.html`
+Dashboard output:
+- `${FINANCE_PROCESSED_PATH}/finance_dashboard.html`
 - Open it in a browser after `transform` or `update`.
 
 ### Single-command path
@@ -96,6 +91,7 @@ This runs `ingest` then `transform` end-to-end.
 
 ### Review command examples
 
+```bash
 uv run review-export \
   --include-categorized \
   --start-date "2026-01-01" \
@@ -183,6 +179,9 @@ FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
 uv run python -m finance_tooling.perf_check
 ```
 
+No short alias is currently defined for `perf_check`; module-style invocation is
+expected here.
+
 The run writes standard artifacts plus `performance_summary.json` under the
 isolated `FINANCE_PROCESSED_PATH`, including total runtime and per-stage timings
 (`ingest`, `hsbc_merge`, `enrichment`, `reporting`).
@@ -192,7 +191,7 @@ Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
 `<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet` (or override path via
 `FINANCE_INGEST_TEXT_CACHE_PATH`) and speed up repeated runs.
 
-## Statement Workflow
+## Statement Workflow and Configuration
 
 The workflow reads environment variables from `.env` in the repository root (if present),
 and falls back to process environment variables.
@@ -228,21 +227,9 @@ export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/data/config/transaction_over
 uv run update
 ```
 
-`FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required.
-Per-file output env vars remain optional; when omitted, artifacts are written under
+`FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required. Per-file
+output env vars remain optional; when omitted, artifacts are written under
 `FINANCE_PROCESSED_PATH`.
-
-The `update` workflow recursively scans statement PDFs, uses bank-specific parsers
-(LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies
-transactions, auto-fetches historical daily ECB FX rates and applies conversion
-using transaction booking dates (with previous business-day fallback), upserts into
-a canonical parquet store, and generates dashboard + exports.
-
-`ingest` writes `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet` and
-`${FINANCE_PROCESSED_PATH}/ingest_summary.json` without running enrichment or
-final reporting outputs. `transform` reads staged parquet input (defaulting to
-`FINANCE_STAGED_TRANSACTIONS_PATH` or `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`)
-and writes final artifacts.
 
 Categorization is deterministic and rules-first. When no categorization env vars are
 set, the workflow expects:
