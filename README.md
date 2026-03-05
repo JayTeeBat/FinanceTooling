@@ -15,49 +15,103 @@ bank statements and expanding toward categorization, reconciliation, and reporti
 
 ```bash
 uv sync --all-groups
-uv run python -m finance_tooling update
+uv run update
 ```
 
-Stage-oriented workflow commands:
+## Workflow Overview (Newcomer)
+
+Use this sequence when processing new statements and optionally refining
+categorization.
+
+### 1) Ingest (parse and stage)
+
+What it does:
+- Scans statements under `FINANCE_STATEMENTS_PATH`.
+- Parses and normalizes raw transaction records.
+- Writes staged data to `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`.
+- Writes ingest diagnostics to `${FINANCE_PROCESSED_PATH}/ingest_summary.json`.
 
 ```bash
-# ingest only -> writes staged parquet + ingest_summary.json
-uv run python -m finance_tooling ingest
-
-# transform only -> consumes staged parquet and writes final artifacts
-uv run python -m finance_tooling transform
-
-# combined run (default full workflow)
-uv run python -m finance_tooling update
+uv run ingest
 ```
 
-Manual categorization review roundtrip:
+### 2) Optional review (human-in-the-loop categorization)
+
+- Export review rows:
 
 ```bash
-# defaults (requires FINANCE_STATEMENTS_PATH + FINANCE_PROCESSED_PATH in .env)
-uv run python -m finance_tooling review-export
+uv run review-export
+```
 
-# include categorized rows and filter by booking_date range
-uv run python -m finance_tooling review-export \
+- Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`.
+- Dry-run import:
+
+```bash
+uv run review-import --dry-run
+```
+
+- Apply reviewed changes:
+
+```bash
+uv run review-import
+```
+
+Detailed guides:
+
+- Transaction review import/export workflow: `docs/categorization_review_workflow.md`
+- Category rule create/amend/delete workflow: `docs/category_rules_review_workflow.md`
+
+### 3) Transform (apply rules/overrides and build final outputs)
+
+```bash
+uv run transform
+```
+
+What it does:
+- Reads staged data.
+- Applies category rules, category overrides, project rules, and transaction overrides.
+- Writes canonical outputs (`transactions_master.parquet`,
+  `transactions_normalized.csv/json`, `run_summary.json`, dashboard).
+
+### 4) Dashboard
+
+Dashboard output:
+- `${FINANCE_PROCESSED_PATH}/finance_dashboard.html`
+- Open it in a browser after `transform` or `update`.
+
+### Single-command path
+
+If you do not need a manual review stop, use:
+
+```bash
+uv run update
+```
+
+This runs `ingest` then `transform` end-to-end.
+
+### Review command examples
+
+```bash
+uv run review-export \
   --include-categorized \
   --start-date "2026-01-01" \
   --end-date "2026-03-31"
 
 # explicit paths
-uv run python -m finance_tooling review-export \
+uv run review-export \
   --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
   --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv"
 
 # edit fallback_category_review.csv (set category/subcategory)
 
 # defaults (review file from processed path, overrides from env or data-adjacent config)
-uv run python -m finance_tooling review-import
+uv run review-import
 
 # safe preview before writing
-uv run python -m finance_tooling review-import --dry-run
+uv run review-import --dry-run
 
 # explicit paths
-uv run python -m finance_tooling review-import \
+uv run review-import \
   --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
   --overrides-path "$FINANCE_STATEMENTS_PATH/../config/category_overrides.yaml"
 ```
@@ -77,7 +131,7 @@ Transaction-level corrections and project tags are configured in:
 - `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
 - `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml`
 
-Detailed human-in-the-loop guide and diagrams:
+Related docs and diagrams:
 
 - `docs/category_rules_review_workflow.md`
 - `docs/categorization_review_workflow.md`
@@ -87,7 +141,7 @@ Detailed human-in-the-loop guide and diagrams:
 Commit-to-commit metrics log update:
 
 ```bash
-uv run python -m finance_tooling metrics-log-update \
+uv run metrics-log-update \
   --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" \
   --log-path "docs/metrics_commit_log.csv" \
   --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"
@@ -119,7 +173,7 @@ FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
 FINANCE_FX_AUTO_FETCH=false \
 FINANCE_INGEST_WORKERS=4 \
 FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
-uv run python -m finance_tooling.perf_check
+uv run perf-check
 ```
 
 The run writes standard artifacts plus `performance_summary.json` under the
@@ -131,7 +185,7 @@ Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
 `<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet` (or override path via
 `FINANCE_INGEST_TEXT_CACHE_PATH`) and speed up repeated runs.
 
-## Statement Workflow
+## Statement Workflow and Configuration
 
 The workflow reads environment variables from `.env` in the repository root (if present),
 and falls back to process environment variables.
@@ -164,24 +218,12 @@ export FINANCE_BUDGET_TARGETS_PATH="/path/to/data/config/budget_targets.yaml"
 export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/data/config/project_overrides.yaml"
 export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/data/config/transaction_overrides.yaml"
 
-uv run python -m finance_tooling update
+uv run update
 ```
 
-`FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required.
-Per-file output env vars remain optional; when omitted, artifacts are written under
+`FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required. Per-file
+output env vars remain optional; when omitted, artifacts are written under
 `FINANCE_PROCESSED_PATH`.
-
-The `update` workflow recursively scans statement PDFs, uses bank-specific parsers
-(LaBanquePostale, HSBC, Boursobank, Revolut + generic fallback), classifies
-transactions, auto-fetches historical daily ECB FX rates and applies conversion
-using transaction booking dates (with previous business-day fallback), upserts into
-a canonical parquet store, and generates dashboard + exports.
-
-`ingest` writes `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet` and
-`${FINANCE_PROCESSED_PATH}/ingest_summary.json` without running enrichment or
-final reporting outputs. `transform` reads staged parquet input (defaulting to
-`FINANCE_STAGED_TRANSACTIONS_PATH` or `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`)
-and writes final artifacts.
 
 Categorization is deterministic and rules-first. When no categorization env vars are
 set, the workflow expects:
@@ -205,9 +247,6 @@ The repository includes starter templates:
 Supported formats for all six config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
 standard categorization rules.
-Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
-from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
-to `Unassigned` projects and no budget targets).
 Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
 from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
 to `Unassigned` projects and no budget targets).

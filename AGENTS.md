@@ -57,6 +57,9 @@ categorization, and reporting.
 - Keep pull requests focused and small enough to review quickly.
 - Do not rewrite history on shared branches.
 - Do not remove or rewrite legacy scripts unless a migration plan is included.
+- For every work package that changes commands, workflow behavior, defaults, or
+  user-facing setup/run steps, update `README.md` in the same package before
+  opening a PR.
 
 ## Metrics Log Protocol
 
@@ -66,7 +69,7 @@ categorization, and reporting.
   percentage breakdown for categorization performance.
 - After any commit that changes pipeline behavior or categorization data, update
   the metrics log using the latest `run_summary.json`:
-  - `uv run python -m finance_tooling metrics-log-update --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`
+  - `uv run metrics-log-update --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`
 - If the log update is done after committing code, include it in a follow-up
   commit (or amend before push).
 - Keep metrics high-level and stable across runs:

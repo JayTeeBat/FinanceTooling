@@ -45,7 +45,7 @@ cp "${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml" \
 
 # One deterministic ingest pass reused by both transforms.
 FINANCE_PROCESSED_PATH="${BASE_DIR}" \
-uv run python -m finance_tooling ingest
+uv run ingest
 
 cp "${BASE_DIR}/staged_transactions.parquet" "${CAND_DIR}/staged_transactions.parquet"
 ```
@@ -56,7 +56,7 @@ Baseline transform:
 FINANCE_PROCESSED_PATH="${BASE_DIR}" \
 FINANCE_STAGED_TRANSACTIONS_PATH="${BASE_DIR}/staged_transactions.parquet" \
 FINANCE_CATEGORY_RULES_PATH="${RUN_ROOT}/category_rules.baseline.yaml" \
-uv run python -m finance_tooling transform
+uv run transform
 ```
 
 ## 2) Rule Change Authoring
@@ -88,20 +88,20 @@ Run candidate transform against the same staged data.
 FINANCE_PROCESSED_PATH="${CAND_DIR}" \
 FINANCE_STAGED_TRANSACTIONS_PATH="${CAND_DIR}/staged_transactions.parquet" \
 FINANCE_CATEGORY_RULES_PATH="${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml" \
-uv run python -m finance_tooling transform
+uv run transform
 ```
 
 Export comparable month-scoped review files (include categorized rows).
 
 ```bash
-uv run python -m finance_tooling review-export \
+uv run review-export \
   --normalized-path "${BASE_DIR}/transactions_normalized.csv" \
   --output-path "${RUN_ROOT}/baseline_review.csv" \
   --include-categorized \
   --start-date "${MONTH_START}" \
   --end-date "${MONTH_END}"
 
-uv run python -m finance_tooling review-export \
+uv run review-export \
   --normalized-path "${CAND_DIR}/transactions_normalized.csv" \
   --output-path "${RUN_ROOT}/candidate_review.csv" \
   --include-categorized \
@@ -112,7 +112,7 @@ uv run python -m finance_tooling review-export \
 Optional full rerun command for sanity:
 
 ```bash
-FINANCE_PROCESSED_PATH="${CAND_DIR}" uv run python -m finance_tooling update
+FINANCE_PROCESSED_PATH="${CAND_DIR}" uv run update
 ```
 
 ## 4) Decisioning (Impacted Previously Rule-Categorized Rows)
@@ -139,7 +139,7 @@ create/amend/delete edits, choose one explicit action:
 If using review import for non-fallback rows:
 
 ```bash
-uv run python -m finance_tooling review-import \
+uv run review-import \
   --review-path "${RUN_ROOT}/candidate_review.csv" \
   --allow-non-fallback-import \
   --dry-run
@@ -153,7 +153,7 @@ After decisioning approval:
 2. Import approved override rows if needed.
 
 ```bash
-uv run python -m finance_tooling review-import \
+uv run review-import \
   --review-path "${RUN_ROOT}/candidate_review.csv" \
   --allow-non-fallback-import
 ```
@@ -161,13 +161,13 @@ uv run python -m finance_tooling review-import \
 3. Re-run canonical pipeline:
 
 ```bash
-uv run python -m finance_tooling transform
+uv run transform
 ```
 
 Or full refresh:
 
 ```bash
-uv run python -m finance_tooling update
+uv run update
 ```
 
 ## 6) Verify
@@ -194,7 +194,7 @@ cp "${RUN_ROOT}/category_rules.baseline.yaml" \
   "${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml"
 
 # Recompute outputs after rollback
-uv run python -m finance_tooling transform
+uv run transform
 ```
 
 If override imports were applied and must be reverted, restore from the
