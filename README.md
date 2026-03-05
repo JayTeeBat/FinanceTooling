@@ -15,52 +15,55 @@ bank statements and expanding toward categorization, reconciliation, and reporti
 
 ```bash
 uv sync --all-groups
-uv run python -m finance_tooling update
+uv run update
 ```
 
 Stage-oriented workflow commands:
 
 ```bash
 # ingest only -> writes staged parquet + ingest_summary.json
-uv run python -m finance_tooling ingest
+uv run ingest
 
 # transform only -> consumes staged parquet and writes final artifacts
-uv run python -m finance_tooling transform
+uv run transform
 
 # combined run (default full workflow)
-uv run python -m finance_tooling update
+uv run update
 ```
 
 Manual categorization review roundtrip:
 
 ```bash
 # defaults (requires FINANCE_STATEMENTS_PATH + FINANCE_PROCESSED_PATH in .env)
-uv run python -m finance_tooling review-export
+uv run review-export
 
 # include categorized rows and filter by booking_date range
-uv run python -m finance_tooling review-export \
+uv run review-export \
   --include-categorized \
   --start-date "2026-01-01" \
   --end-date "2026-03-31"
 
 # explicit paths
-uv run python -m finance_tooling review-export \
+uv run review-export \
   --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
   --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv"
 
 # edit fallback_category_review.csv (set category/subcategory)
 
 # defaults (review file from processed path, overrides from env or data-adjacent config)
-uv run python -m finance_tooling review-import
+uv run review-import
 
 # safe preview before writing
-uv run python -m finance_tooling review-import --dry-run
+uv run review-import --dry-run
 
 # explicit paths
-uv run python -m finance_tooling review-import \
+uv run review-import \
   --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
   --overrides-path "$FINANCE_STATEMENTS_PATH/../config/category_overrides.yaml"
 ```
+
+Legacy module-style invocation remains supported:
+`uv run python -m finance_tooling <subcommand>`.
 
 Default upsert key is normalized `description` fingerprint + `bank`. Add
 `--include-account-label-scope` on import to include `account_label` in the key.
@@ -87,7 +90,7 @@ Detailed human-in-the-loop guide and diagrams:
 Commit-to-commit metrics log update:
 
 ```bash
-uv run python -m finance_tooling metrics-log-update \
+uv run metrics-log-update \
   --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" \
   --log-path "docs/metrics_commit_log.csv" \
   --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"
@@ -164,7 +167,7 @@ export FINANCE_BUDGET_TARGETS_PATH="/path/to/data/config/budget_targets.yaml"
 export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/data/config/project_overrides.yaml"
 export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/data/config/transaction_overrides.yaml"
 
-uv run python -m finance_tooling update
+uv run update
 ```
 
 `FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required.
@@ -205,9 +208,6 @@ The repository includes starter templates:
 Supported formats for all six config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
 standard categorization rules.
-Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
-from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
-to `Unassigned` projects and no budget targets).
 Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
 from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
 to `Unassigned` projects and no budget targets).
