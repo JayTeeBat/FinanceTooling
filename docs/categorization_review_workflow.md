@@ -32,7 +32,7 @@ Optional:
 ### 1. Export fallback review rows
 
 ```bash
-uv run python -m finance_tooling review-export
+uv run review-export
 ```
 
 Default input/output paths when flags are omitted:
@@ -49,7 +49,7 @@ Default export behavior is fallback-only. Optional filters:
 Example scoped export:
 
 ```bash
-uv run python -m finance_tooling review-export \
+uv run review-export \
   --include-categorized \
   --start-date "2026-01-01" \
   --end-date "2026-01-31"
@@ -78,7 +78,7 @@ Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`:
 ### 3. Dry-run import (recommended)
 
 ```bash
-uv run python -m finance_tooling review-import --dry-run
+uv run review-import --dry-run
 ```
 
 Dry-run reports row and upsert counters without writing override files.
@@ -86,7 +86,7 @@ Dry-run reports row and upsert counters without writing override files.
 ### 4. Apply import
 
 ```bash
-uv run python -m finance_tooling review-import
+uv run review-import
 ```
 
 Default path resolution:
@@ -116,7 +116,7 @@ Default safety behavior:
 ### 5. Re-run transform
 
 ```bash
-uv run python -m finance_tooling transform
+uv run transform
 ```
 
 ### 6. Optional: direct override editing outside CSV review

@@ -18,26 +18,84 @@ uv sync --all-groups
 uv run update
 ```
 
-Stage-oriented workflow commands:
+## Workflow Overview (Newcomer)
+
+Use this sequence when processing new statements and optionally refining
+categorization.
+
+### 1) Ingest (parse and stage)
+
+- What it does:
+  - scans statements under `FINANCE_STATEMENTS_PATH`
+  - parses and normalizes raw transaction records
+  - writes staged data to
+    `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`
+  - writes ingest diagnostics to
+    `${FINANCE_PROCESSED_PATH}/ingest_summary.json`
 
 ```bash
-# ingest only -> writes staged parquet + ingest_summary.json
 uv run ingest
+```
 
-# transform only -> consumes staged parquet and writes final artifacts
+### 2) Optional review (human-in-the-loop categorization)
+
+- Export review rows:
+
+```bash
+uv run review-export
+```
+
+- Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`.
+- Dry-run import:
+
+```bash
+uv run review-import --dry-run
+```
+
+- Apply reviewed changes:
+
+```bash
+uv run review-import
+```
+
+Detailed guides:
+
+- Transaction review import/export workflow:
+  - `docs/categorization_review_workflow.md`
+- Category rule creation/amend/delete workflow:
+  - `docs/category_rules_review_workflow.md`
+
+### 3) Transform (apply rules/overrides and build final outputs)
+
+```bash
 uv run transform
+```
 
-# combined run (default full workflow)
+- What it does:
+  - reads staged data
+  - applies category rules, category overrides, project rules, and transaction
+    overrides
+  - writes canonical outputs (`transactions_master.parquet`,
+    `transactions_normalized.csv/json`, `run_summary.json`, dashboard)
+
+### 4) Dashboard
+
+- Dashboard output:
+  - `${FINANCE_PROCESSED_PATH}/finance_dashboard.html`
+- Open it in a browser after `transform` or `update`.
+
+### Single-command path
+
+If you do not need a manual review stop, use:
+
+```bash
 uv run update
 ```
 
-Manual categorization review roundtrip:
+This runs `ingest` then `transform` end-to-end.
 
-```bash
-# defaults (requires FINANCE_STATEMENTS_PATH + FINANCE_PROCESSED_PATH in .env)
-uv run review-export
+### Review command examples
 
-# include categorized rows and filter by booking_date range
 uv run review-export \
   --include-categorized \
   --start-date "2026-01-01" \
@@ -80,7 +138,7 @@ Transaction-level corrections and project tags are configured in:
 - `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
 - `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml`
 
-Detailed human-in-the-loop guide and diagrams:
+Related docs and diagrams:
 
 - `docs/category_rules_review_workflow.md`
 - `docs/categorization_review_workflow.md`
