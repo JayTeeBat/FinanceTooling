@@ -25,6 +25,7 @@ update = "finance_tooling.cli_aliases:update"
 review-export = "finance_tooling.cli_aliases:review_export"
 review-import = "finance_tooling.cli_aliases:review_import"
 metrics-log-update = "finance_tooling.cli_aliases:metrics_log_update"
+perf-check = "finance_tooling.cli_aliases:perf_check"
 
 [dependency-groups]
 dev = [

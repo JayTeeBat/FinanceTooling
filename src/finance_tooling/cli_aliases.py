@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from finance_tooling.__main__ import main
+from finance_tooling.perf_check import main as perf_check_main
 
 
 def ingest() -> int:
@@ -35,3 +36,8 @@ def review_import() -> int:
 def metrics_log_update() -> int:
     """Run the metrics-log-update subcommand via console-script alias."""
     return main(["metrics-log-update", *sys.argv[1:]])
+
+
+def perf_check() -> int:
+    """Run the perf-check command via console-script alias."""
+    return perf_check_main()

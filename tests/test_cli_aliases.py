@@ -37,3 +37,19 @@ def test_alias_dispatches_to_main_with_forwarded_argv(
 
     assert exit_code == 7
     assert captured["argv"] == [subcommand, "--flag", "value"]
+
+
+def test_perf_check_alias_dispatches_to_perf_check_main(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = {"count": 0}
+
+    def _perf_main() -> int:
+        called["count"] += 1
+        return 11
+
+    monkeypatch.setattr(cli_aliases, "perf_check_main", _perf_main)
+    exit_code = cli_aliases.perf_check()
+
+    assert exit_code == 11
+    assert called["count"] == 1

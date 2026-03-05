@@ -116,9 +116,6 @@ uv run review-import \
   --overrides-path "$FINANCE_STATEMENTS_PATH/../config/category_overrides.yaml"
 ```
 
-Legacy module-style invocation remains supported:
-`uv run python -m finance_tooling <subcommand>`.
-
 Default upsert key is normalized `description` fingerprint + `bank`. Add
 `--include-account-label-scope` on import to include `account_label` in the key.
 By default, `review-import` aborts when existing override-load warnings are present.
@@ -176,11 +173,8 @@ FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
 FINANCE_FX_AUTO_FETCH=false \
 FINANCE_INGEST_WORKERS=4 \
 FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
-uv run python -m finance_tooling.perf_check
+uv run perf-check
 ```
-
-No short alias is currently defined for `perf_check`; module-style invocation is
-expected here.
 
 The run writes standard artifacts plus `performance_summary.json` under the
 isolated `FINANCE_PROCESSED_PATH`, including total runtime and per-stage timings
