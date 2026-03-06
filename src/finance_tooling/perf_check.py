@@ -192,6 +192,15 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         ingest_text_cache_hits=ingest.text_cache_hits,
         ingest_text_cache_misses=ingest.text_cache_misses,
         ingest_text_cache_write_count=ingest.text_cache_write_count,
+        manual_category_carry_forward_applied_count=(
+            enrichment.manual_category_carry_forward_applied_count
+        ),
+        manual_category_carry_forward_ambiguous_skipped_count=(
+            enrichment.manual_category_carry_forward_ambiguous_skipped_count
+        ),
+        manual_category_carry_forward_unmatched_count=(
+            enrichment.manual_category_carry_forward_unmatched_count
+        ),
         classification_diagnostics=enrichment.classification_diagnostics,
         warnings=warnings,
         upsert_transactions_fn=upsert_transactions,

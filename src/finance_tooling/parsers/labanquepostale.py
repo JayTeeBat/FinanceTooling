@@ -75,6 +75,19 @@ _CONTINUATION_NOISE_EXACT = {
     "TOTALDESOPERATIONS",
     "TOTAL DES OPERATIONS",
 }
+_CONTINUATION_BOUNDARY_MARKERS = (
+    "totaldesoperation",
+    "totaldesoperations",
+    "nouveausoldeau",
+    "pourvotreinformation",
+    "ilvousestconseilledeconservercereleve",
+    "bonasavoir",
+    "commentfaireopposition",
+    "lagarantiedevosdepots",
+    "serviceclients",
+    "releven",
+)
+_PAGE_MARKER_PATTERN = re.compile(r"^\s*PAGE\s+\d+\s*/\s*\d+\s*$", re.IGNORECASE)
 _CREDIT_HINTS = (
     "VIREMENT DE",
     "VIREMENT INSTANTANE DE",
@@ -222,10 +235,24 @@ def _collect_continuation(*, lines: list[str], start: int) -> str:
         line = " ".join(raw_line.split())
         if not line:
             continue
+        if _is_continuation_boundary(line):
+            break
         if _is_continuation_noise(line):
             continue
         details.append(line)
     return " ".join(details).strip()
+
+
+def _is_continuation_boundary(line: str) -> bool:
+    if _PAGE_MARKER_PATTERN.match(line):
+        return True
+    compact_upper = "".join(line.upper().split())
+    if compact_upper.startswith("TOTALDESOP"):
+        return True
+    marker = _normalize_marker(line)
+    if not marker:
+        return False
+    return any(marker.startswith(prefix) for prefix in _CONTINUATION_BOUNDARY_MARKERS)
 
 
 def _is_continuation_noise(line: str) -> bool:

@@ -70,8 +70,16 @@ uv run transform
 What it does:
 - Reads staged data.
 - Applies category rules, category overrides, project rules, and transaction overrides.
+- Carries forward prior manual category/subcategory (`override` or `transaction_override`)
+  when parser cleanup changes transaction descriptions but the same transaction can be
+  matched deterministically.
 - Writes canonical outputs (`transactions_master.parquet`,
   `transactions_normalized.csv/json`, `run_summary.json`, dashboard).
+
+`run_summary.json` also includes carry-forward diagnostics:
+- `manual_category_carry_forward_applied_count`
+- `manual_category_carry_forward_ambiguous_skipped_count`
+- `manual_category_carry_forward_unmatched_count`
 
 ### 4) Dashboard
 

@@ -56,6 +56,9 @@ def persist_and_report(
     ingest_text_cache_hits: int,
     ingest_text_cache_misses: int,
     ingest_text_cache_write_count: int,
+    manual_category_carry_forward_applied_count: int,
+    manual_category_carry_forward_ambiguous_skipped_count: int,
+    manual_category_carry_forward_unmatched_count: int,
     classification_diagnostics: ClassificationDiagnostics,
     warnings: list[str],
     upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
@@ -230,6 +233,15 @@ def persist_and_report(
         "categorized_count": classification_diagnostics.categorized_count,
         "uncategorized_count": classification_diagnostics.uncategorized_count,
         "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
+        "manual_category_carry_forward_applied_count": (
+            manual_category_carry_forward_applied_count
+        ),
+        "manual_category_carry_forward_ambiguous_skipped_count": (
+            manual_category_carry_forward_ambiguous_skipped_count
+        ),
+        "manual_category_carry_forward_unmatched_count": (
+            manual_category_carry_forward_unmatched_count
+        ),
         "category_source_counts": classification_diagnostics.category_source_counts,
         "category_metrics_by_bank": category_metrics_by_bank,
         "top_uncategorized_descriptions": (

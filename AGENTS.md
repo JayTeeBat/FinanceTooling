@@ -186,6 +186,37 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-06 - codex
+- Branch: `fix/lbp-footer-carry-forward`
+- Completed:
+  - Stopped La Banque Postale footer/legal text from bleeding into transaction
+    descriptions by introducing hard continuation boundaries in
+    `src/finance_tooling/parsers/labanquepostale.py`.
+  - Added manual category/subcategory carry-forward in
+    `src/finance_tooling/workflow/category_carry_forward.py` so prior
+    `override` and `transaction_override` labels survive parser description
+    cleanup when transactions can be matched deterministically.
+  - Updated persistence in `src/finance_tooling/store.py` to replace existing
+    rows by incoming `source_file`, preventing stale prior IDs from lingering
+    after parser-driven description changes.
+  - Added summary diagnostics, README notes, regression tests, and reran the
+    real `ingest` + `transform` workflow on production data.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+  - `uv run ingest`: pass
+  - `uv run transform`: pass
+- Open items:
+  - `manual_category_carry_forward_unmatched_count` is high because manual
+    labels only exist for a minority of transactions; this is expected but
+    worth monitoring as review coverage expands.
+- Next action:
+  - Review remaining duplicate staged transactions, especially longstanding
+    Revolut duplicates, to decide whether they should be deduplicated earlier
+    in ingest rather than at canonical persistence time.
+
 ### 2026-03-04 - codex
 - Branch: `feature/config-migration-and-rule-review-workflow`
 - Completed:
@@ -233,32 +264,3 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Re-run `review-import` + `transform` on the latest edited review CSV and
     confirm last-month rows now flip from `fallback` to override-driven categories.
-
-### 2026-03-03 - codex
-- Branch: `chore/review-export-import-audit`
-- Completed:
-  - Implemented review CSV v2 semantics in
-    `src/finance_tooling/categorization_review.py` with independent category and
-    project handling columns: `override_level`, `project_tags`,
-    `existing_project_tags`.
-  - Added import routing so category edits can upsert either category overrides
-    or transaction overrides, while project tags always upsert to
-    transaction-level overrides.
-  - Added/validated transaction-override upsert + write helpers in
-    `src/finance_tooling/transaction_overrides.py` and wired CLI
-    `review-import` defaults to both override paths (including
-    `--transaction-overrides-path`) in `src/finance_tooling/__main__.py`.
-  - Expanded tests for v2 review behavior and dual-store CLI import flows.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - End-to-end manual review run against full 2026 months is still pending on
-    real statement data.
-  - `plantuml` is not available in PATH; `.puml` sources were updated but SVG
-    diagrams were not regenerated in this session.
-- Next action:
-  - Execute `review-export` -> manual edits -> `review-import` on the latest
-    2026 corpus and validate resulting override files and categorized deltas.

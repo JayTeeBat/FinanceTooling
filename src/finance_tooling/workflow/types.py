@@ -138,6 +138,9 @@ class SummaryPayload(TypedDict):
     categorized_count: int
     uncategorized_count: int
     uncategorized_ratio: float
+    manual_category_carry_forward_applied_count: int
+    manual_category_carry_forward_ambiguous_skipped_count: int
+    manual_category_carry_forward_unmatched_count: int
     category_source_counts: dict[str, int]
     category_metrics_by_bank: list[dict[str, object]]
     top_uncategorized_descriptions: list[dict[str, object]]
@@ -196,6 +199,9 @@ class EnrichmentResult:
     transactions: list[Transaction]
     warnings: list[str]
     classification_diagnostics: ClassificationDiagnostics
+    manual_category_carry_forward_applied_count: int
+    manual_category_carry_forward_ambiguous_skipped_count: int
+    manual_category_carry_forward_unmatched_count: int
 
 
 @dataclass(frozen=True)
