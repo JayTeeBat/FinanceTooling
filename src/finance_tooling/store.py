@@ -131,6 +131,7 @@ def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> 
         incoming_ids = set(incoming_deduped["transaction_id"])
         overlapping_ids = existing_ids & incoming_ids
         new_rows = len(incoming_ids - existing_ids)
+        incoming_source_files = set(incoming_deduped["source_file"])
 
         if overlapping_ids:
             existing_ingested_at = (
@@ -146,7 +147,7 @@ def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> 
                 mask, "transaction_id"
             ].map(existing_ingested_at)
 
-        retained_existing = existing[~existing["transaction_id"].isin(incoming_ids)]
+        retained_existing = existing[~existing["source_file"].isin(incoming_source_files)]
         merged = pd.concat([retained_existing, incoming_deduped], ignore_index=True)
 
     merged = merged.sort_values(by=["booking_date", "transaction_id"]).reset_index(drop=True)

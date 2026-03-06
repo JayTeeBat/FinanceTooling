@@ -75,3 +75,20 @@ def test_upsert_transactions_replaces_existing_row_and_preserves_ingested_at(
     assert second.dataframe.loc[0, "subcategory"] == "Cleaning"
     assert second.dataframe.loc[0, "category_source"] == "transaction_override"
     assert second.dataframe.loc[0, "ingested_at"] == original_ingested_at
+
+
+def test_upsert_transactions_replaces_rows_by_source_file_when_ids_change(tmp_path: Path) -> None:
+    source = tmp_path / "sample.pdf"
+    source.write_text("x", encoding="utf-8")
+    parquet_path = tmp_path / "transactions_master.parquet"
+
+    initial = _sample_transaction(source)
+    first = upsert_transactions(parquet_path, [initial])
+    assert first.total_rows == 1
+
+    changed_description = replace(initial, description="Salary payment updated")
+    second = upsert_transactions(parquet_path, [changed_description])
+
+    assert second.total_rows == 1
+    assert second.new_rows == 1
+    assert second.dataframe.loc[0, "description"] == "Salary payment updated"

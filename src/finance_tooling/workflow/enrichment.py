@@ -20,6 +20,7 @@ from finance_tooling.transaction_overrides import (
     apply_transaction_overrides,
     load_transaction_override_store,
 )
+from finance_tooling.workflow.category_carry_forward import apply_manual_category_carry_forward
 from finance_tooling.workflow.types import EnrichmentResult
 
 
@@ -103,13 +104,23 @@ def enrich_transactions(transactions: list[Transaction], settings: Settings) -> 
     )
     projected = assign_projects_to_transactions(classified, project_config)
     overridden = apply_transaction_overrides(projected, transaction_overrides)
-    classification_diagnostics = build_classification_diagnostics(overridden)
+    carry_forward = apply_manual_category_carry_forward(
+        overridden,
+        master_parquet_path=settings.master_parquet_path,
+    )
+    warnings.extend(carry_forward.warnings)
+    classification_diagnostics = build_classification_diagnostics(carry_forward.transactions)
 
-    enriched, fx_warnings = apply_fx_and_mtime(overridden, settings)
+    enriched, fx_warnings = apply_fx_and_mtime(carry_forward.transactions, settings)
     warnings.extend(fx_warnings)
 
     return EnrichmentResult(
         transactions=enriched,
         warnings=warnings,
         classification_diagnostics=classification_diagnostics,
+        manual_category_carry_forward_applied_count=carry_forward.diagnostics.applied_count,
+        manual_category_carry_forward_ambiguous_skipped_count=(
+            carry_forward.diagnostics.ambiguous_skipped_count
+        ),
+        manual_category_carry_forward_unmatched_count=carry_forward.diagnostics.unmatched_count,
     )

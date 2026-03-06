@@ -66,6 +66,26 @@ def test_labanquepostale_parser_captures_multiline_continuations() -> None:
     assert "EUR 17,80 CARTE NO 885 SAMSUNG PAY" in result.transactions[1].description
 
 
+def test_labanquepostale_parser_stops_continuation_at_footer_boundary() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    23/10 ACHAT CB Cyrillus SAS 22.10.23                  102,57
+         EUR 102,57 CARTE NO 536
+                                       TotaldesopØrations 8 017,17 7 273,38
+    Pour votre information
+    Il vous est conseillØ de conserver ce relevØ.                 Page 5/5
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20231024.pdf"), text)
+
+    assert len(result.transactions) == 1
+    description = result.transactions[0].description
+    assert "EUR 102,57 CARTE NO 536" in description
+    assert "Totaldesop" not in description
+    assert "Pour votre information" not in description
+    assert "Page 5/5" not in description
+
+
 def test_labanquepostale_parser_excludes_fee_statements_from_reconciliation() -> None:
     parser = LaBanquePostaleParser()
     text = """

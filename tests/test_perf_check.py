@@ -120,6 +120,9 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
             top_uncategorized_descriptions=[],
             top_rules_by_hits=[],
         ),
+        manual_category_carry_forward_applied_count=0,
+        manual_category_carry_forward_ambiguous_skipped_count=0,
+        manual_category_carry_forward_unmatched_count=1,
     )
     workflow_result = WorkflowResult(
         dashboard_path=settings.output_path,
