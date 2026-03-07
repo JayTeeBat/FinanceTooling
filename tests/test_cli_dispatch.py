@@ -10,23 +10,12 @@ from finance_tooling.review_import import ReviewImportResult
 from finance_tooling.transaction_overrides import TransactionOverrideStore
 
 
-def test_run_alias_emits_deprecation_and_dispatches_update(monkeypatch, capsys) -> None:
-    captured: dict[str, bool] = {}
-
-    def _handle(args: Any) -> int:
-        captured["ingest_only"] = args.ingest_only
-        captured["transform_only"] = args.transform_only
-        return 0
-
-    monkeypatch.setattr("finance_tooling.commands.update.handle", _handle)
-
-    exit_code = main(["run"])
+def test_main_without_subcommand_prints_help(monkeypatch, capsys) -> None:
+    exit_code = main([])
     stdio = capsys.readouterr()
 
-    assert exit_code == 0
-    assert captured == {"ingest_only": False, "transform_only": False}
-    assert "deprecated" in stdio.err
-    assert "Use `update` instead." in stdio.err
+    assert exit_code == 1
+    assert "usage:" in stdio.out
 
 
 def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> None:
@@ -74,7 +63,8 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         return 4
 
     monkeypatch.setattr(
-        "finance_tooling.commands.review_export.load_settings_from_env", lambda: settings
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: settings,
     )
     monkeypatch.setattr(
         "finance_tooling.commands.review_export.export_fallback_review_rows", _export
@@ -165,7 +155,8 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         )
 
     monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_settings_from_env", lambda: settings
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: settings,
     )
     monkeypatch.setattr(
         "finance_tooling.commands.review_import.load_override_store",
@@ -214,8 +205,8 @@ def test_review_import_infers_data_adjacent_paths_from_review_path(
         )
 
     monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_settings_from_env",
-        lambda: (_ for _ in ()).throw(ValueError("missing settings")),
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: None,
     )
     monkeypatch.setattr(
         "finance_tooling.commands.review_import.load_override_store",

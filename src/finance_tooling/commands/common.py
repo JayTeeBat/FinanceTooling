@@ -2,8 +2,110 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from finance_tooling.config import Settings, load_settings_from_env
 from finance_tooling.models import WorkflowResult
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
+
+
+def try_load_settings_for_defaults() -> Settings | None:
+    """Return settings when env-backed defaults are available."""
+    try:
+        return load_settings_from_env()
+    except ValueError:
+        return None
+
+
+def processed_dir_from_settings(settings: Settings) -> Path:
+    """Return the processed directory derived from settings."""
+    return settings.summary_json_path.parent
+
+
+def infer_data_adjacent_config_dir(review_path: Path) -> Path:
+    """Infer the data-adjacent config directory from a review file path."""
+    return review_path.expanduser().resolve().parent.parent / "config"
+
+
+def resolve_review_export_paths(
+    normalized_path: Path | None,
+    output_path: Path | None,
+) -> tuple[Path, Path]:
+    """Resolve normalized and review output paths using settings defaults when possible."""
+    if normalized_path is not None and output_path is not None:
+        return normalized_path, output_path
+
+    settings = try_load_settings_for_defaults()
+    if settings is None:
+        missing_flags: list[str] = []
+        if normalized_path is None:
+            missing_flags.append("--normalized-path")
+        if output_path is None:
+            missing_flags.append("--output-path")
+        joined = ", ".join(missing_flags)
+        raise ValueError(
+            f"Missing {joined}; provide explicit flags or configure .env "
+            "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
+        )
+
+    processed_dir = processed_dir_from_settings(settings)
+    return (
+        normalized_path or (processed_dir / "transactions_normalized.csv"),
+        output_path or (processed_dir / "fallback_category_review.csv"),
+    )
+
+
+def resolve_review_import_paths(
+    review_path: Path | None,
+    overrides_path: Path | None,
+    transaction_overrides_path: Path | None,
+) -> tuple[Path, Path, Path]:
+    """Resolve review-import paths using settings or review-file-adjacent defaults."""
+    settings = try_load_settings_for_defaults()
+    settings_category_overrides = (
+        getattr(settings, "category_overrides_path", None) if settings is not None else None
+    )
+    settings_transaction_overrides = (
+        getattr(settings, "transaction_overrides_path", None) if settings is not None else None
+    )
+
+    review_config_dir: Path | None = None
+    if review_path is not None:
+        review_config_dir = infer_data_adjacent_config_dir(review_path)
+
+    resolved_overrides = overrides_path or settings_category_overrides
+    if resolved_overrides is None and review_config_dir is not None:
+        resolved_overrides = review_config_dir / "category_overrides.yaml"
+
+    resolved_transaction_overrides = transaction_overrides_path or settings_transaction_overrides
+    if resolved_transaction_overrides is None and review_config_dir is not None:
+        resolved_transaction_overrides = review_config_dir / "transaction_overrides.yaml"
+
+    if review_path is not None:
+        if resolved_overrides is None or resolved_transaction_overrides is None:
+            raise ValueError(
+                "Missing --overrides-path/--transaction-overrides-path; provide explicit "
+                "paths or configure .env with FINANCE_STATEMENTS_PATH and "
+                "FINANCE_PROCESSED_PATH."
+            )
+        return review_path, resolved_overrides, resolved_transaction_overrides
+
+    if settings is None:
+        raise ValueError(
+            "Missing --review-path; provide explicit path or configure .env "
+            "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
+        )
+    if resolved_overrides is None or resolved_transaction_overrides is None:
+        raise ValueError(
+            "Unable to resolve override paths; provide --overrides-path and "
+            "--transaction-overrides-path explicitly."
+        )
+
+    return (
+        processed_dir_from_settings(settings) / "fallback_category_review.csv",
+        resolved_overrides,
+        resolved_transaction_overrides,
+    )
 
 
 def print_workflow_result(result: WorkflowResult) -> int:

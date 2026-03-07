@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 
 from finance_tooling.commands import (
     ingest as ingest_command,
@@ -50,9 +49,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     update_command.configure_parser(update_parser)
 
-    run_parser = subparsers.add_parser("run", help="Deprecated alias for `update`.")
-    run_parser.set_defaults(command="run")
-
     review_export_parser = subparsers.add_parser(
         "review-export",
         help="Export fallback categorization rows for manual review.",
@@ -78,17 +74,6 @@ def main(argv: list[str] | None = None) -> int:
     """Run workflow or categorization review subcommands."""
     parser = _build_parser()
     args = parser.parse_args(argv)
-    command = args.command or "run"
-
-    if command == "run":
-        print(
-            "Warning: `run` is deprecated and will be removed in a future release. "
-            "Use `update` instead.",
-            file=sys.stderr,
-        )
-        update_args = argparse.Namespace(ingest_only=False, transform_only=False)
-        return update_command.handle(update_args)
-
     handler = getattr(args, "handler", None)
     if handler is None:
         parser.print_help()

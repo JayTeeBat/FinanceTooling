@@ -187,14 +187,21 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-07 - codex
-- Branch: `main`
+- Branch: `chore/command-module-discoverability`
 - Completed:
+  - Consolidated shared review path-resolution helpers into
+    `src/finance_tooling/commands/common.py` so `review-export` and
+    `review-import` no longer duplicate settings/default resolution logic.
+  - Removed the deprecated `run` alias from
+    `src/finance_tooling/__main__.py`; supported CLI entrypoints are now the
+    explicit command names only.
   - Renamed legacy-named test files to align with the refactored module layout:
+    `tests/test_cli_dispatch.py`,
     `tests/test_workflow_stages.py`,
     `tests/test_review_workflow.py`, and
     `tests/test_command_entrypoints.py`.
-  - Re-ran the full quality gates after the rename-only cleanup to confirm the
-    test discovery and module move remain stable.
+  - Re-ran the full quality gates after the follow-up cleanup to confirm the
+    command/module refactor remains stable.
 - Checks:
   - `uv run ruff check .`: pass
   - `uv run ruff format .`: pass
@@ -203,8 +210,7 @@ Success target for the 2026 validation campaign:
 - Open items:
   - None.
 - Next action:
-  - Package the command/module discoverability refactor and test cleanup in a
-    single PR.
+  - Merge the command/module discoverability PR once reviewed.
 
 ### 2026-03-07 - codex
 - Branch: `main`

@@ -6,62 +6,9 @@ import argparse
 from pathlib import Path
 
 from finance_tooling.classify import load_override_store
-from finance_tooling.config import Settings, load_settings_from_env
+from finance_tooling.commands.common import resolve_review_import_paths
 from finance_tooling.review_import import import_review_into_overrides
 from finance_tooling.transaction_overrides import load_transaction_override_store
-
-
-def _try_load_settings_for_review_defaults() -> Settings | None:
-    try:
-        return load_settings_from_env()
-    except ValueError:
-        return None
-
-
-def _resolve_review_import_paths(
-    review_path: Path | None,
-    overrides_path: Path | None,
-    transaction_overrides_path: Path | None,
-) -> tuple[Path, Path, Path]:
-    settings = _try_load_settings_for_review_defaults()
-    settings_category_overrides = (
-        getattr(settings, "category_overrides_path", None) if settings is not None else None
-    )
-    settings_transaction_overrides = (
-        getattr(settings, "transaction_overrides_path", None) if settings is not None else None
-    )
-    review_config_dir: Path | None = None
-    if review_path is not None:
-        review_config_dir = review_path.expanduser().resolve().parent.parent / "config"
-    resolved_overrides = overrides_path or settings_category_overrides
-    if resolved_overrides is None and review_config_dir is not None:
-        resolved_overrides = review_config_dir / "category_overrides.yaml"
-    resolved_transaction_overrides = transaction_overrides_path or settings_transaction_overrides
-    if resolved_transaction_overrides is None and review_config_dir is not None:
-        resolved_transaction_overrides = review_config_dir / "transaction_overrides.yaml"
-    if review_path is not None:
-        if resolved_overrides is None or resolved_transaction_overrides is None:
-            raise ValueError(
-                "Missing --overrides-path/--transaction-overrides-path; provide explicit "
-                "paths or configure .env with FINANCE_STATEMENTS_PATH and "
-                "FINANCE_PROCESSED_PATH."
-            )
-        return review_path, resolved_overrides, resolved_transaction_overrides
-    if settings is None:
-        raise ValueError(
-            "Missing --review-path; provide explicit path or configure .env "
-            "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
-        )
-    if resolved_overrides is None or resolved_transaction_overrides is None:
-        raise ValueError(
-            "Unable to resolve override paths; provide --overrides-path and "
-            "--transaction-overrides-path explicitly."
-        )
-    return (
-        settings.summary_json_path.parent / "fallback_category_review.csv",
-        resolved_overrides,
-        resolved_transaction_overrides,
-    )
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
@@ -122,7 +69,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 def handle(args: argparse.Namespace) -> int:
     """Execute the review-import command from parsed CLI arguments."""
     try:
-        review_path, overrides_path, transaction_overrides_path = _resolve_review_import_paths(
+        review_path, overrides_path, transaction_overrides_path = resolve_review_import_paths(
             args.review_path,
             args.overrides_path,
             args.transaction_overrides_path,
