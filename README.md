@@ -97,6 +97,22 @@ uv run update
 
 This runs `ingest` then `transform` end-to-end.
 
+## Code Map
+
+Main CLI entrypoints live in modules named after the commands:
+
+- `src/finance_tooling/commands/ingest.py`
+- `src/finance_tooling/commands/review_export.py`
+- `src/finance_tooling/commands/review_import.py`
+- `src/finance_tooling/commands/transform.py`
+- `src/finance_tooling/commands/update.py`
+
+Shared stage orchestration lives under:
+
+- `src/finance_tooling/workflow/ingest_stage.py`
+- `src/finance_tooling/workflow/transform_stage.py`
+- `src/finance_tooling/workflow/update_stage.py`
+
 ### Review command examples
 
 ```bash

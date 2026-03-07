@@ -19,13 +19,13 @@ dependencies = [
 ]
 
 [project.scripts]
-ingest = "finance_tooling.cli_aliases:ingest"
-transform = "finance_tooling.cli_aliases:transform"
-update = "finance_tooling.cli_aliases:update"
-review-export = "finance_tooling.cli_aliases:review_export"
-review-import = "finance_tooling.cli_aliases:review_import"
-metrics-log-update = "finance_tooling.cli_aliases:metrics_log_update"
-perf-check = "finance_tooling.cli_aliases:perf_check"
+ingest = "finance_tooling.commands.ingest:main"
+transform = "finance_tooling.commands.transform:main"
+update = "finance_tooling.commands.update:main"
+review-export = "finance_tooling.commands.review_export:main"
+review-import = "finance_tooling.commands.review_import:main"
+metrics-log-update = "finance_tooling.commands.metrics_log_update:main"
+perf-check = "finance_tooling.perf_check:main"
 
 [dependency-groups]
 dev = [

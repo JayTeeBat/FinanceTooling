@@ -186,6 +186,56 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-07 - codex
+- Branch: `main`
+- Completed:
+  - Renamed legacy-named test files to align with the refactored module layout:
+    `tests/test_workflow_stages.py`,
+    `tests/test_review_workflow.py`, and
+    `tests/test_command_entrypoints.py`.
+  - Re-ran the full quality gates after the rename-only cleanup to confirm the
+    test discovery and module move remain stable.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - None.
+- Next action:
+  - Package the command/module discoverability refactor and test cleanup in a
+    single PR.
+
+### 2026-03-07 - codex
+- Branch: `main`
+- Completed:
+  - Refactored CLI entrypoints into command-named modules under
+    `src/finance_tooling/commands/` for `ingest`, `transform`, `update`,
+    `review_export`, `review_import`, and `metrics_log_update`.
+  - Split workflow orchestration out of `src/finance_tooling/pipeline.py` into
+    `src/finance_tooling/workflow/ingest_stage.py`,
+    `src/finance_tooling/workflow/transform_stage.py`, and
+    `src/finance_tooling/workflow/update_stage.py`.
+  - Split review import/export logic out of
+    `src/finance_tooling/categorization_review.py` into
+    `src/finance_tooling/review_export.py`,
+    `src/finance_tooling/review_import.py`, and
+    `src/finance_tooling/review_common.py`.
+  - Repointed console scripts in `pyproject.toml`, removed obsolete legacy
+    entrypoint modules, updated tests, and added a README code map section.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Test filenames still reflect some legacy naming (`test_cli_aliases.py`,
+    `test_pipeline.py`, `test_categorization_review.py`) even though the code
+    under test has been moved.
+- Next action:
+  - Rename the remaining legacy-named test files to match the new command and
+    stage module layout.
+
 ### 2026-03-06 - codex
 - Branch: `fix/lbp-footer-carry-forward`
 - Completed:
@@ -217,47 +267,7 @@ Success target for the 2026 validation campaign:
     Revolut duplicates, to decide whether they should be deduplicated earlier
     in ingest rather than at canonical persistence time.
 
-### 2026-03-04 - codex
-- Branch: `feature/config-migration-and-rule-review-workflow`
-- Completed:
-  - Migrated runtime default config resolution to data-adjacent paths under
-    `${FINANCE_STATEMENTS_PATH}/../config` for category/project/budget/override
-    configs in `src/finance_tooling/config.py`.
-  - Updated `review-import` path resolution to avoid repo-local `config/...`
-    fallback when settings are unavailable, inferring data-adjacent override
-    paths from `--review-path` when possible (`src/finance_tooling/__main__.py`).
-  - Added a dedicated human-in-the-loop category-rules governance guide at
-    `docs/category_rules_review_workflow.md` covering create/amend/delete flows
-    and explicit handling for previously rule-categorized impacted rows.
-  - Updated tests/docs for the new defaults and review process references.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Existing local data/config artifacts in working tree remain intentionally
-    uncommitted (`config/*.yaml` and backup files under local data workflow).
-- Next action:
-  - Move active runtime configs into `${FINANCE_STATEMENTS_PATH}/../config`,
-    run `update`, and confirm resolved config paths in `run_summary.json`.
 
-### 2026-03-04 - codex
-- Branch: `main`
-- Completed:
-  - Fixed persistence merge behavior in `src/finance_tooling/store.py` so
-    `transform` replaces existing rows by `transaction_id` instead of
-    append-only semantics.
-  - Preserved existing `ingested_at` values for matched transaction IDs while
-    still applying new enrichment fields (category/subcategory/project metadata).
-  - Added regression coverage in `tests/test_store.py` and `tests/test_pipeline.py`
-    to prove recategorization changes for existing rows are persisted into
-    normalized outputs.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
 - Open items:
   - `review-import` counters still report key-level updates even when no semantic
     value change occurs; this can remain confusing during manual review cycles.
