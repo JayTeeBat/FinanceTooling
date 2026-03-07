@@ -12,15 +12,16 @@ from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import ParserOutput, StatementParser, StatementValidation
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
-from finance_tooling.pipeline import (
-    _parse_hsbc_statement_period,
-    run_ingest,
-    run_transform,
-    run_update,
-    run_workflow,
-)
 from finance_tooling.store import UpsertResult, compute_transaction_id, upsert_transactions
+from finance_tooling.workflow.ingest_stage import (
+    parse_hsbc_statement_period_compat as _parse_hsbc_statement_period,
+)
+from finance_tooling.workflow.ingest_stage import (
+    run_ingest,
+)
 from finance_tooling.workflow.staging import write_staged_transactions
+from finance_tooling.workflow.transform_stage import run_transform
+from finance_tooling.workflow.update_stage import run_update, run_workflow
 
 
 @dataclass
@@ -86,14 +87,15 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     settings = _settings(input_dir)
 
     monkeypatch.setattr(
-        "finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf, missing_pdf]
+        "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
+        lambda _: [parsed_pdf, missing_pdf],
     )
     monkeypatch.setattr(
-        "finance_tooling.pipeline.extract_text_from_pdf",
+        "finance_tooling.workflow.ingest_stage.extract_text_from_pdf",
         lambda _: ExtractedPdfText(first_page_text="", full_text=""),
     )
     monkeypatch.setattr(
-        "finance_tooling.pipeline.select_parser_with_diagnostics",
+        "finance_tooling.workflow.ingest_stage.select_parser_with_diagnostics",
         lambda *_: ParserSelection(
             parser=cast(StatementParser, _DummyParser()),
             score=2,
@@ -105,7 +107,7 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         ),
     )
     monkeypatch.setattr(
-        "finance_tooling.pipeline.render_dashboard_html",
+        "finance_tooling.workflow.transform_stage.render_dashboard_html",
         lambda *args, **kwargs: settings.output_path,
     )
 
@@ -132,7 +134,7 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         ]
     )
     monkeypatch.setattr(
-        "finance_tooling.pipeline.upsert_transactions",
+        "finance_tooling.workflow.transform_stage.upsert_transactions",
         lambda *_: UpsertResult(
             parquet_path=settings.master_parquet_path,
             dataframe=dataframe,
@@ -277,13 +279,16 @@ def test_run_workflow_uses_hsbc_pdf_balances_for_validation(monkeypatch, tmp_pat
             )
             return ParserOutput(transactions=[tx], warnings=[], validation=validation)
 
-    monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
     monkeypatch.setattr(
-        "finance_tooling.pipeline.extract_text_from_pdf",
+        "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
+        lambda _: [parsed_pdf],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.extract_text_from_pdf",
         lambda _: ExtractedPdfText(first_page_text="", full_text=""),
     )
     monkeypatch.setattr(
-        "finance_tooling.pipeline.select_parser_with_diagnostics",
+        "finance_tooling.workflow.ingest_stage.select_parser_with_diagnostics",
         lambda *_: ParserSelection(
             parser=cast(StatementParser, _ValidatingHsbcParser()),
             score=3,
@@ -295,7 +300,7 @@ def test_run_workflow_uses_hsbc_pdf_balances_for_validation(monkeypatch, tmp_pat
         ),
     )
     monkeypatch.setattr(
-        "finance_tooling.pipeline.render_dashboard_html",
+        "finance_tooling.workflow.transform_stage.render_dashboard_html",
         lambda *args, **kwargs: settings.output_path,
     )
 
@@ -330,7 +335,9 @@ def test_run_workflow_uses_hsbc_pdf_balances_for_validation(monkeypatch, tmp_pat
             total_rows=len(transactions),
         )
 
-    monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.upsert_transactions", _capture_upsert
+    )
 
     run_workflow(settings)
 
@@ -362,13 +369,16 @@ def test_run_ingest_writes_staged_artifacts_only(monkeypatch, tmp_path: Path) ->
 
     settings = _settings(input_dir)
 
-    monkeypatch.setattr("finance_tooling.pipeline.discover_statement_pdfs", lambda _: [parsed_pdf])
     monkeypatch.setattr(
-        "finance_tooling.pipeline.extract_text_from_pdf",
+        "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
+        lambda _: [parsed_pdf],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.extract_text_from_pdf",
         lambda _: ExtractedPdfText(first_page_text="", full_text=""),
     )
     monkeypatch.setattr(
-        "finance_tooling.pipeline.select_parser_with_diagnostics",
+        "finance_tooling.workflow.ingest_stage.select_parser_with_diagnostics",
         lambda *_: ParserSelection(
             parser=cast(StatementParser, _DummyParser()),
             score=2,
@@ -417,7 +427,7 @@ def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_
     write_staged_transactions(settings.staged_transactions_path, [staged_transaction])
 
     monkeypatch.setattr(
-        "finance_tooling.pipeline.render_dashboard_html",
+        "finance_tooling.workflow.transform_stage.render_dashboard_html",
         lambda *args, **kwargs: settings.output_path,
     )
 
@@ -456,7 +466,9 @@ def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_
             total_rows=len(transactions),
         )
 
-    monkeypatch.setattr("finance_tooling.pipeline.upsert_transactions", _capture_upsert)
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.upsert_transactions", _capture_upsert
+    )
 
     result = run_transform(settings)
 

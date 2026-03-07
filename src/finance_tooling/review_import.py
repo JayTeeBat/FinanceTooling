@@ -1,18 +1,29 @@
-"""Manual categorization review export/import helpers."""
+"""Manual categorization review import helpers."""
 
 from __future__ import annotations
 
 import json
 import shutil
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import UTC, datetime
 from pathlib import Path
 
-import pandas as pd
 import yaml
 
 from finance_tooling.classify import OverrideEntry, OverrideStore, normalize_description
+from finance_tooling.review_common import (
+    OVERRIDE_LEVEL_COLUMN,
+    PROJECT_TAGS_COLUMN,
+    REQUIRED_REVIEW_COLUMNS,
+    VALID_OVERRIDE_LEVELS,
+    is_fallback_category_source,
+    normalize_optional_booking_date,
+    normalize_optional_decimal,
+    normalize_optional_text,
+    normalize_optional_upper,
+    normalize_project_tags,
+    read_table,
+)
 from finance_tooling.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
@@ -22,19 +33,6 @@ from finance_tooling.transaction_overrides import (
     upsert_transaction_override_entries,
     write_transaction_override_store,
 )
-
-REQUIRED_REVIEW_COLUMNS: tuple[str, ...] = (
-    "description",
-    "bank",
-    "account_label",
-    "category",
-    "subcategory",
-    "category_source",
-)
-OVERRIDE_LEVEL_COLUMN = "override_level"
-PROJECT_TAGS_COLUMN = "project_tags"
-EXISTING_PROJECT_TAGS_COLUMN = "existing_project_tags"
-VALID_OVERRIDE_LEVELS = {"skip", "category_override", "transaction_override"}
 
 
 @dataclass(frozen=True)
@@ -58,173 +56,13 @@ class ReviewImportResult:
     transaction_backup_path: Path | None = None
 
 
-def _read_table(path: Path) -> pd.DataFrame:
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        return pd.read_csv(path)
-    if suffix == ".json":
-        return pd.read_json(path)
-    if suffix == ".parquet":
-        return pd.read_parquet(path)
-    raise ValueError(f"Unsupported table format for {path}; expected .csv, .json, or .parquet")
-
-
-def _write_table(path: Path, dataframe: pd.DataFrame) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        dataframe.to_csv(path, index=False)
-        return
-    if suffix == ".json":
-        path.write_text(
-            json.dumps(dataframe.to_dict(orient="records"), indent=2, default=str),
-            encoding="utf-8",
-        )
-        return
-    raise ValueError(f"Unsupported review output format for {path}; expected .csv or .json")
-
-
-def _normalize_optional_text(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text or text.lower() == "nan":
-        return None
-    return text
-
-
-def _normalize_optional_upper(value: object) -> str | None:
-    text = _normalize_optional_text(value)
-    return text.upper() if text is not None else None
-
-
-def _normalize_optional_decimal(value: object) -> Decimal | None:
-    text = _normalize_optional_text(value)
-    if text is None:
-        return None
-    try:
-        return Decimal(text)
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def _normalize_optional_booking_date(value: object) -> str | None:
-    text = _normalize_optional_text(value)
-    if text is None:
-        return None
-    timestamp = pd.to_datetime(text, errors="coerce")
-    if pd.isna(timestamp):
-        return None
-    return timestamp.date().isoformat()
-
-
-def _normalize_project_tags(value: object) -> tuple[str, ...]:
-    if value is None:
-        return ()
-    raw_values: list[str] = []
-    if isinstance(value, list | tuple):
-        raw_values.extend(str(item).strip() for item in value if str(item).strip())
-    else:
-        text = str(value).strip()
-        if not text or text.lower() == "nan":
-            return ()
-        raw_values.extend(part.strip() for part in text.split("|"))
-
-    tags: list[str] = []
-    seen: set[str] = set()
-    for raw in raw_values:
-        if not raw:
-            continue
-        marker = raw.casefold()
-        if marker in seen:
-            continue
-        seen.add(marker)
-        tags.append(raw)
-    return tuple(tags)
-
-
-def _is_fallback_category_source(value: object) -> bool:
-    normalized = _normalize_optional_text(value)
-    if normalized is None:
-        return False
-    return normalized.lower() == "fallback"
-
-
-def _parse_filter_date(value: str | None, *, label: str) -> date | None:
-    if value is None:
-        return None
-    parsed = pd.to_datetime(value, errors="coerce")
-    if pd.isna(parsed):
-        raise ValueError(f"Invalid {label}: {value}")
-    return parsed.date()
-
-
-def export_fallback_review_rows(
-    normalized_path: Path,
-    review_output_path: Path,
-    *,
-    include_categorized: bool = False,
-    start_date: str | None = None,
-    end_date: str | None = None,
-) -> int:
-    """Export fallback-classified rows for manual review."""
-    dataframe = _read_table(normalized_path)
-    missing_columns = [
-        column for column in REQUIRED_REVIEW_COLUMNS if column not in dataframe.columns
-    ]
-    if missing_columns:
-        joined = ", ".join(missing_columns)
-        raise ValueError(f"Input table missing required columns: {joined}")
-
-    start_date_value = _parse_filter_date(start_date, label="start_date")
-    end_date_value = _parse_filter_date(end_date, label="end_date")
-    if (
-        start_date_value is not None
-        and end_date_value is not None
-        and start_date_value > end_date_value
-    ):
-        raise ValueError("start_date must be <= end_date")
-
-    filtered_rows = dataframe
-    if not include_categorized:
-        filtered_rows = filtered_rows.loc[
-            filtered_rows["category_source"].astype(str).str.strip().str.lower() == "fallback"
-        ]
-
-    if start_date_value is not None or end_date_value is not None:
-        if "booking_date" not in filtered_rows.columns:
-            raise ValueError("Input table missing required columns: booking_date")
-        booking_dates = pd.to_datetime(filtered_rows["booking_date"], errors="coerce")
-        if start_date_value is not None:
-            filtered_rows = filtered_rows.loc[booking_dates >= pd.Timestamp(start_date_value)]
-            booking_dates = booking_dates.loc[filtered_rows.index]
-        if end_date_value is not None:
-            filtered_rows = filtered_rows.loc[booking_dates <= pd.Timestamp(end_date_value)]
-
-    review_rows = filtered_rows.copy()
-    if PROJECT_TAGS_COLUMN in review_rows.columns:
-        review_rows[EXISTING_PROJECT_TAGS_COLUMN] = review_rows[PROJECT_TAGS_COLUMN]
-    else:
-        review_rows[EXISTING_PROJECT_TAGS_COLUMN] = None
-    review_rows[PROJECT_TAGS_COLUMN] = None
-    review_rows[OVERRIDE_LEVEL_COLUMN] = None
-    if "project_source" in review_rows.columns:
-        columns = review_rows.columns.tolist()
-        columns.remove(OVERRIDE_LEVEL_COLUMN)
-        project_source_index = columns.index("project_source")
-        columns.insert(project_source_index + 1, OVERRIDE_LEVEL_COLUMN)
-        review_rows = review_rows.loc[:, columns]
-    _write_table(review_output_path, review_rows)
-    return len(review_rows)
-
-
 def _parse_category_override_row(
     row: dict[str, object],
     *,
     include_account_label_scope: bool,
 ) -> OverrideEntry | None:
-    description = _normalize_optional_text(row.get("description"))
-    category = _normalize_optional_text(row.get("category"))
+    description = normalize_optional_text(row.get("description"))
+    category = normalize_optional_text(row.get("category"))
     if description is None or category is None:
         return None
 
@@ -232,11 +70,11 @@ def _parse_category_override_row(
     if not fingerprint:
         return None
 
-    bank = _normalize_optional_upper(row.get("bank"))
+    bank = normalize_optional_upper(row.get("bank"))
     account_label = (
-        _normalize_optional_upper(row.get("account_label")) if include_account_label_scope else None
+        normalize_optional_upper(row.get("account_label")) if include_account_label_scope else None
     )
-    subcategory = _normalize_optional_text(row.get("subcategory"))
+    subcategory = normalize_optional_text(row.get("subcategory"))
     return OverrideEntry(
         fingerprint=fingerprint,
         category=category,
@@ -250,30 +88,30 @@ def _parse_category_override_row(
 def _parse_category_transaction_override_row(
     row: dict[str, object],
 ) -> TransactionOverrideEntry | None:
-    category = _normalize_optional_text(row.get("category"))
+    category = normalize_optional_text(row.get("category"))
     if category is None:
         return None
 
-    subcategory = _normalize_optional_text(row.get("subcategory"))
-    transaction_id = _normalize_optional_text(row.get("transaction_id"))
+    subcategory = normalize_optional_text(row.get("subcategory"))
+    transaction_id = normalize_optional_text(row.get("transaction_id"))
 
     fingerprint: str | None = None
     booking_date: str | None = None
-    amount_native: Decimal | None = None
+    amount_native = None
     currency: str | None = None
     bank: str | None = None
     account_label: str | None = None
 
     if transaction_id is None:
-        description = _normalize_optional_text(row.get("description"))
+        description = normalize_optional_text(row.get("description"))
         fingerprint = normalize_description(description or "")
         if not fingerprint:
             return None
-        booking_date = _normalize_optional_booking_date(row.get("booking_date"))
-        amount_native = _normalize_optional_decimal(row.get("amount_native"))
-        currency = _normalize_optional_upper(row.get("currency"))
-        bank = _normalize_optional_upper(row.get("bank"))
-        account_label = _normalize_optional_upper(row.get("account_label"))
+        booking_date = normalize_optional_booking_date(row.get("booking_date"))
+        amount_native = normalize_optional_decimal(row.get("amount_native"))
+        currency = normalize_optional_upper(row.get("currency"))
+        bank = normalize_optional_upper(row.get("bank"))
+        account_label = normalize_optional_upper(row.get("account_label"))
         if booking_date is None or amount_native is None or currency is None or bank is None:
             return None
 
@@ -305,7 +143,7 @@ def _parse_project_transaction_override_row(
     row: dict[str, object],
     tags: tuple[str, ...],
 ) -> TransactionOverrideEntry | None:
-    transaction_id = _normalize_optional_text(row.get("transaction_id"))
+    transaction_id = normalize_optional_text(row.get("transaction_id"))
     if transaction_id is None:
         return None
     return TransactionOverrideEntry(
@@ -335,7 +173,7 @@ def _resolve_override_level(
 ) -> str | None:
     if not has_override_level_column:
         return "category_override"
-    raw = _normalize_optional_text(row.get(OVERRIDE_LEVEL_COLUMN))
+    raw = normalize_optional_text(row.get(OVERRIDE_LEVEL_COLUMN))
     if raw is None:
         return "transaction_override"
     normalized = raw.strip().lower()
@@ -349,8 +187,8 @@ def _has_category_override_request(
     *,
     has_override_level_column: bool,
 ) -> bool:
-    category = _normalize_optional_text(row.get("category"))
-    subcategory = _normalize_optional_text(row.get("subcategory"))
+    category = normalize_optional_text(row.get("category"))
+    subcategory = normalize_optional_text(row.get("subcategory"))
     if category is None:
         return False
     if not has_override_level_column:
@@ -479,7 +317,7 @@ def import_review_into_overrides(
     transaction_backup_path: Path | None = None,
 ) -> ReviewImportResult:
     """Import reviewed rows and upsert into override config."""
-    dataframe = _read_table(review_path)
+    dataframe = read_table(review_path)
     missing_columns = [
         column for column in REQUIRED_REVIEW_COLUMNS if column not in dataframe.columns
     ]
@@ -500,9 +338,9 @@ def import_review_into_overrides(
     project_tags_applied = 0
 
     for index, row in enumerate(raw_rows):
-        row_is_fallback = _is_fallback_category_source(row.get("category_source"))
+        row_is_fallback = is_fallback_category_source(row.get("category_source"))
         tags = (
-            _normalize_project_tags(row.get(PROJECT_TAGS_COLUMN)) if has_project_tags_column else ()
+            normalize_project_tags(row.get(PROJECT_TAGS_COLUMN)) if has_project_tags_column else ()
         )
         category_requested = _has_category_override_request(
             row,

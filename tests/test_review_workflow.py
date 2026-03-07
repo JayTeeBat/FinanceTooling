@@ -4,11 +4,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from finance_tooling.categorization_review import (
-    export_fallback_review_rows,
-    import_review_into_overrides,
-)
 from finance_tooling.classify import OverrideEntry, OverrideStore, load_override_store
+from finance_tooling.review_export import export_fallback_review_rows
+from finance_tooling.review_import import import_review_into_overrides
 from finance_tooling.transaction_overrides import (
     TransactionOverrideStore,
     load_transaction_override_store,
