@@ -11,7 +11,7 @@ import pandas as pd
 from finance_tooling.classify import normalize_description
 from finance_tooling.models import Transaction
 
-_MANUAL_SOURCES = {"override", "transaction_override", "carry_forward_manual"}
+_MANUAL_SOURCES = {"transaction_override"}
 _BLOCKED_CURRENT_SOURCES = _MANUAL_SOURCES
 _REQUIRED_COLUMNS = (
     "booking_date",
@@ -214,7 +214,7 @@ def apply_manual_category_carry_forward(
                 category=_normalize_text(selected.get("category")),
                 subcategory=_normalize_text(selected.get("subcategory")) or None,
                 category_confidence=1.0,
-                category_source="carry_forward_manual",
+                category_source="transaction_override",
                 category_rule_id=None,
             )
         )

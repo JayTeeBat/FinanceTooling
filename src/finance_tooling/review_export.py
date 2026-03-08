@@ -1,4 +1,4 @@
-"""Manual categorization review export helpers."""
+"""Manual transaction review export helpers."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from finance_tooling.classify import normalize_description
 from finance_tooling.review_common import (
     EXISTING_PROJECT_TAGS_COLUMN,
     FINGERPRINT_COLUMN,
-    OVERRIDE_LEVEL_COLUMN,
     PROJECT_TAGS_COLUMN,
     REQUIRED_REVIEW_COLUMNS,
     REVIEW_COMMENT_COLUMN,
@@ -26,7 +25,6 @@ from finance_tooling.review_state import load_review_state
 _PRESERVED_REVIEW_COLUMNS = (
     "category",
     "subcategory",
-    OVERRIDE_LEVEL_COLUMN,
     PROJECT_TAGS_COLUMN,
     REVIEWED_COLUMN,
     REVIEW_COMMENT_COLUMN,
@@ -42,7 +40,6 @@ _CONTEXT_EXPORT_COLUMNS = (
 _EDITABLE_EXPORT_COLUMNS = (
     "category",
     "subcategory",
-    OVERRIDE_LEVEL_COLUMN,
     PROJECT_TAGS_COLUMN,
     REVIEWED_COLUMN,
     REVIEW_COMMENT_COLUMN,
@@ -50,26 +47,11 @@ _EDITABLE_EXPORT_COLUMNS = (
 _PROVENANCE_EXPORT_COLUMNS = (
     FINGERPRINT_COLUMN,
     "account_label",
-    "category_source",
     "project_source",
     EXISTING_PROJECT_TAGS_COLUMN,
     "source_file",
 )
-
-
-def _order_review_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
-    ordered: list[str] = []
-    for column in (
-        *_CONTEXT_EXPORT_COLUMNS,
-        *_EDITABLE_EXPORT_COLUMNS,
-        *_PROVENANCE_EXPORT_COLUMNS,
-    ):
-        if column in dataframe.columns and column not in ordered:
-            ordered.append(column)
-    for column in dataframe.columns:
-        if column not in ordered:
-            ordered.append(column)
-    return dataframe.loc[:, ordered]
+_LEGACY_UNCATEGORIZED_SOURCES = {"fallback", "uncategorized"}
 
 
 def _apply_existing_review_values(
@@ -150,7 +132,44 @@ def _apply_exact_filter(dataframe: pd.DataFrame, column: str, value: str | None)
     return dataframe.loc[values == normalized]
 
 
-def export_fallback_review_rows(
+def _order_review_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
+    ordered: list[str] = []
+    for column in (
+        *_CONTEXT_EXPORT_COLUMNS,
+        *_EDITABLE_EXPORT_COLUMNS,
+        *_PROVENANCE_EXPORT_COLUMNS,
+    ):
+        if column in dataframe.columns and column not in ordered:
+            ordered.append(column)
+    for column in dataframe.columns:
+        if column not in ordered:
+            ordered.append(column)
+    return dataframe.loc[:, ordered]
+
+
+def _filter_review_scope(dataframe: pd.DataFrame, *, include_categorized: bool) -> pd.DataFrame:
+    if include_categorized:
+        return dataframe
+
+    uncategorized_by_category = (
+        dataframe["category"].fillna("").astype(str).str.strip().str.casefold() == "uncategorized"
+        if "category" in dataframe.columns
+        else pd.Series(False, index=dataframe.index)
+    )
+    uncategorized_by_source = (
+        dataframe["category_source"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+        .isin(_LEGACY_UNCATEGORIZED_SOURCES)
+        if "category_source" in dataframe.columns
+        else pd.Series(False, index=dataframe.index)
+    )
+    return dataframe.loc[uncategorized_by_category | uncategorized_by_source]
+
+
+def export_review_rows(
     normalized_path: Path,
     review_output_path: Path,
     *,
@@ -165,7 +184,7 @@ def export_fallback_review_rows(
     review_state_path: Path | None = None,
     dark_safe: bool = True,
 ) -> int:
-    """Export fallback-classified rows for manual review."""
+    """Export uncategorized rows for manual review."""
     dataframe = read_table(normalized_path)
     missing_columns = [
         column for column in REQUIRED_REVIEW_COLUMNS if column not in dataframe.columns
@@ -188,14 +207,9 @@ def export_fallback_review_rows(
         lambda value: normalize_description(str(value))
     )
 
-    if not include_categorized:
-        filtered_rows = filtered_rows.loc[
-            filtered_rows["category_source"].astype(str).str.strip().str.lower() == "fallback"
-        ]
+    filtered_rows = _filter_review_scope(filtered_rows, include_categorized=include_categorized)
 
     if start_date_value is not None or end_date_value is not None:
-        if "booking_date" not in filtered_rows.columns:
-            raise ValueError("Input table missing required columns: booking_date")
         booking_dates = pd.to_datetime(filtered_rows["booking_date"], errors="coerce")
         if start_date_value is not None:
             filtered_rows = filtered_rows.loc[booking_dates >= pd.Timestamp(start_date_value)]
@@ -213,9 +227,11 @@ def export_fallback_review_rows(
     else:
         review_rows[EXISTING_PROJECT_TAGS_COLUMN] = None
     review_rows[PROJECT_TAGS_COLUMN] = None
-    review_rows[OVERRIDE_LEVEL_COLUMN] = None
     review_rows[REVIEWED_COLUMN] = False
     review_rows[REVIEW_COMMENT_COLUMN] = None
+    for removable in ("category_source", "category_rule_id"):
+        if removable in review_rows.columns:
+            review_rows = review_rows.drop(columns=[removable])
 
     if preserve_review_state and review_output_path.exists():
         review_rows = _apply_existing_review_values(review_rows, read_table(review_output_path))

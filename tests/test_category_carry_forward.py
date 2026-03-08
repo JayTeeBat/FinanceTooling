@@ -14,7 +14,7 @@ def _transaction(
     description: str,
     category: str = "Uncategorized",
     subcategory: str | None = None,
-    category_source: str = "fallback",
+    category_source: str = "uncategorized",
 ) -> Transaction:
     return Transaction(
         booking_date=date(2025, 6, 24),
@@ -59,7 +59,7 @@ def test_apply_manual_category_carry_forward_uses_prefix_match_when_description_
     assert result.diagnostics.ambiguous_skipped_count == 0
     assert result.transactions[0].category == "Groceries"
     assert result.transactions[0].subcategory == "General Retail"
-    assert result.transactions[0].category_source == "carry_forward_manual"
+    assert result.transactions[0].category_source == "transaction_override"
 
 
 def test_apply_manual_category_carry_forward_skips_ambiguous_matches(tmp_path: Path) -> None:
@@ -83,7 +83,7 @@ def test_apply_manual_category_carry_forward_skips_ambiguous_matches(tmp_path: P
         base,
         description="VIS PRIMARK644 LONDON W5 EXTRA",
         category="Leisure",
-        category_source="override",
+        category_source="transaction_override",
     )
     upsert_transactions(master, [base, another])
 
@@ -92,7 +92,7 @@ def test_apply_manual_category_carry_forward_skips_ambiguous_matches(tmp_path: P
         description="VIS PRIMARK644 LONDON W5",
         category="Uncategorized",
         subcategory=None,
-        category_source="fallback",
+        category_source="uncategorized",
     )
     # Force ambiguity by matching both existing descriptions through prefix logic.
     incoming = replace(incoming, description="VIS PRIMARK644 LONDON W5 E")
@@ -102,5 +102,5 @@ def test_apply_manual_category_carry_forward_skips_ambiguous_matches(tmp_path: P
     assert result.diagnostics.applied_count == 0
     assert result.diagnostics.ambiguous_skipped_count == 1
     assert result.transactions[0].category == "Uncategorized"
-    assert result.transactions[0].category_source == "fallback"
+    assert result.transactions[0].category_source == "uncategorized"
     assert result.warnings

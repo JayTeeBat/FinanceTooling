@@ -5,12 +5,12 @@ transaction-level overrides, and project tagging.
 
 ## Purpose
 
-- Export fallback-classified rows with full transaction detail for review in an
-  Excel workbook.
+- Export uncategorized rows with full transaction detail for review in an Excel
+  workbook.
 - Let an analyst edit category/subcategory and project tags independently.
 - Persist review progress (`reviewed`, `review_comment`) across review sessions.
-- Re-import reviewed rows into persistent overrides safely.
-- Re-run transform to apply new overrides and reduce fallback volume.
+- Re-import reviewed rows into persistent transaction overrides safely.
+- Re-run transform to apply new overrides and reduce uncategorized volume.
 
 ## Flow Overview
 
@@ -28,12 +28,11 @@ Assumes `.env` has at least:
 
 Optional:
 
-- `FINANCE_CATEGORY_OVERRIDES_PATH`
 - `FINANCE_TRANSACTION_OVERRIDES_PATH`
 - `FINANCE_REVIEW_STATE_PATH`
 - `FINANCE_REVIEW_EXPORT_DARK_SAFE`
 
-### 1. Export fallback review rows
+### 1. Export uncategorized review rows
 
 ```bash
 uv run review-export
@@ -42,11 +41,11 @@ uv run review-export
 Default input/output paths when flags are omitted:
 
 - normalized input: `${FINANCE_PROCESSED_PATH}/transactions_normalized.csv`
-- review output: `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx`
+- review output: `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`
 
-Default export behavior is fallback-only. Optional filters:
+Default export behavior is uncategorized-only. Optional filters:
 
-- `--include-categorized`: include non-fallback rows in the review export.
+- `--include-categorized`: include categorized rows in the review export.
 - `--start-date YYYY-MM-DD`: inclusive lower `booking_date` bound.
 - `--end-date YYYY-MM-DD`: inclusive upper `booking_date` bound.
 - `--contains TEXT`: case-insensitive match across description/fingerprint/bank/account.
@@ -68,21 +67,16 @@ uv run review-export \
 
 ### 2. Analyst review
 
-Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx`:
+Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
 
 - Keep `description`, `bank`, `account_label` unchanged.
 - Set `category` and optional `subcategory` when a category correction is needed.
-- Keep `category_source` as `fallback` for standard import mode.
 - Use `fingerprint` as a read-only normalized search/grouping helper.
 - Use extra transaction columns (for example `booking_date`, `amount_native`,
   `currency`, `source_file`) to disambiguate similar descriptions when needed.
 - Use `reviewed` to mark a transaction as reviewed.
 - Use `review_comment` for freeform reviewer notes.
-- Use `override_level` for category behavior:
-  - `category_override`: write into `category_overrides.yaml`
-  - `transaction_override`: write into `transaction_overrides.yaml`
-  - `skip`: do not import category change for that row
-- `override_level` defaults to `transaction_override` when left blank.
+- Category/subcategory edits always write into `transaction_overrides.yaml`.
 - Use `project_tags` for manual project tagging on unique transactions.
   - `project_tags` is independent from category edits.
   - Leave blank to skip project tagging.
@@ -110,14 +104,8 @@ uv run review-import
 Default path resolution:
 
 - review input:
-  - `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx` if present
-  - else `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`
-- category overrides destination:
-  - `--overrides-path` if provided
-  - else `FINANCE_CATEGORY_OVERRIDES_PATH` from settings
-  - else `${FINANCE_STATEMENTS_PATH}/../config/category_overrides.yaml`
-  - else, when settings are unavailable but `--review-path` is provided:
-    `${REVIEW_PATH_PARENT}/../config/category_overrides.yaml`
+  - `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx` if present
+  - else `${FINANCE_PROCESSED_PATH}/transactions_review.csv`
 - transaction overrides destination:
   - `--transaction-overrides-path` if provided
   - else `FINANCE_TRANSACTION_OVERRIDES_PATH` from settings
@@ -130,9 +118,7 @@ Default path resolution:
 
 Default safety behavior:
 
-- abort on override-load warnings for either override file (unless
-  `--allow-load-warnings`)
-- skip rows not marked `category_source=fallback` (unless `--allow-non-fallback-import`)
+- abort on transaction-override load warnings (unless `--allow-load-warnings`)
 - create timestamped backup before writing changed files (disable with
   `--no-backup`)
 
@@ -148,10 +134,18 @@ Or apply import and rebuild outputs in one step:
 uv run review-import --run-transform
 ```
 
-### 6. Optional: direct override editing outside CSV review
+### 6. Optional: direct editing outside workbook review
 
 Use `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml` for direct
-one-off edits or bulk edits outside the review CSV.
+one-off edits or bulk edits outside the review workbook.
+
+Use `${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml` for reusable
+categorization logic. Legacy fingerprint-level category overrides should be
+migrated into exact-match rules with:
+
+```bash
+uv run migrate-category-overrides-to-rules
+```
 
 Use `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml` for reusable
 project-tag automation:
@@ -173,33 +167,29 @@ Precedence during transform:
 
 Review file must include:
 
+- `transaction_id`
+- `booking_date`
 - `description`
+- `amount_native`
+- `currency`
 - `bank`
 - `account_label`
 - `category`
 - `subcategory`
-- `category_source`
 
 ### Row filtering
 
-- Non-fallback rows are skipped by default.
-- In legacy rows (without `override_level`), missing `description` or
-  `category` are skipped as invalid.
-- In v2 rows (with `override_level`):
-  - category import is skipped when `category=Uncategorized` and subcategory is
-    empty.
-  - `override_level` must be one of:
-    `skip`, `category_override`, `transaction_override`.
-  - blank `override_level` defaults to `transaction_override`.
+- Category import requires `transaction_id`.
+- `category=Uncategorized` is treated as no manual category correction.
+- `subcategory` without `category` is invalid.
 - `project_tags` import requires `transaction_id`.
 - `reviewed` / `review_comment` persistence requires `transaction_id`.
-- If multiple rows map to the same override key (`fingerprint`, `bank`,
-  `account_label`), import keeps the last row (last-row wins).
+- If multiple rows map to the same `transaction_id`, import keeps the last row
+  (last-row wins).
 
 ### Operational switches
 
 - `--allow-load-warnings`: proceed even if existing override file fails parsing.
-- `--allow-non-fallback-import`: import rows where `category_source != fallback`.
 - `--dry-run`: preview only, no writes.
 - `--backup/--no-backup`: enable/disable pre-write backup.
 - `--backup-path`: custom backup destination.

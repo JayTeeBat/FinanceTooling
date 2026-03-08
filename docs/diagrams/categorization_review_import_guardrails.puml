@@ -2,8 +2,7 @@
 title review-import Guardrails and Decision Flow
 
 start
-:Resolve review + category + transaction paths;
-:Load category override store;
+:Resolve review + transaction override + review state paths;
 :Load transaction override store;
 
 if (override load warnings?) then (yes)
@@ -21,28 +20,21 @@ endif
 repeat
   :Read next review row;
   if (row exists?) then (yes)
-    if (category_source == fallback?) then (yes)
-      :Continue row validation;
-    else (no)
-      if (--allow-non-fallback-import?) then (yes)
-        :Continue row validation;
-      else (no)
-        :Skip row (non-fallback);
-      endif
-    endif
-    if (category edit requested?) then (yes)
-      if (override_level valid?) then (yes)
-        if (override_level == category_override?) then (yes)
-          :Build category override entry;
-        else (no)
-          if (override_level == transaction_override?) then (yes)
-            :Build transaction category override entry;
-          else (no)
+    if (category/subcategory edit requested?) then (yes)
+      if (transaction_id present?) then (yes)
+        if (category present?) then (yes)
+          if (category == Uncategorized?) then (yes)
             :Skip category action;
+          else (no)
+            :Build transaction category override entry;
+          endif
+        else (no)
+          if (subcategory present?) then (yes)
+            :Skip row (invalid category action);
           endif
         endif
       else (no)
-        :Skip row (invalid category action);
+        :Skip row (missing transaction_id for category edit);
       endif
     endif
 
@@ -53,22 +45,31 @@ repeat
         :Skip row (invalid project tags);
       endif
     endif
+
+    if (reviewed/review_comment populated?) then (yes)
+      if (transaction_id present?) then (yes)
+        :Build review-state update entry;
+      else (no)
+        :Skip review-state update;
+      endif
+    endif
   endif
 repeat while (more rows?) is (yes)
 
-:Upsert category entries in-memory;
 :Upsert transaction entries in-memory;
+:Upsert review-state entries in-memory;
 if (--dry-run?) then (yes)
   :Return counters only;\nNo write;
   stop
 endif
 
 if (--backup?) then (yes)
-  :Create backup for changed files\n(default timestamp or --backup-path);
+  :Create backup for changed transaction override file\n(default timestamp or --backup-path);
 endif
 
-:Write merged category and transaction overrides files;
-:Return counters and backup paths;
+:Write merged transaction overrides file;
+:Write review state file;
+:Return counters and backup path;
 stop
 
 @enduml

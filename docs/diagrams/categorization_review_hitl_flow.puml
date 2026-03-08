@@ -4,9 +4,9 @@ title Categorization Review Human-in-the-Loop Flow
 actor Analyst
 participant "finance_tooling CLI" as CLI
 database "transactions_normalized.csv" as NORMALIZED
-participant "fallback_category_review.csv" as REVIEW <<file>>
-database "category_overrides.yaml" as OVERRIDES
+participant "transactions_review.xlsx" as REVIEW <<file>>
 database "transaction_overrides.yaml" as TX_OVERRIDES
+database "review_state.parquet" as REVIEW_STATE
 participant "transform stage" as TRANSFORM
 
 group Review Export
@@ -15,57 +15,52 @@ alt flags omitted
 CLI -> CLI: Resolve defaults from .env\nFINANCE_PROCESSED_PATH
 end
 CLI -> NORMALIZED: Read normalized table
-CLI -> REVIEW: Write fallback-only review rows
+CLI -> REVIEW_STATE: Load persisted review state
+CLI -> REVIEW: Write uncategorized review rows\n(default) or all rows with --include-categorized
 CLI --> Analyst: Export summary\n(row count + output path)
 end
 
 group Manual Review
-Analyst -> REVIEW: Edit category/subcategory,\noverride_level, project_tags
+Analyst -> REVIEW: Edit category/subcategory,\nproject_tags, reviewed, review_comment
 note right of Analyst
 Keep key fields stable:
+- transaction_id
 - description
 - bank
 - account_label
-Use override_level:
-- category_override
-- transaction_override
-- skip
-Leave blank => transaction_override
+
+Use:
+- category/subcategory for manual transaction corrections
+- project_tags for manual project tagging
+- reviewed for progress tracking
+- review_comment for analyst notes
 end note
 end
 
 group Review Import
 Analyst -> CLI: review-import\n[with flags OR defaults]
 alt flags omitted
-CLI -> CLI: Resolve defaults from .env\n(processed + category + transaction paths)
+CLI -> CLI: Resolve defaults from .env\n(processed + transaction override paths)
 end
-CLI -> OVERRIDES: Load existing overrides
 CLI -> TX_OVERRIDES: Load existing transaction overrides
+CLI -> REVIEW_STATE: Load existing review state
 CLI -> REVIEW: Read reviewed rows
-CLI -> CLI: Validate rows + route actions
-alt category row (override_level=category_override)
-CLI -> OVERRIDES: Upsert category override
-else category row (override_level blank/transaction_override)
-CLI -> TX_OVERRIDES: Upsert transaction category override
-else project_tags set
-CLI -> TX_OVERRIDES: Upsert transaction project tags
-end
+CLI -> CLI: Validate rows + build transaction-level changes
 alt dry-run enabled
 CLI --> Analyst: Preview upsert counters\n(no file write)
 else apply import
-CLI -> OVERRIDES: Backup existing file
 CLI -> TX_OVERRIDES: Backup existing file
-CLI -> OVERRIDES: Upsert overrides and write file
-CLI -> TX_OVERRIDES: Upsert overrides and write file
+CLI -> TX_OVERRIDES: Upsert transaction overrides and write file
+CLI -> REVIEW_STATE: Upsert review state and write file
 CLI --> Analyst: Import summary\n(updated/inserted/skipped)
 end
 end
 
 group Apply New Overrides
-Analyst -> TRANSFORM: Run transform
-TRANSFORM -> OVERRIDES: Load updated overrides
+Analyst -> TRANSFORM: Run transform\nor review-import --run-transform
 TRANSFORM -> TX_OVERRIDES: Load updated overrides
-TRANSFORM --> Analyst: New categorized outputs
+TRANSFORM -> REVIEW_STATE: Load review markers
+TRANSFORM --> Analyst: New categorized outputs\nwith reviewed projected into normalized output
 end
 
 @enduml

@@ -26,7 +26,7 @@ def _tx(description: str, *, amount: str) -> Transaction:
         category="Uncategorized",
         subcategory=None,
         category_confidence=0.0,
-        category_source="fallback",
+        category_source="uncategorized",
         account_label="Main",
     )
 

@@ -43,7 +43,7 @@ uv run ingest
 uv run review-export
 ```
 
-- Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx`.
+- Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`.
 - The review workbook includes:
   - `reviewed`: persistent review-progress marker
   - `review_comment`: freeform review note
@@ -79,8 +79,8 @@ uv run transform
 
 What it does:
 - Reads staged data.
-- Applies category rules, category overrides, project rules, and transaction overrides.
-- Carries forward prior manual category/subcategory (`override` or `transaction_override`)
+- Applies category rules, project rules, and transaction overrides.
+- Carries forward prior manual category/subcategory (`transaction_override`)
   when parser cleanup changes transaction descriptions but the same transaction can be
   matched deterministically.
 - Writes canonical outputs (`transactions_master.parquet`,
@@ -136,9 +136,9 @@ uv run review-export \
 # explicit paths
 uv run review-export \
   --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
-  --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.xlsx"
+  --output-path "$FINANCE_PROCESSED_PATH/transactions_review.xlsx"
 
-# edit fallback_category_review.xlsx (set category/subcategory, reviewed, notes)
+# edit transactions_review.xlsx (set category/subcategory, reviewed, notes)
 
 # defaults (review file from processed path, overrides from env or data-adjacent config)
 uv run review-import
@@ -151,17 +151,13 @@ uv run review-import --run-transform
 
 # explicit paths
 uv run review-import \
-  --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.xlsx" \
-  --overrides-path "$FINANCE_STATEMENTS_PATH/../config/category_overrides.yaml"
+  --review-path "$FINANCE_PROCESSED_PATH/transactions_review.xlsx" \
+  --transaction-overrides-path "$FINANCE_STATEMENTS_PATH/../config/transaction_overrides.yaml"
 ```
 
-Default upsert key is normalized `description` fingerprint + `bank`. Add
-`--include-account-label-scope` on import to include `account_label` in the key.
 By default, `review-import` aborts when existing override-load warnings are present.
 Use `--allow-load-warnings` only for deliberate recovery flows.
-Rows whose `category_source` is not `fallback` are skipped by default; override with
-`--allow-non-fallback-import`.
-For `review-export`, output remains fallback-only by default; use
+For `review-export`, output is uncategorized-only by default; use
 `--include-categorized` to include already-categorized rows. Optional
 `--start-date` and `--end-date` apply inclusive `booking_date` filters.
 Additional review filters:
@@ -184,6 +180,13 @@ Transaction-level corrections and project tags are configured in:
 
 - `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
 - `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml`
+
+Legacy fingerprint-level category overrides can be migrated into exact-match
+rules with:
+
+```bash
+uv run migrate-category-overrides-to-rules
+```
 
 Related docs and diagrams:
 
@@ -266,7 +269,6 @@ export FINANCE_INGEST_WORKERS="1"
 export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
 export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet"
 export FINANCE_CATEGORY_RULES_PATH="/path/to/data/config/category_rules.yaml"
-export FINANCE_CATEGORY_OVERRIDES_PATH="/path/to/data/config/category_overrides.yaml"
 export FINANCE_PROJECT_RULES_PATH="/path/to/data/config/project_rules.yaml"
 export FINANCE_BUDGET_TARGETS_PATH="/path/to/data/config/budget_targets.yaml"
 export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/data/config/project_overrides.yaml"
@@ -285,7 +287,6 @@ Categorization is deterministic and rules-first. When no categorization env vars
 set, the workflow expects:
 
 - `<FINANCE_STATEMENTS_PATH>/../config/category_rules.yaml`
-- `<FINANCE_STATEMENTS_PATH>/../config/category_overrides.yaml`
 - `<FINANCE_STATEMENTS_PATH>/../config/project_rules.yaml`
 - `<FINANCE_STATEMENTS_PATH>/../config/budget_targets.yaml`
 - `<FINANCE_STATEMENTS_PATH>/../config/project_overrides.yaml`
@@ -294,15 +295,12 @@ set, the workflow expects:
 The repository includes starter templates:
 
 - `config/category_rules.yaml`
-- `config/category_overrides.yaml`
 - `config/project_rules.yaml`
 - `config/budget_targets.yaml`
 - `config/project_overrides.yaml`
 - `config/transaction_overrides.yaml`
 
-Supported formats for all six config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
-Manual correction rules in `FINANCE_CATEGORY_OVERRIDES_PATH` take precedence over
-standard categorization rules.
+Supported formats for all five config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
 from `FINANCE_BUDGET_TARGETS_PATH` (both optional; missing files degrade gracefully
 to `Unassigned` projects and no budget targets).

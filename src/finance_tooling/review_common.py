@@ -10,28 +10,26 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.datavalidation import DataValidation
 
 REQUIRED_REVIEW_COLUMNS: tuple[str, ...] = (
+    "transaction_id",
+    "booking_date",
     "description",
+    "amount_native",
+    "currency",
     "bank",
     "account_label",
     "category",
     "subcategory",
-    "category_source",
 )
-OVERRIDE_LEVEL_COLUMN = "override_level"
 PROJECT_TAGS_COLUMN = "project_tags"
 EXISTING_PROJECT_TAGS_COLUMN = "existing_project_tags"
 REVIEWED_COLUMN = "reviewed"
 REVIEW_COMMENT_COLUMN = "review_comment"
 FINGERPRINT_COLUMN = "fingerprint"
-VALID_OVERRIDE_LEVELS = {"skip", "category_override", "transaction_override"}
 EDITABLE_REVIEW_COLUMNS = (
     "category",
     "subcategory",
-    OVERRIDE_LEVEL_COLUMN,
     PROJECT_TAGS_COLUMN,
     REVIEWED_COLUMN,
     REVIEW_COMMENT_COLUMN,
@@ -115,17 +113,6 @@ def _format_review_workbook(path: Path, columns: list[str], *, dark_safe: bool) 
         for index, cell in enumerate(row, start=1):
             cell.font = body_font
             cell.fill = editable_fill if index in editable_indexes else body_fill
-
-    if OVERRIDE_LEVEL_COLUMN in columns and worksheet.max_row >= 2:
-        column_index = columns.index(OVERRIDE_LEVEL_COLUMN) + 1
-        letter = get_column_letter(column_index)
-        validation = DataValidation(
-            type="list",
-            formula1='"skip,category_override,transaction_override"',
-            allow_blank=True,
-        )
-        worksheet.add_data_validation(validation)
-        validation.add(f"{letter}2:{letter}{worksheet.max_row}")
 
     _set_column_widths(worksheet)
     workbook.save(path)
@@ -223,14 +210,6 @@ def normalize_project_tags(value: object) -> tuple[str, ...]:
         seen.add(marker)
         tags.append(raw)
     return tuple(tags)
-
-
-def is_fallback_category_source(value: object) -> bool:
-    """Return True when the source column points to fallback categorization."""
-    normalized = normalize_optional_text(value)
-    if normalized is None:
-        return False
-    return normalized.lower() == "fallback"
 
 
 def parse_filter_date(value: str | None, *, label: str) -> date | None:

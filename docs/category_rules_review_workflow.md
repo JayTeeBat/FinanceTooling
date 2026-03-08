@@ -71,13 +71,13 @@ the change type for each edit:
 Acceptance checks by change type:
 
 - create:
-  - new targeted fingerprints move from `fallback` to intended category.
+  - new targeted fingerprints move from `uncategorized` to intended category.
   - no unexpected cross-bank/account spillover.
 - amend:
   - only intended rows move from old category to new category.
   - rule narrowing/widening is intentional and documented in PR notes.
 - delete:
-  - impacted rows are intentionally handled (new rule, override, or fallback).
+  - impacted rows are intentionally handled (new rule, transaction override, or uncategorized).
   - no silent drop in categorization quality for the month window.
 
 ## 3) Impact Preview
@@ -123,39 +123,25 @@ create/amend/delete edits, choose one explicit action:
 - keep as new-rule category
   - action: accept candidate rule result, no override added.
   - check: row is correctly categorized in candidate output.
-- pin with category override
-  - action: set `override_level=category_override` in review CSV, import with
-    `--allow-non-fallback-import`.
-  - check: future rule edits cannot change this fingerprint-level category.
 - recategorize via transaction override
-  - action: set `override_level=transaction_override` for exact transaction
-    control, import with `--allow-non-fallback-import`.
+  - action: edit `category` / `subcategory` in the review workbook for exact
+    transaction control, then import.
   - check: only intended transaction IDs are forced.
-- intentionally fallback and track
-  - action: leave uncategorized/fallback intentionally, track in month residuals.
-  - check: appears in fallback review and is captured in
+- intentionally uncategorized and track
+  - action: leave uncategorized intentionally, track in month residuals.
+  - check: appears in review export and is captured in
     `top_uncategorized_descriptions`.
-
-If using review import for non-fallback rows:
-
-```bash
-uv run review-import \
-  --review-path "${RUN_ROOT}/candidate_review.xlsx" \
-  --allow-non-fallback-import \
-  --dry-run
-```
 
 ## 5) Apply
 
 After decisioning approval:
 
 1. Keep approved changes in `${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml`.
-2. Import approved override rows if needed.
+2. Import approved transaction-level review edits if needed.
 
 ```bash
 uv run review-import \
-  --review-path "${RUN_ROOT}/candidate_review.xlsx" \
-  --allow-non-fallback-import
+  --review-path "${RUN_ROOT}/candidate_review.xlsx"
 ```
 
 3. Re-run canonical pipeline:

@@ -11,6 +11,9 @@ from finance_tooling.commands import (
     metrics_log_update as metrics_log_update_command,
 )
 from finance_tooling.commands import (
+    migrate_category_overrides_to_rules as migrate_category_overrides_command,
+)
+from finance_tooling.commands import (
     review_export as review_export_command,
 )
 from finance_tooling.commands import (
@@ -51,7 +54,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     review_export_parser = subparsers.add_parser(
         "review-export",
-        help="Export fallback categorization rows for manual review.",
+        help="Export uncategorized transaction rows for manual review.",
     )
     review_export_command.configure_parser(review_export_parser)
 
@@ -60,6 +63,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Import reviewed categories and upsert overrides.",
     )
     review_import_command.configure_parser(review_import_parser)
+
+    migrate_category_overrides_parser = subparsers.add_parser(
+        "migrate-category-overrides-to-rules",
+        help="Migrate legacy category overrides into exact-match rules.",
+    )
+    migrate_category_overrides_command.configure_parser(migrate_category_overrides_parser)
 
     metrics_log_parser = subparsers.add_parser(
         "metrics-log-update",

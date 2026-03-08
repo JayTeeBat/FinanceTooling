@@ -24,7 +24,7 @@ categorization, and reporting.
   - `transactions_normalized.csv`:
     `category_source` distribution for targeted month windows.
   - review-import safety behavior:
-    load-warning fail-safe, fallback-row filtering, backup creation.
+    load-warning fail-safe, row-validation counters, backup creation.
 
 ## Engineering Standards
 
@@ -129,8 +129,8 @@ Prioritized recommendations for the next worker:
 - Implemented review-export/review-import command pair with default path
   resolution from `.env`/settings.
 - Added import safety controls and guardrails:
-  `--allow-load-warnings`, `--allow-non-fallback-import`, `--dry-run`,
-  `--backup/--no-backup`, and `--backup-path`.
+  `--allow-load-warnings`, `--dry-run`, `--backup/--no-backup`, and
+  `--backup-path`.
 - Added documentation + diagrams for human-in-the-loop operations.
 
 2. Completed: transaction-level overrides + project tags pipeline support
@@ -140,7 +140,7 @@ Prioritized recommendations for the next worker:
 - Added config-backed project tagging rules/overrides:
   `config/project_overrides.yaml` (or `FINANCE_PROJECT_OVERRIDES_PATH`).
 - Enrichment now applies precedence:
-  category rule/override -> project rule/override -> transaction override.
+  category rule -> project rule/override -> transaction override.
 - Transaction overrides can set `category`, `subcategory`, `project`,
   `project_tags` with `category_source`/`project_source=transaction_override`.
 
@@ -149,10 +149,11 @@ Prioritized recommendations for the next worker:
   `review-export` -> manual review -> `review-import` -> `transform`.
 - Track before/after month-scoped `uncategorized_count` and
   `uncategorized_ratio` from normalized outputs and `run_summary.json`.
-- Keep override updates centralized in `config/category_overrides.yaml` and
-  avoid ad-hoc local-only override files.
+- Keep reusable categorization logic centralized in `config/category_rules.yaml`
+  and use `transaction_overrides.yaml` only for true transaction-level manual
+  corrections.
 - Capture high-frequency residual fingerprints discovered during 2026 review
-  and feed them into rule/override updates.
+  and feed them into rule updates.
 
 4. Apply second-pass residual rule/override batch for current uncategorized leaders
 - Target the latest high-frequency residual fingerprints:
@@ -187,6 +188,23 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-08 - codex
+- Branch: `feature/excel-review-workbook`
+- Completed:
+  - Removed the old fallback categorization workflow from active runtime behavior: unmatched transactions are now `uncategorized`, manual review edits route to `transaction_overrides.yaml`, and active settings no longer load `category_overrides.yaml`.
+  - Simplified the review workbook and CLI around `transactions_review.xlsx`, uncategorized-first export, and transaction-override-only import semantics.
+  - Added a one-off `migrate-category-overrides-to-rules` command to convert legacy fingerprint overrides into exact-match category rules.
+  - Updated tests, README, workflow docs, and diagram sources to reflect the new review model.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - `docs/diagrams/*.svg` were not regenerated in this session if `plantuml` is unavailable in `PATH`.
+- Next action:
+  - Run one real `review-export` -> `review-import --dry-run` cycle on current data to confirm the simplified workbook feels right in daily use.
+
+### 2026-03-08 - codex
 - Branch: `main`
 - Completed:
   - Added dark-safe review workbook export control with
@@ -214,7 +232,7 @@ Success target for the 2026 validation campaign:
 - Completed:
   - Migrated the human review workflow to be Excel-first by default:
     `review-export` now defaults to
-    `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx` and supports
+    `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx` and supports
     workbook formatting plus review filters (`--contains`, `--bank`,
     `--account-label`, `--only-unreviewed`).
   - Added durable review-state persistence in
@@ -239,29 +257,3 @@ Success target for the 2026 validation campaign:
   - Run `review-export` -> Excel review -> `review-import --run-transform` on a
     real month slice and validate `reviewed` propagation in
     `transactions_normalized.csv`.
-
-### 2026-03-07 - codex
-- Branch: `chore/command-module-discoverability`
-- Completed:
-  - Consolidated shared review path-resolution helpers into
-    `src/finance_tooling/commands/common.py` so `review-export` and
-    `review-import` no longer duplicate settings/default resolution logic.
-  - Removed the deprecated `run` alias from
-    `src/finance_tooling/__main__.py`; supported CLI entrypoints are now the
-    explicit command names only.
-  - Renamed legacy-named test files to align with the refactored module layout:
-    `tests/test_cli_dispatch.py`,
-    `tests/test_workflow_stages.py`,
-    `tests/test_review_workflow.py`, and
-    `tests/test_command_entrypoints.py`.
-  - Re-ran the full quality gates after the follow-up cleanup to confirm the
-    command/module refactor remains stable.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - None.
-- Next action:
-  - Merge the command/module discoverability PR once reviewed.
