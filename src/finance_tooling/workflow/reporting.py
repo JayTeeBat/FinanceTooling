@@ -113,12 +113,19 @@ def persist_and_report(
     )
 
     category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"transactions_count": 0, "categorized_count": 0, "uncategorized_count": 0}
+        lambda: {
+            "transactions_count": 0,
+            "categorized_count": 0,
+            "uncategorized_count": 0,
+            "reviewed_count": 0,
+        }
     )
     for tx in transactions:
         bank = tx.bank.strip() if tx.bank.strip() else "UNKNOWN"
         counters = category_metrics_by_bank_counters[bank]
         counters["transactions_count"] += 1
+        if tx.reviewed:
+            counters["reviewed_count"] += 1
         is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
             (tx.category_source or "").strip().lower() == "fallback"
         )
@@ -133,16 +140,22 @@ def persist_and_report(
         total = counters["transactions_count"]
         categorized_pct = (counters["categorized_count"] / total) * 100.0 if total > 0 else 0.0
         uncategorized_pct = (counters["uncategorized_count"] / total) * 100.0 if total > 0 else 0.0
+        reviewed_pct = (counters["reviewed_count"] / total) * 100.0 if total > 0 else 0.0
         category_metrics_by_bank.append(
             {
                 "bank": bank,
                 "transactions_count": total,
                 "categorized_count": counters["categorized_count"],
                 "uncategorized_count": counters["uncategorized_count"],
+                "reviewed_count": counters["reviewed_count"],
                 "categorized_pct": round(categorized_pct, 4),
                 "uncategorized_pct": round(uncategorized_pct, 4),
+                "reviewed_pct": round(reviewed_pct, 4),
             }
         )
+
+    reviewed_count = sum(1 for tx in transactions if tx.reviewed)
+    reviewed_ratio = (reviewed_count / len(transactions)) if transactions else 0.0
 
     summary_payload: SummaryPayload = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -233,6 +246,8 @@ def persist_and_report(
         "categorized_count": classification_diagnostics.categorized_count,
         "uncategorized_count": classification_diagnostics.uncategorized_count,
         "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
+        "reviewed_count": reviewed_count,
+        "reviewed_ratio": reviewed_ratio,
         "manual_category_carry_forward_applied_count": (
             manual_category_carry_forward_applied_count
         ),
@@ -254,6 +269,7 @@ def persist_and_report(
         "budget_targets_path": str(settings.budget_targets_path),
         "project_overrides_path": str(settings.project_overrides_path),
         "transaction_overrides_path": str(settings.transaction_overrides_path),
+        "review_state_path": str(settings.review_state_path),
         "fx_cache_path": str(settings.fx_cache_path),
         "warnings": warnings,
     }

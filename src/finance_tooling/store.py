@@ -78,6 +78,7 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "project": tx.project,
             "project_tags": _serialize_project_tags(tx.project_tags),
             "project_source": tx.project_source,
+            "reviewed": tx.reviewed,
             "bank": tx.bank,
             "account_label": tx.account_label,
             "source_file": str(tx.source_file),

@@ -3,10 +3,12 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from openpyxl import load_workbook
 
 from finance_tooling.classify import OverrideEntry, OverrideStore, load_override_store
 from finance_tooling.review_export import export_fallback_review_rows
 from finance_tooling.review_import import import_review_into_overrides
+from finance_tooling.review_state import load_review_state
 from finance_tooling.transaction_overrides import (
     TransactionOverrideStore,
     load_transaction_override_store,
@@ -15,7 +17,7 @@ from finance_tooling.transaction_overrides import (
 
 def test_export_fallback_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> None:
     normalized_path = tmp_path / "transactions_normalized.csv"
-    output_path = tmp_path / "review.csv"
+    output_path = tmp_path / "review.xlsx"
     normalized_df = pd.DataFrame(
         [
             {
@@ -67,10 +69,27 @@ def test_export_fallback_review_rows_filters_and_keeps_full_detail(tmp_path: Pat
     exported = export_fallback_review_rows(normalized_path, output_path)
 
     assert exported == 2
-    exported_df = pd.read_csv(output_path)
+    exported_df = pd.read_excel(output_path, engine="openpyxl")
+    assert exported_df.columns[:12].tolist() == [
+        "transaction_id",
+        "booking_date",
+        "description",
+        "amount_native",
+        "currency",
+        "bank",
+        "category",
+        "subcategory",
+        "override_level",
+        "project_tags",
+        "reviewed",
+        "review_comment",
+    ]
     assert "existing_project_tags" in exported_df.columns
     assert "project_tags" in exported_df.columns
     assert "override_level" in exported_df.columns
+    assert "reviewed" in exported_df.columns
+    assert "review_comment" in exported_df.columns
+    assert "fingerprint" in exported_df.columns
     assert exported_df["transaction_id"].tolist() == ["tx_1", "tx_2"]
     assert exported_df["booking_date"].tolist() == ["2026-01-01", "2026-01-02"]
     assert exported_df.loc[0, "description"] == "UNKNOWN MERCHANT 123"
@@ -79,6 +98,14 @@ def test_export_fallback_review_rows_filters_and_keeps_full_detail(tmp_path: Pat
     assert pd.isna(exported_df.loc[1, "existing_project_tags"])
     assert exported_df["project_tags"].isna().all()
     assert exported_df["override_level"].isna().all()
+    assert exported_df["reviewed"].tolist() == [False, False]
+    workbook = load_workbook(output_path)
+    worksheet = workbook["review"]
+    assert worksheet["A1"].font.color.type == "rgb"
+    assert worksheet["A1"].font.color.rgb == "FFF5F5F5"
+    assert worksheet["A1"].font.name == "Calibri"
+    assert worksheet["A2"].font.name == "Calibri"
+    assert worksheet["A2"].fill.fgColor.rgb == "FF1E1E1E"
 
 
 def test_export_fallback_review_rows_accepts_whitespace_and_case_variants(tmp_path: Path) -> None:
@@ -104,7 +131,7 @@ def test_export_fallback_review_rows_accepts_whitespace_and_case_variants(tmp_pa
     assert exported_df.loc[0, "description"] == "UNKNOWN MERCHANT 999"
 
 
-def test_export_fallback_review_rows_places_override_level_after_project_source(
+def test_export_fallback_review_rows_groups_editable_columns_contiguously(
     tmp_path: Path,
 ) -> None:
     normalized_path = tmp_path / "transactions_normalized.csv"
@@ -130,7 +157,18 @@ def test_export_fallback_review_rows_places_override_level_after_project_source(
     assert exported == 1
     exported_df = pd.read_csv(output_path)
     columns = exported_df.columns.tolist()
-    assert columns.index("override_level") == columns.index("project_source") + 1
+    assert columns[:10] == [
+        "transaction_id",
+        "booking_date",
+        "description",
+        "bank",
+        "category",
+        "subcategory",
+        "override_level",
+        "project_tags",
+        "reviewed",
+        "review_comment",
+    ]
 
 
 def test_export_fallback_review_rows_include_categorized_option_includes_non_fallback(
@@ -232,6 +270,94 @@ def test_export_fallback_review_rows_booking_date_filters_are_inclusive(tmp_path
     assert exported == 2
     exported_df = pd.read_csv(output_path)
     assert exported_df["transaction_id"].tolist() == ["tx_start", "tx_end"]
+
+
+def test_export_fallback_review_rows_applies_review_state_and_only_unreviewed(
+    tmp_path: Path,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.xlsx"
+    review_state_path = tmp_path / "review_state.parquet"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "Merchant Alpha",
+                "bank": "REVOLUT",
+                "account_label": "Main",
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+            {
+                "transaction_id": "tx_2",
+                "booking_date": "2026-01-02",
+                "description": "Merchant Beta",
+                "bank": "REVOLUT",
+                "account_label": "Main",
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "reviewed": True,
+                "review_comment": "done",
+                "updated_at": "2026-03-07T10:00:00+00:00",
+            }
+        ]
+    ).to_parquet(review_state_path, index=False)
+
+    exported = export_fallback_review_rows(
+        normalized_path,
+        output_path,
+        only_unreviewed=True,
+        review_state_path=review_state_path,
+    )
+
+    assert exported == 1
+    exported_df = pd.read_excel(output_path, engine="openpyxl")
+    assert exported_df["transaction_id"].tolist() == ["tx_2"]
+
+
+def test_import_review_into_overrides_from_xlsx_updates_review_state(tmp_path: Path) -> None:
+    review_path = tmp_path / "review.xlsx"
+    overrides_path = tmp_path / "category_overrides.yaml"
+    review_state_path = tmp_path / "review_state.parquet"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_123",
+                "description": "UNKNOWN MERCHANT 123",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Shopping",
+                "subcategory": "General Retail",
+                "category_source": "fallback",
+                "reviewed": True,
+                "review_comment": "checked",
+            }
+        ]
+    ).to_excel(review_path, index=False, engine="openpyxl")
+
+    result = import_review_into_overrides(
+        review_path=review_path,
+        overrides_path=overrides_path,
+        existing_store=OverrideStore(entries=()),
+        include_account_label_scope=False,
+        review_state_path=review_state_path,
+    )
+
+    assert result.review_state_upserted == 1
+    loaded = load_review_state(review_state_path)
+    assert loaded["transaction_id"].tolist() == ["tx_123"]
+    assert bool(loaded.loc[0, "reviewed"])
+    assert loaded.loc[0, "review_comment"] == "checked"
 
 
 @pytest.mark.parametrize(

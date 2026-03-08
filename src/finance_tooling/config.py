@@ -25,6 +25,8 @@ PROJECT_RULES_PATH_ENV = "FINANCE_PROJECT_RULES_PATH"
 BUDGET_TARGETS_PATH_ENV = "FINANCE_BUDGET_TARGETS_PATH"
 PROJECT_OVERRIDES_PATH_ENV = "FINANCE_PROJECT_OVERRIDES_PATH"
 TRANSACTION_OVERRIDES_PATH_ENV = "FINANCE_TRANSACTION_OVERRIDES_PATH"
+REVIEW_STATE_PATH_ENV = "FINANCE_REVIEW_STATE_PATH"
+REVIEW_EXPORT_DARK_SAFE_ENV = "FINANCE_REVIEW_EXPORT_DARK_SAFE"
 DOTENV_PATH = Path(".env")
 
 
@@ -52,6 +54,8 @@ class Settings:
     budget_targets_path: Path
     project_overrides_path: Path
     transaction_overrides_path: Path
+    review_state_path: Path
+    review_export_dark_safe: bool
 
 
 def _resolve_path_from_env(env_name: str) -> Path | None:
@@ -173,6 +177,13 @@ def load_settings_from_env() -> Settings:
     transaction_overrides_path = _resolve_path_from_env(TRANSACTION_OVERRIDES_PATH_ENV) or (
         config_dir / "transaction_overrides.yaml"
     )
+    review_state_path = _resolve_path_from_env(REVIEW_STATE_PATH_ENV) or (
+        processed_dir / "review_state.parquet"
+    )
+    review_export_dark_safe = _parse_bool(
+        os.environ.get(REVIEW_EXPORT_DARK_SAFE_ENV),
+        default=True,
+    )
 
     return Settings(
         input_path=input_path,
@@ -195,4 +206,6 @@ def load_settings_from_env() -> Settings:
         budget_targets_path=budget_targets_path,
         project_overrides_path=project_overrides_path,
         transaction_overrides_path=transaction_overrides_path,
+        review_state_path=review_state_path,
+        review_export_dark_safe=review_export_dark_safe,
     )

@@ -43,7 +43,11 @@ uv run ingest
 uv run review-export
 ```
 
-- Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`.
+- Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx`.
+- The review workbook includes:
+  - `reviewed`: persistent review-progress marker
+  - `review_comment`: freeform review note
+  - `fingerprint`: normalized description helper for search/filtering
 - Dry-run import:
 
 ```bash
@@ -54,6 +58,12 @@ uv run review-import --dry-run
 
 ```bash
 uv run review-import
+```
+
+- Apply and rebuild normalized outputs immediately:
+
+```bash
+uv run review-import --run-transform
 ```
 
 Detailed guides:
@@ -75,6 +85,8 @@ What it does:
   matched deterministically.
 - Writes canonical outputs (`transactions_master.parquet`,
   `transactions_normalized.csv/json`, `run_summary.json`, dashboard).
+- Projects persisted `reviewed` state into canonical outputs so review progress
+  survives across sessions and appears in `transactions_normalized.csv`.
 
 `run_summary.json` also includes carry-forward diagnostics:
 - `manual_category_carry_forward_applied_count`
@@ -124,9 +136,9 @@ uv run review-export \
 # explicit paths
 uv run review-export \
   --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
-  --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv"
+  --output-path "$FINANCE_PROCESSED_PATH/fallback_category_review.xlsx"
 
-# edit fallback_category_review.csv (set category/subcategory)
+# edit fallback_category_review.xlsx (set category/subcategory, reviewed, notes)
 
 # defaults (review file from processed path, overrides from env or data-adjacent config)
 uv run review-import
@@ -134,9 +146,12 @@ uv run review-import
 # safe preview before writing
 uv run review-import --dry-run
 
+# apply import and rebuild normalized outputs
+uv run review-import --run-transform
+
 # explicit paths
 uv run review-import \
-  --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.csv" \
+  --review-path "$FINANCE_PROCESSED_PATH/fallback_category_review.xlsx" \
   --overrides-path "$FINANCE_STATEMENTS_PATH/../config/category_overrides.yaml"
 ```
 
@@ -149,6 +164,21 @@ Rows whose `category_source` is not `fallback` are skipped by default; override 
 For `review-export`, output remains fallback-only by default; use
 `--include-categorized` to include already-categorized rows. Optional
 `--start-date` and `--end-date` apply inclusive `booking_date` filters.
+Additional review filters:
+- `--contains`
+- `--bank`
+- `--account-label`
+- `--only-unreviewed`
+- `--dark-safe` / `--no-dark-safe`
+
+For `.xlsx` review exports, dark-safe rendering is enabled by default. It
+writes explicit light text on dark fills so the workbook stays readable in dark
+LibreOffice/Excel setups without manual theme tweaks. Override via
+`--no-dark-safe` or `FINANCE_REVIEW_EXPORT_DARK_SAFE=false`.
+
+Review progress is stored separately in
+`${FINANCE_PROCESSED_PATH}/review_state.parquet` by default and projected into
+`transactions_normalized.csv` as the `reviewed` column after `transform`.
 
 Transaction-level corrections and project tags are configured in:
 
@@ -241,6 +271,8 @@ export FINANCE_PROJECT_RULES_PATH="/path/to/data/config/project_rules.yaml"
 export FINANCE_BUDGET_TARGETS_PATH="/path/to/data/config/budget_targets.yaml"
 export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/data/config/project_overrides.yaml"
 export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/data/config/transaction_overrides.yaml"
+export FINANCE_REVIEW_STATE_PATH="/path/to/output/review_state.parquet"
+export FINANCE_REVIEW_EXPORT_DARK_SAFE="true"
 
 uv run update
 ```

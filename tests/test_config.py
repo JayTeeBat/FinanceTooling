@@ -18,6 +18,8 @@ from finance_tooling.config import (
     PROCESSED_PATH_ENV,
     PROJECT_OVERRIDES_PATH_ENV,
     PROJECT_RULES_PATH_ENV,
+    REVIEW_EXPORT_DARK_SAFE_ENV,
+    REVIEW_STATE_PATH_ENV,
     STAGED_TRANSACTIONS_PATH_ENV,
     TRANSACTION_OVERRIDES_PATH_ENV,
     load_settings_from_env,
@@ -49,6 +51,8 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(BUDGET_TARGETS_PATH_ENV, raising=False)
     monkeypatch.delenv(PROJECT_OVERRIDES_PATH_ENV, raising=False)
     monkeypatch.delenv(TRANSACTION_OVERRIDES_PATH_ENV, raising=False)
+    monkeypatch.delenv(REVIEW_STATE_PATH_ENV, raising=False)
+    monkeypatch.delenv(REVIEW_EXPORT_DARK_SAFE_ENV, raising=False)
     monkeypatch.delenv(BASE_CURRENCY_ENV, raising=False)
 
     settings = load_settings_from_env()
@@ -74,6 +78,8 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert (
         settings.transaction_overrides_path == (config_dir / "transaction_overrides.yaml").resolve()
     )
+    assert settings.review_state_path == (processed_dir / "review_state.parquet").resolve()
+    assert settings.review_export_dark_safe is True
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True
     assert settings.ingest_workers == 1
@@ -114,6 +120,8 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
         TRANSACTION_OVERRIDES_PATH_ENV,
         str(custom_dir / "transaction_overrides.yaml"),
     )
+    monkeypatch.setenv(REVIEW_STATE_PATH_ENV, str(custom_dir / "review_state.parquet"))
+    monkeypatch.setenv(REVIEW_EXPORT_DARK_SAFE_ENV, "false")
     monkeypatch.setenv(BASE_CURRENCY_ENV, "gbp")
 
     settings = load_settings_from_env()
@@ -132,6 +140,8 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert (
         settings.transaction_overrides_path == (custom_dir / "transaction_overrides.yaml").resolve()
     )
+    assert settings.review_state_path == (custom_dir / "review_state.parquet").resolve()
+    assert settings.review_export_dark_safe is False
     assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
     assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
     assert settings.base_currency == "GBP"

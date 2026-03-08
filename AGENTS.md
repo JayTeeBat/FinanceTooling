@@ -186,6 +186,60 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-08 - codex
+- Branch: `main`
+- Completed:
+  - Added dark-safe review workbook export control with
+    `FINANCE_REVIEW_EXPORT_DARK_SAFE` and
+    `review-export --dark-safe/--no-dark-safe`.
+  - Updated `.xlsx` review formatting to write explicit light text on dark
+    fills so exported workbooks are readable by default in dark
+    LibreOffice/Excel.
+  - Updated docs/config/tests for the dark-safe default and validated a real
+    `uv run review-export` against the production processed path.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Validate visually in LibreOffice/Excel that the chosen dark-safe palette is
+    comfortable for long review sessions and adjust if needed.
+- Next action:
+  - Review the exported workbook in LibreOffice dark mode and confirm whether
+    the current palette should remain the default.
+
+### 2026-03-07 - codex
+- Branch: `main`
+- Completed:
+  - Migrated the human review workflow to be Excel-first by default:
+    `review-export` now defaults to
+    `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx` and supports
+    workbook formatting plus review filters (`--contains`, `--bank`,
+    `--account-label`, `--only-unreviewed`).
+  - Added durable review-state persistence in
+    `src/finance_tooling/review_state.py` backed by
+    `${FINANCE_PROCESSED_PATH}/review_state.parquet` (or
+    `FINANCE_REVIEW_STATE_PATH`), with `reviewed` projected into canonical
+    outputs and `transactions_normalized.csv`.
+  - Extended `review-import` to persist review state, accept `.xlsx`, and
+    optionally run `transform` immediately via `--run-transform`.
+  - Added regression coverage for review-state persistence, `.xlsx`
+    export/import, new CLI behavior, and reviewed summary fields; updated
+    README and review docs for the new workflow.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - No real-data validation run had been performed yet when this package was
+    first completed.
+- Next action:
+  - Run `review-export` -> Excel review -> `review-import --run-transform` on a
+    real month slice and validate `reviewed` propagation in
+    `transactions_normalized.csv`.
+
 ### 2026-03-07 - codex
 - Branch: `chore/command-module-discoverability`
 - Completed:
@@ -211,72 +265,3 @@ Success target for the 2026 validation campaign:
   - None.
 - Next action:
   - Merge the command/module discoverability PR once reviewed.
-
-### 2026-03-07 - codex
-- Branch: `main`
-- Completed:
-  - Refactored CLI entrypoints into command-named modules under
-    `src/finance_tooling/commands/` for `ingest`, `transform`, `update`,
-    `review_export`, `review_import`, and `metrics_log_update`.
-  - Split workflow orchestration out of `src/finance_tooling/pipeline.py` into
-    `src/finance_tooling/workflow/ingest_stage.py`,
-    `src/finance_tooling/workflow/transform_stage.py`, and
-    `src/finance_tooling/workflow/update_stage.py`.
-  - Split review import/export logic out of
-    `src/finance_tooling/categorization_review.py` into
-    `src/finance_tooling/review_export.py`,
-    `src/finance_tooling/review_import.py`, and
-    `src/finance_tooling/review_common.py`.
-  - Repointed console scripts in `pyproject.toml`, removed obsolete legacy
-    entrypoint modules, updated tests, and added a README code map section.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Test filenames still reflect some legacy naming (`test_cli_aliases.py`,
-    `test_pipeline.py`, `test_categorization_review.py`) even though the code
-    under test has been moved.
-- Next action:
-  - Rename the remaining legacy-named test files to match the new command and
-    stage module layout.
-
-### 2026-03-06 - codex
-- Branch: `fix/lbp-footer-carry-forward`
-- Completed:
-  - Stopped La Banque Postale footer/legal text from bleeding into transaction
-    descriptions by introducing hard continuation boundaries in
-    `src/finance_tooling/parsers/labanquepostale.py`.
-  - Added manual category/subcategory carry-forward in
-    `src/finance_tooling/workflow/category_carry_forward.py` so prior
-    `override` and `transaction_override` labels survive parser description
-    cleanup when transactions can be matched deterministically.
-  - Updated persistence in `src/finance_tooling/store.py` to replace existing
-    rows by incoming `source_file`, preventing stale prior IDs from lingering
-    after parser-driven description changes.
-  - Added summary diagnostics, README notes, regression tests, and reran the
-    real `ingest` + `transform` workflow on production data.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-  - `uv run ingest`: pass
-  - `uv run transform`: pass
-- Open items:
-  - `manual_category_carry_forward_unmatched_count` is high because manual
-    labels only exist for a minority of transactions; this is expected but
-    worth monitoring as review coverage expands.
-- Next action:
-  - Review remaining duplicate staged transactions, especially longstanding
-    Revolut duplicates, to decide whether they should be deduplicated earlier
-    in ingest rather than at canonical persistence time.
-
-
-- Open items:
-  - `review-import` counters still report key-level updates even when no semantic
-    value change occurs; this can remain confusing during manual review cycles.
-- Next action:
-  - Re-run `review-import` + `transform` on the latest edited review CSV and
-    confirm last-month rows now flip from `fallback` to override-driven categories.

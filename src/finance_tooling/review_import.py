@@ -15,6 +15,8 @@ from finance_tooling.review_common import (
     OVERRIDE_LEVEL_COLUMN,
     PROJECT_TAGS_COLUMN,
     REQUIRED_REVIEW_COLUMNS,
+    REVIEW_COMMENT_COLUMN,
+    REVIEWED_COLUMN,
     VALID_OVERRIDE_LEVELS,
     is_fallback_category_source,
     normalize_optional_booking_date,
@@ -22,8 +24,10 @@ from finance_tooling.review_common import (
     normalize_optional_text,
     normalize_optional_upper,
     normalize_project_tags,
+    normalize_reviewed_value,
     read_table,
 )
+from finance_tooling.review_state import build_review_state_updates, upsert_review_state
 from finance_tooling.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
@@ -47,11 +51,15 @@ class ReviewImportResult:
     transaction_overrides_updated: int = 0
     transaction_overrides_inserted: int = 0
     project_tags_applied: int = 0
+    review_state_upserted: int = 0
+    review_state_updated: int = 0
+    review_state_inserted: int = 0
     rows_skipped: int = 0
     rows_skipped_non_fallback: int = 0
     rows_skipped_invalid: int = 0
     rows_skipped_invalid_category: int = 0
     rows_skipped_invalid_project_tags: int = 0
+    rows_skipped_invalid_review_state: int = 0
     backup_path: Path | None = None
     transaction_backup_path: Path | None = None
 
@@ -309,6 +317,7 @@ def import_review_into_overrides(
     existing_store: OverrideStore,
     transaction_overrides_path: Path | None = None,
     existing_transaction_store: TransactionOverrideStore | None = None,
+    review_state_path: Path | None = None,
     include_account_label_scope: bool,
     allow_non_fallback_import: bool = False,
     dry_run: bool = False,
@@ -335,6 +344,7 @@ def import_review_into_overrides(
     invalid_rows: set[int] = set()
     invalid_category_rows: set[int] = set()
     invalid_project_rows: set[int] = set()
+    invalid_review_state_rows: set[int] = set()
     project_tags_applied = 0
 
     for index, row in enumerate(raw_rows):
@@ -408,6 +418,13 @@ def import_review_into_overrides(
                     )
                 project_tags_applied += 1
 
+        transaction_id = normalize_optional_text(row.get("transaction_id"))
+        if transaction_id is None and (REVIEWED_COLUMN in row or REVIEW_COMMENT_COLUMN in row):
+            reviewed = normalize_reviewed_value(row.get(REVIEWED_COLUMN))
+            comment = normalize_optional_text(row.get(REVIEW_COMMENT_COLUMN))
+            if reviewed or comment is not None:
+                invalid_review_state_rows.add(index)
+
     merged_store, updated, inserted = _upsert_override_entries(
         existing_store,
         list(parsed_category_entries.values()),
@@ -418,6 +435,9 @@ def import_review_into_overrides(
     )
     tx_updated = 0
     tx_inserted = 0
+    review_state_upserted = 0
+    review_state_updated = 0
+    review_state_inserted = 0
     merged_transaction_store: TransactionOverrideStore | None = None
     if parsed_transaction_entries:
         transaction_store = existing_transaction_store
@@ -430,6 +450,19 @@ def import_review_into_overrides(
             transaction_store,
             list(parsed_transaction_entries.values()),
         )
+
+    review_state_updates = build_review_state_updates(
+        raw_rows,
+        reviewed_column=REVIEWED_COLUMN,
+        review_comment_column=REVIEW_COMMENT_COLUMN,
+    )
+    if not dry_run and review_state_path is not None and not review_state_updates.empty:
+        review_state_result = upsert_review_state(review_state_path, review_state_updates)
+        review_state_upserted = review_state_result.rows_upserted
+        review_state_updated = review_state_result.rows_updated
+        review_state_inserted = review_state_result.rows_inserted
+    elif dry_run and review_state_path is not None:
+        review_state_upserted = len(review_state_updates)
 
     created_backup_path: Path | None = None
     created_transaction_backup_path: Path | None = None
@@ -449,7 +482,7 @@ def import_review_into_overrides(
                 merged_transaction_store,
             )
 
-    skipped_rows = skipped_non_fallback_rows | invalid_rows
+    skipped_rows = skipped_non_fallback_rows | invalid_rows | invalid_review_state_rows
     return ReviewImportResult(
         rows_read=len(raw_rows),
         overrides_upserted=updated + inserted,
@@ -459,11 +492,15 @@ def import_review_into_overrides(
         transaction_overrides_updated=tx_updated,
         transaction_overrides_inserted=tx_inserted,
         project_tags_applied=project_tags_applied,
+        review_state_upserted=review_state_upserted,
+        review_state_updated=review_state_updated,
+        review_state_inserted=review_state_inserted,
         rows_skipped=len(skipped_rows),
         rows_skipped_non_fallback=len(skipped_non_fallback_rows),
         rows_skipped_invalid=len(invalid_rows),
         rows_skipped_invalid_category=len(invalid_category_rows),
         rows_skipped_invalid_project_tags=len(invalid_project_rows),
+        rows_skipped_invalid_review_state=len(invalid_review_state_rows),
         backup_path=created_backup_path,
         transaction_backup_path=created_transaction_backup_path,
     )
