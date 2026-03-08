@@ -7,6 +7,7 @@ from pathlib import Path
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.models import WorkflowResult
+from finance_tooling.review_state import apply_review_state
 from finance_tooling.store import upsert_transactions
 from finance_tooling.workflow.enrichment import enrich_transactions
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
@@ -64,6 +65,10 @@ def run_transform(
     input_staged_path = staged_path or settings.staged_transactions_path
     staged_transactions = read_staged_transactions(input_staged_path)
     enrichment = enrich_transactions(staged_transactions, settings)
+    reviewed_transactions = apply_review_state(
+        enrichment.transactions,
+        settings.review_state_path,
+    )
 
     if ingest_result is not None:
         source_files = list(ingest_result.source_files)
@@ -117,7 +122,7 @@ def run_transform(
         settings=settings,
         source_files=source_files,
         files_failed=files_failed,
-        transactions=enrichment.transactions,
+        transactions=reviewed_transactions,
         validations=validations,
         parser_selection_diagnostics=parser_selection_diagnostics,
         parser_low_confidence_file_count=parser_low_confidence_file_count,

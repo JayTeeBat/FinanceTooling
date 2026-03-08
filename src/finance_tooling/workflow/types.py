@@ -138,6 +138,8 @@ class SummaryPayload(TypedDict):
     categorized_count: int
     uncategorized_count: int
     uncategorized_ratio: float
+    reviewed_count: int
+    reviewed_ratio: float
     manual_category_carry_forward_applied_count: int
     manual_category_carry_forward_ambiguous_skipped_count: int
     manual_category_carry_forward_unmatched_count: int
@@ -151,6 +153,7 @@ class SummaryPayload(TypedDict):
     budget_targets_path: str
     project_overrides_path: str
     transaction_overrides_path: str
+    review_state_path: str
     fx_cache_path: str
     warnings: list[str]
 

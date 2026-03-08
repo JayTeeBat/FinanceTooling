@@ -31,6 +31,8 @@ def _settings(tmp_path: Path) -> Settings:
         budget_targets_path=tmp_path / "budget_targets.yaml",
         project_overrides_path=tmp_path / "project_overrides.yaml",
         transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
+        review_state_path=tmp_path / "review_state.parquet",
+        review_export_dark_safe=True,
     )
 
 

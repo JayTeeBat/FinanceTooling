@@ -25,6 +25,7 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "project",
     "project_tags",
     "project_source",
+    "reviewed",
     "bank",
     "account_label",
     "source_file",
@@ -53,6 +54,7 @@ class Transaction:
     project: str | None = None
     project_tags: tuple[str, ...] = ()
     project_source: str | None = None
+    reviewed: bool = False
     account_label: str | None = None
     fx_rate_to_eur: Decimal | None = None
     fx_rate_date: date | None = None

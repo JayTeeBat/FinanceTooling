@@ -30,10 +30,17 @@ def infer_data_adjacent_config_dir(review_path: Path) -> Path:
 def resolve_review_export_paths(
     normalized_path: Path | None,
     output_path: Path | None,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path | None, bool]:
     """Resolve normalized and review output paths using settings defaults when possible."""
     if normalized_path is not None and output_path is not None:
-        return normalized_path, output_path
+        settings = try_load_settings_for_defaults()
+        review_state_path = (
+            getattr(settings, "review_state_path", None) if settings is not None else None
+        )
+        dark_safe = (
+            getattr(settings, "review_export_dark_safe", True) if settings is not None else True
+        )
+        return normalized_path, output_path, review_state_path, dark_safe
 
     settings = try_load_settings_for_defaults()
     if settings is None:
@@ -51,7 +58,9 @@ def resolve_review_export_paths(
     processed_dir = processed_dir_from_settings(settings)
     return (
         normalized_path or (processed_dir / "transactions_normalized.csv"),
-        output_path or (processed_dir / "fallback_category_review.csv"),
+        output_path or (processed_dir / "fallback_category_review.xlsx"),
+        getattr(settings, "review_state_path", None),
+        getattr(settings, "review_export_dark_safe", True),
     )
 
 
@@ -59,7 +68,7 @@ def resolve_review_import_paths(
     review_path: Path | None,
     overrides_path: Path | None,
     transaction_overrides_path: Path | None,
-) -> tuple[Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path | None]:
     """Resolve review-import paths using settings or review-file-adjacent defaults."""
     settings = try_load_settings_for_defaults()
     settings_category_overrides = (
@@ -88,7 +97,10 @@ def resolve_review_import_paths(
                 "paths or configure .env with FINANCE_STATEMENTS_PATH and "
                 "FINANCE_PROCESSED_PATH."
             )
-        return review_path, resolved_overrides, resolved_transaction_overrides
+        review_state_path = (
+            getattr(settings, "review_state_path", None) if settings is not None else None
+        )
+        return review_path, resolved_overrides, resolved_transaction_overrides, review_state_path
 
     if settings is None:
         raise ValueError(
@@ -101,10 +113,20 @@ def resolve_review_import_paths(
             "--transaction-overrides-path explicitly."
         )
 
+    processed_dir = processed_dir_from_settings(settings)
+    default_review_xlsx = processed_dir / "fallback_category_review.xlsx"
+    default_review_csv = processed_dir / "fallback_category_review.csv"
+    if default_review_xlsx.exists():
+        resolved_review_path = default_review_xlsx
+    elif default_review_csv.exists():
+        resolved_review_path = default_review_csv
+    else:
+        resolved_review_path = default_review_xlsx
     return (
-        processed_dir_from_settings(settings) / "fallback_category_review.csv",
+        resolved_review_path,
         resolved_overrides,
         resolved_transaction_overrides,
+        getattr(settings, "review_state_path", None),
     )
 
 

@@ -5,8 +5,10 @@ transaction-level overrides, and project tagging.
 
 ## Purpose
 
-- Export fallback-classified rows with full transaction detail for review.
+- Export fallback-classified rows with full transaction detail for review in an
+  Excel workbook.
 - Let an analyst edit category/subcategory and project tags independently.
+- Persist review progress (`reviewed`, `review_comment`) across review sessions.
 - Re-import reviewed rows into persistent overrides safely.
 - Re-run transform to apply new overrides and reduce fallback volume.
 
@@ -28,6 +30,8 @@ Optional:
 
 - `FINANCE_CATEGORY_OVERRIDES_PATH`
 - `FINANCE_TRANSACTION_OVERRIDES_PATH`
+- `FINANCE_REVIEW_STATE_PATH`
+- `FINANCE_REVIEW_EXPORT_DARK_SAFE`
 
 ### 1. Export fallback review rows
 
@@ -38,13 +42,20 @@ uv run review-export
 Default input/output paths when flags are omitted:
 
 - normalized input: `${FINANCE_PROCESSED_PATH}/transactions_normalized.csv`
-- review output: `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`
+- review output: `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx`
 
 Default export behavior is fallback-only. Optional filters:
 
 - `--include-categorized`: include non-fallback rows in the review export.
 - `--start-date YYYY-MM-DD`: inclusive lower `booking_date` bound.
 - `--end-date YYYY-MM-DD`: inclusive upper `booking_date` bound.
+- `--contains TEXT`: case-insensitive match across description/fingerprint/bank/account.
+- `--bank BANK`: exact bank filter.
+- `--account-label LABEL`: exact account-label filter.
+- `--only-unreviewed`: export only rows whose persisted review marker is false.
+- `--dark-safe` / `--no-dark-safe`: force explicit light-on-dark workbook
+  styling for dark-mode readability. Default comes from
+  `FINANCE_REVIEW_EXPORT_DARK_SAFE` and falls back to enabled.
 
 Example scoped export:
 
@@ -57,13 +68,16 @@ uv run review-export \
 
 ### 2. Analyst review
 
-Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`:
+Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx`:
 
 - Keep `description`, `bank`, `account_label` unchanged.
 - Set `category` and optional `subcategory` when a category correction is needed.
 - Keep `category_source` as `fallback` for standard import mode.
+- Use `fingerprint` as a read-only normalized search/grouping helper.
 - Use extra transaction columns (for example `booking_date`, `amount_native`,
   `currency`, `source_file`) to disambiguate similar descriptions when needed.
+- Use `reviewed` to mark a transaction as reviewed.
+- Use `review_comment` for freeform reviewer notes.
 - Use `override_level` for category behavior:
   - `category_override`: write into `category_overrides.yaml`
   - `transaction_override`: write into `transaction_overrides.yaml`
@@ -74,6 +88,10 @@ Edit `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`:
   - Leave blank to skip project tagging.
   - Requires `transaction_id`.
 - `existing_project_tags` is informational; do not edit.
+- `reviewed` is persisted separately and also projected into
+  `transactions_normalized.csv` after `transform`.
+- `review_comment` is review metadata only; it is not used as `project` data and
+  is not written into canonical normalized outputs.
 
 ### 3. Dry-run import (recommended)
 
@@ -91,7 +109,9 @@ uv run review-import
 
 Default path resolution:
 
-- review input: `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`
+- review input:
+  - `${FINANCE_PROCESSED_PATH}/fallback_category_review.xlsx` if present
+  - else `${FINANCE_PROCESSED_PATH}/fallback_category_review.csv`
 - category overrides destination:
   - `--overrides-path` if provided
   - else `FINANCE_CATEGORY_OVERRIDES_PATH` from settings
@@ -104,6 +124,9 @@ Default path resolution:
   - else `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
   - else, when settings are unavailable but `--review-path` is provided:
     `${REVIEW_PATH_PARENT}/../config/transaction_overrides.yaml`
+- review state path:
+  - `FINANCE_REVIEW_STATE_PATH` if configured
+  - else `${FINANCE_PROCESSED_PATH}/review_state.parquet`
 
 Default safety behavior:
 
@@ -117,6 +140,12 @@ Default safety behavior:
 
 ```bash
 uv run transform
+```
+
+Or apply import and rebuild outputs in one step:
+
+```bash
+uv run review-import --run-transform
 ```
 
 ### 6. Optional: direct override editing outside CSV review
@@ -163,6 +192,7 @@ Review file must include:
     `skip`, `category_override`, `transaction_override`.
   - blank `override_level` defaults to `transaction_override`.
 - `project_tags` import requires `transaction_id`.
+- `reviewed` / `review_comment` persistence requires `transaction_id`.
 - If multiple rows map to the same override key (`fingerprint`, `bank`,
   `account_label`), import keeps the last row (last-row wins).
 
@@ -174,6 +204,7 @@ Review file must include:
 - `--backup/--no-backup`: enable/disable pre-write backup.
 - `--backup-path`: custom backup destination.
 - `--transaction-overrides-path`: optional explicit transaction-override target.
+- `--run-transform`: import and immediately run `transform`.
 
 ## Rendering Diagrams
 

@@ -44,7 +44,6 @@ def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> Non
 def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
-    settings = SimpleNamespace(summary_json_path=processed_dir / "run_summary.json")
     captured: dict[str, Path | bool | str | None] = {}
 
     def _export(
@@ -54,17 +53,34 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         include_categorized: bool = False,
         start_date: str | None = None,
         end_date: str | None = None,
+        contains: str | None = None,
+        bank: str | None = None,
+        account_label: str | None = None,
+        only_unreviewed: bool = False,
+        preserve_review_state: bool = True,
+        review_state_path: Path | None = None,
+        dark_safe: bool = True,
     ) -> int:
         captured["normalized_path"] = normalized_path
         captured["output_path"] = output_path
         captured["include_categorized"] = include_categorized
         captured["start_date"] = start_date
         captured["end_date"] = end_date
+        captured["contains"] = contains
+        captured["bank"] = bank
+        captured["account_label"] = account_label
+        captured["only_unreviewed"] = only_unreviewed
+        captured["preserve_review_state"] = preserve_review_state
+        captured["review_state_path"] = review_state_path
+        captured["dark_safe"] = dark_safe
         return 4
 
     monkeypatch.setattr(
         "finance_tooling.commands.common.try_load_settings_for_defaults",
-        lambda: settings,
+        lambda: SimpleNamespace(
+            summary_json_path=processed_dir / "run_summary.json",
+            review_export_dark_safe=True,
+        ),
     )
     monkeypatch.setattr(
         "finance_tooling.commands.review_export.export_fallback_review_rows", _export
@@ -75,10 +91,11 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
 
     assert exit_code == 0
     assert captured["normalized_path"] == processed_dir / "transactions_normalized.csv"
-    assert captured["output_path"] == processed_dir / "fallback_category_review.csv"
+    assert captured["output_path"] == processed_dir / "fallback_category_review.xlsx"
     assert captured["include_categorized"] is False
     assert captured["start_date"] is None
     assert captured["end_date"] is None
+    assert captured["dark_safe"] is True
     assert "Exported 4 fallback review rows" in stdio.out
 
 
@@ -92,12 +109,26 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
         include_categorized: bool = False,
         start_date: str | None = None,
         end_date: str | None = None,
+        contains: str | None = None,
+        bank: str | None = None,
+        account_label: str | None = None,
+        only_unreviewed: bool = False,
+        preserve_review_state: bool = True,
+        review_state_path: Path | None = None,
+        dark_safe: bool = True,
     ) -> int:
         captured["normalized_path"] = normalized_path
         captured["output_path"] = output_path
         captured["include_categorized"] = include_categorized
         captured["start_date"] = start_date
         captured["end_date"] = end_date
+        captured["contains"] = contains
+        captured["bank"] = bank
+        captured["account_label"] = account_label
+        captured["only_unreviewed"] = only_unreviewed
+        captured["preserve_review_state"] = preserve_review_state
+        captured["review_state_path"] = review_state_path
+        captured["dark_safe"] = dark_safe
         return 1
 
     monkeypatch.setattr(
@@ -116,6 +147,14 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
             "2026-01-01",
             "--end-date",
             "2026-01-31",
+            "--contains",
+            "merchant",
+            "--bank",
+            "revolut",
+            "--account-label",
+            "main",
+            "--only-unreviewed",
+            "--no-dark-safe",
         ]
     )
     stdio = capsys.readouterr()
@@ -126,6 +165,11 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert captured["include_categorized"] is True
     assert captured["start_date"] == "2026-01-01"
     assert captured["end_date"] == "2026-01-31"
+    assert captured["contains"] == "merchant"
+    assert captured["bank"] == "revolut"
+    assert captured["account_label"] == "main"
+    assert captured["only_unreviewed"] is True
+    assert captured["dark_safe"] is False
     assert "Exported 1 fallback review rows" in stdio.out
 
 
@@ -138,6 +182,7 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         summary_json_path=processed_dir / "run_summary.json",
         category_overrides_path=overrides_path,
         transaction_overrides_path=transaction_overrides_path,
+        review_state_path=processed_dir / "review_state.parquet",
     )
     captured: dict[str, object] = {}
 
@@ -174,9 +219,10 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     stdio = capsys.readouterr()
 
     assert exit_code == 0
-    assert captured["review_path"] == processed_dir / "fallback_category_review.csv"
+    assert captured["review_path"] == processed_dir / "fallback_category_review.xlsx"
     assert captured["overrides_path"] == overrides_path
     assert captured["transaction_overrides_path"] == transaction_overrides_path
+    assert captured["review_state_path"] == processed_dir / "review_state.parquet"
     assert captured["dry_run"] is True
     assert "Dry run: no override file was written." in stdio.out
 
@@ -329,8 +375,28 @@ def test_review_export_returns_clean_error_without_traceback(monkeypatch, capsys
         include_categorized: bool = False,
         start_date: str | None = None,
         end_date: str | None = None,
+        contains: str | None = None,
+        bank: str | None = None,
+        account_label: str | None = None,
+        only_unreviewed: bool = False,
+        preserve_review_state: bool = True,
+        review_state_path: Path | None = None,
+        dark_safe: bool = True,
     ) -> int:
-        del normalized_path, output_path, include_categorized, start_date, end_date
+        del (
+            normalized_path,
+            output_path,
+            include_categorized,
+            start_date,
+            end_date,
+            contains,
+            bank,
+            account_label,
+            only_unreviewed,
+            preserve_review_state,
+            review_state_path,
+            dark_safe,
+        )
         raise ValueError("boom")
 
     monkeypatch.setattr(
@@ -381,3 +447,11 @@ def test_review_import_returns_clean_error_without_traceback(monkeypatch, capsys
     assert exit_code == 1
     assert "Review import error: invalid review" in stdio.out
     assert "Traceback" not in f"{stdio.out}\n{stdio.err}"
+
+
+def test_review_import_rejects_run_transform_with_dry_run(capsys) -> None:
+    exit_code = main(["review-import", "--dry-run", "--run-transform"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "--run-transform cannot be used together with --dry-run" in stdio.out

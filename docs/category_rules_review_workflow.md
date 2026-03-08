@@ -96,14 +96,14 @@ Export comparable month-scoped review files (include categorized rows).
 ```bash
 uv run review-export \
   --normalized-path "${BASE_DIR}/transactions_normalized.csv" \
-  --output-path "${RUN_ROOT}/baseline_review.csv" \
+  --output-path "${RUN_ROOT}/baseline_review.xlsx" \
   --include-categorized \
   --start-date "${MONTH_START}" \
   --end-date "${MONTH_END}"
 
 uv run review-export \
   --normalized-path "${CAND_DIR}/transactions_normalized.csv" \
-  --output-path "${RUN_ROOT}/candidate_review.csv" \
+  --output-path "${RUN_ROOT}/candidate_review.xlsx" \
   --include-categorized \
   --start-date "${MONTH_START}" \
   --end-date "${MONTH_END}"
@@ -140,7 +140,7 @@ If using review import for non-fallback rows:
 
 ```bash
 uv run review-import \
-  --review-path "${RUN_ROOT}/candidate_review.csv" \
+  --review-path "${RUN_ROOT}/candidate_review.xlsx" \
   --allow-non-fallback-import \
   --dry-run
 ```
@@ -154,7 +154,7 @@ After decisioning approval:
 
 ```bash
 uv run review-import \
-  --review-path "${RUN_ROOT}/candidate_review.csv" \
+  --review-path "${RUN_ROOT}/candidate_review.xlsx" \
   --allow-non-fallback-import
 ```
 
