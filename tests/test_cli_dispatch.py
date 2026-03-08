@@ -5,12 +5,11 @@ from types import SimpleNamespace
 from typing import Any
 
 from finance_tooling.__main__ import main
-from finance_tooling.classify import OverrideStore
 from finance_tooling.review_import import ReviewImportResult
 from finance_tooling.transaction_overrides import TransactionOverrideStore
 
 
-def test_main_without_subcommand_prints_help(monkeypatch, capsys) -> None:
+def test_main_without_subcommand_prints_help(capsys) -> None:
     exit_code = main([])
     stdio = capsys.readouterr()
 
@@ -23,15 +22,12 @@ def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> Non
 
     def _run_update(
         settings: Any, *, ingest_only: bool, transform_only: bool
-    ) -> object:  # pragma: no cover - simple control-path stub
+    ) -> object:  # pragma: no cover
         del settings
-        captured["ingest_only"] = ingest_only
-        captured["transform_only"] = transform_only
         if ingest_only and transform_only:
             raise ValueError("--ingest-only and --transform-only are mutually exclusive.")
         return object()
 
-    captured: dict[str, bool] = {}
     monkeypatch.setattr("finance_tooling.commands.update.run_update", _run_update)
 
     exit_code = main(["update", "--ingest-only", "--transform-only"])
@@ -63,16 +59,9 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     ) -> int:
         captured["normalized_path"] = normalized_path
         captured["output_path"] = output_path
-        captured["include_categorized"] = include_categorized
-        captured["start_date"] = start_date
-        captured["end_date"] = end_date
-        captured["contains"] = contains
-        captured["bank"] = bank
-        captured["account_label"] = account_label
-        captured["only_unreviewed"] = only_unreviewed
-        captured["preserve_review_state"] = preserve_review_state
-        captured["review_state_path"] = review_state_path
         captured["dark_safe"] = dark_safe
+        captured["include_categorized"] = include_categorized
+        captured["review_state_path"] = review_state_path
         return 4
 
     monkeypatch.setattr(
@@ -80,23 +69,21 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         lambda: SimpleNamespace(
             summary_json_path=processed_dir / "run_summary.json",
             review_export_dark_safe=True,
+            review_state_path=processed_dir / "review_state.parquet",
         ),
     )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_export.export_fallback_review_rows", _export
-    )
+    monkeypatch.setattr("finance_tooling.commands.review_export.export_review_rows", _export)
 
     exit_code = main(["review-export"])
     stdio = capsys.readouterr()
 
     assert exit_code == 0
     assert captured["normalized_path"] == processed_dir / "transactions_normalized.csv"
-    assert captured["output_path"] == processed_dir / "fallback_category_review.xlsx"
+    assert captured["output_path"] == processed_dir / "transactions_review.xlsx"
     assert captured["include_categorized"] is False
-    assert captured["start_date"] is None
-    assert captured["end_date"] is None
+    assert captured["review_state_path"] == processed_dir / "review_state.parquet"
     assert captured["dark_safe"] is True
-    assert "Exported 4 fallback review rows" in stdio.out
+    assert "Exported 4 review rows" in stdio.out
 
 
 def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None:
@@ -117,23 +104,25 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
         review_state_path: Path | None = None,
         dark_safe: bool = True,
     ) -> int:
-        captured["normalized_path"] = normalized_path
-        captured["output_path"] = output_path
-        captured["include_categorized"] = include_categorized
-        captured["start_date"] = start_date
-        captured["end_date"] = end_date
-        captured["contains"] = contains
-        captured["bank"] = bank
-        captured["account_label"] = account_label
-        captured["only_unreviewed"] = only_unreviewed
-        captured["preserve_review_state"] = preserve_review_state
-        captured["review_state_path"] = review_state_path
-        captured["dark_safe"] = dark_safe
+        captured.update(
+            {
+                "normalized_path": normalized_path,
+                "output_path": output_path,
+                "include_categorized": include_categorized,
+                "start_date": start_date,
+                "end_date": end_date,
+                "contains": contains,
+                "bank": bank,
+                "account_label": account_label,
+                "only_unreviewed": only_unreviewed,
+                "preserve_review_state": preserve_review_state,
+                "review_state_path": review_state_path,
+                "dark_safe": dark_safe,
+            }
+        )
         return 1
 
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_export.export_fallback_review_rows", _export
-    )
+    monkeypatch.setattr("finance_tooling.commands.review_export.export_review_rows", _export)
 
     exit_code = main(
         [
@@ -141,7 +130,7 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
             "--normalized-path",
             "transactions_normalized.csv",
             "--output-path",
-            "fallback_category_review.csv",
+            "transactions_review.csv",
             "--include-categorized",
             "--start-date",
             "2026-01-01",
@@ -161,7 +150,7 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
 
     assert exit_code == 0
     assert captured["normalized_path"] == Path("transactions_normalized.csv")
-    assert captured["output_path"] == Path("fallback_category_review.csv")
+    assert captured["output_path"] == Path("transactions_review.csv")
     assert captured["include_categorized"] is True
     assert captured["start_date"] == "2026-01-01"
     assert captured["end_date"] == "2026-01-31"
@@ -170,17 +159,15 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert captured["account_label"] == "main"
     assert captured["only_unreviewed"] is True
     assert captured["dark_safe"] is False
-    assert "Exported 1 fallback review rows" in stdio.out
+    assert "Exported 1 review rows" in stdio.out
 
 
 def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
-    overrides_path = tmp_path / "config" / "category_overrides.yaml"
     transaction_overrides_path = tmp_path / "config" / "transaction_overrides.yaml"
     settings = SimpleNamespace(
         summary_json_path=processed_dir / "run_summary.json",
-        category_overrides_path=overrides_path,
         transaction_overrides_path=transaction_overrides_path,
         review_state_path=processed_dir / "review_state.parquet",
     )
@@ -190,22 +177,16 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         captured.update(kwargs)
         return ReviewImportResult(
             rows_read=2,
-            overrides_upserted=1,
-            overrides_updated=1,
-            overrides_inserted=0,
+            transaction_overrides_upserted=1,
+            transaction_overrides_updated=1,
+            transaction_overrides_inserted=0,
             rows_skipped=1,
-            rows_skipped_non_fallback=1,
             rows_skipped_invalid=0,
-            backup_path=None,
         )
 
     monkeypatch.setattr(
         "finance_tooling.commands.common.try_load_settings_for_defaults",
         lambda: settings,
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_override_store",
-        lambda path: (OverrideStore(entries=()), []),
     )
     monkeypatch.setattr(
         "finance_tooling.commands.review_import.load_transaction_override_store",
@@ -219,8 +200,7 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     stdio = capsys.readouterr()
 
     assert exit_code == 0
-    assert captured["review_path"] == processed_dir / "fallback_category_review.xlsx"
-    assert captured["overrides_path"] == overrides_path
+    assert captured["review_path"] == processed_dir / "transactions_review.xlsx"
     assert captured["transaction_overrides_path"] == transaction_overrides_path
     assert captured["review_state_path"] == processed_dir / "review_state.parquet"
     assert captured["dry_run"] is True
@@ -233,30 +213,17 @@ def test_review_import_infers_data_adjacent_paths_from_review_path(
     data_dir = tmp_path / "data"
     processed_dir = data_dir / "processed"
     processed_dir.mkdir(parents=True)
-    review_path = processed_dir / "fallback_category_review.csv"
+    review_path = processed_dir / "transactions_review.csv"
     review_path.write_text("", encoding="utf-8")
     captured: dict[str, object] = {}
 
     def _import(**kwargs: object) -> ReviewImportResult:
         captured.update(kwargs)
-        return ReviewImportResult(
-            rows_read=1,
-            overrides_upserted=1,
-            overrides_updated=0,
-            overrides_inserted=1,
-            rows_skipped=0,
-            rows_skipped_non_fallback=0,
-            rows_skipped_invalid=0,
-            backup_path=None,
-        )
+        return ReviewImportResult(rows_read=1)
 
     monkeypatch.setattr(
         "finance_tooling.commands.common.try_load_settings_for_defaults",
         lambda: None,
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_override_store",
-        lambda path: (OverrideStore(entries=()), []),
     )
     monkeypatch.setattr(
         "finance_tooling.commands.review_import.load_transaction_override_store",
@@ -267,191 +234,54 @@ def test_review_import_infers_data_adjacent_paths_from_review_path(
     )
 
     exit_code = main(["review-import", "--review-path", str(review_path), "--dry-run"])
-    stdio = capsys.readouterr()
+    capsys.readouterr()
 
     assert exit_code == 0
-    assert captured["review_path"] == review_path
-    assert captured["overrides_path"] == data_dir / "config" / "category_overrides.yaml"
     assert captured["transaction_overrides_path"] == (
         data_dir / "config" / "transaction_overrides.yaml"
     )
-    assert "Dry run: no override file was written." in stdio.out
 
 
-def test_review_import_aborts_on_override_load_warnings(monkeypatch, capsys) -> None:
-    called = {"import_called": False}
-
-    def _import(**kwargs: object) -> ReviewImportResult:
-        del kwargs
-        called["import_called"] = True
-        return ReviewImportResult(
-            rows_read=0,
-            overrides_upserted=0,
-            overrides_updated=0,
-            overrides_inserted=0,
-            rows_skipped=0,
-            rows_skipped_non_fallback=0,
-            rows_skipped_invalid=0,
-            backup_path=None,
-        )
-
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_override_store",
-        lambda path: (OverrideStore(entries=()), [f"bad override file: {path}"]),
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_transaction_override_store",
-        lambda path: (TransactionOverrideStore(entries=()), []),
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.import_review_into_overrides", _import
-    )
-
-    exit_code = main(
-        [
-            "review-import",
-            "--review-path",
-            "review.csv",
-            "--overrides-path",
-            "overrides.yaml",
-        ]
-    )
-    stdio = capsys.readouterr()
-
-    assert exit_code == 1
-    assert called["import_called"] is False
-    assert "Review import error: override load warnings detected" in stdio.out
-
-
-def test_review_import_allows_override_load_warnings_with_flag(monkeypatch, capsys) -> None:
-    called = {"import_called": False}
-
-    def _import(**kwargs: object) -> ReviewImportResult:
-        del kwargs
-        called["import_called"] = True
-        return ReviewImportResult(
-            rows_read=1,
-            overrides_upserted=1,
-            overrides_updated=0,
-            overrides_inserted=1,
-            rows_skipped=0,
-            rows_skipped_non_fallback=0,
-            rows_skipped_invalid=0,
-            backup_path=None,
-        )
-
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_override_store",
-        lambda path: (OverrideStore(entries=()), [f"bad override file: {path}"]),
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_transaction_override_store",
-        lambda path: (TransactionOverrideStore(entries=()), []),
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.import_review_into_overrides", _import
-    )
-
-    exit_code = main(
-        [
-            "review-import",
-            "--review-path",
-            "review.csv",
-            "--overrides-path",
-            "overrides.yaml",
-            "--allow-load-warnings",
-        ]
-    )
-
-    assert exit_code == 0
-    assert called["import_called"] is True
-
-
-def test_review_export_returns_clean_error_without_traceback(monkeypatch, capsys) -> None:
-    def _export(
-        normalized_path: Path,
-        output_path: Path,
-        *,
-        include_categorized: bool = False,
-        start_date: str | None = None,
-        end_date: str | None = None,
-        contains: str | None = None,
-        bank: str | None = None,
-        account_label: str | None = None,
-        only_unreviewed: bool = False,
-        preserve_review_state: bool = True,
-        review_state_path: Path | None = None,
-        dark_safe: bool = True,
-    ) -> int:
-        del (
-            normalized_path,
-            output_path,
-            include_categorized,
-            start_date,
-            end_date,
-            contains,
-            bank,
-            account_label,
-            only_unreviewed,
-            preserve_review_state,
-            review_state_path,
-            dark_safe,
-        )
-        raise ValueError("boom")
-
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_export.export_fallback_review_rows", _export
-    )
-
-    exit_code = main(
-        [
-            "review-export",
-            "--normalized-path",
-            "transactions_normalized.csv",
-            "--output-path",
-            "fallback_category_review.csv",
-        ]
-    )
-    stdio = capsys.readouterr()
-
-    assert exit_code == 1
-    assert "Review export error: boom" in stdio.out
-    assert "Traceback" not in f"{stdio.out}\n{stdio.err}"
-
-
-def test_review_import_returns_clean_error_without_traceback(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_override_store",
-        lambda path: (OverrideStore(entries=()), []),
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.load_transaction_override_store",
-        lambda path: (TransactionOverrideStore(entries=()), []),
-    )
-    monkeypatch.setattr(
-        "finance_tooling.commands.review_import.import_review_into_overrides",
-        lambda **kwargs: (_ for _ in ()).throw(ValueError("invalid review")),
-    )
-
-    exit_code = main(
-        [
-            "review-import",
-            "--review-path",
-            "review.csv",
-            "--overrides-path",
-            "overrides.yaml",
-        ]
-    )
-    stdio = capsys.readouterr()
-
-    assert exit_code == 1
-    assert "Review import error: invalid review" in stdio.out
-    assert "Traceback" not in f"{stdio.out}\n{stdio.err}"
-
-
-def test_review_import_rejects_run_transform_with_dry_run(capsys) -> None:
+def test_review_import_rejects_transform_with_dry_run(capsys) -> None:
     exit_code = main(["review-import", "--dry-run", "--run-transform"])
     stdio = capsys.readouterr()
 
     assert exit_code == 1
     assert "--run-transform cannot be used together with --dry-run" in stdio.out
+
+
+def test_migrate_category_overrides_command_prints_summary(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    rules_path = tmp_path / "category_rules.yaml"
+    report_path = tmp_path / "migration_report.json"
+    overrides_path = tmp_path / "category_overrides.yaml"
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.migrate_category_overrides_to_rules.migrate_category_overrides_to_rules",
+        lambda **kwargs: SimpleNamespace(
+            migrated_count=2,
+            skipped_count=1,
+            conflict_count=0,
+            rules_path=rules_path,
+            report_path=report_path,
+            backup_path=overrides_path.with_suffix(".bak"),
+        ),
+    )
+
+    exit_code = main(
+        [
+            "migrate-category-overrides-to-rules",
+            "--overrides-path",
+            str(overrides_path),
+            "--rules-path",
+            str(rules_path),
+            "--report-path",
+            str(report_path),
+        ]
+    )
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Migrated rules: 2" in stdio.out
+    assert str(rules_path) in stdio.out

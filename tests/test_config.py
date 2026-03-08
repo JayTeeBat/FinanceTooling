@@ -3,7 +3,6 @@ from pathlib import Path
 from finance_tooling.config import (
     BASE_CURRENCY_ENV,
     BUDGET_TARGETS_PATH_ENV,
-    CATEGORY_OVERRIDES_PATH_ENV,
     CATEGORY_RULES_PATH_ENV,
     EXPORT_CSV_PATH_ENV,
     EXPORT_JSON_PATH_ENV,
@@ -46,7 +45,6 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     monkeypatch.delenv(INGEST_TEXT_CACHE_ENABLED_ENV, raising=False)
     monkeypatch.delenv(INGEST_TEXT_CACHE_PATH_ENV, raising=False)
     monkeypatch.delenv(CATEGORY_RULES_PATH_ENV, raising=False)
-    monkeypatch.delenv(CATEGORY_OVERRIDES_PATH_ENV, raising=False)
     monkeypatch.delenv(PROJECT_RULES_PATH_ENV, raising=False)
     monkeypatch.delenv(BUDGET_TARGETS_PATH_ENV, raising=False)
     monkeypatch.delenv(PROJECT_OVERRIDES_PATH_ENV, raising=False)
@@ -71,7 +69,6 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.fx_cache_path == (processed_dir / "fx_rates_history.parquet").resolve()
     config_dir = raw_dir.parent / "config"
     assert settings.category_rules_path == (config_dir / "category_rules.yaml").resolve()
-    assert settings.category_overrides_path == (config_dir / "category_overrides.yaml").resolve()
     assert settings.project_rules_path == (config_dir / "project_rules.yaml").resolve()
     assert settings.budget_targets_path == (config_dir / "budget_targets.yaml").resolve()
     assert settings.project_overrides_path == (config_dir / "project_overrides.yaml").resolve()
@@ -112,7 +109,6 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     monkeypatch.setenv(INGEST_TEXT_CACHE_ENABLED_ENV, "true")
     monkeypatch.setenv(INGEST_TEXT_CACHE_PATH_ENV, str(custom_dir / "ingest_cache.parquet"))
     monkeypatch.setenv(CATEGORY_RULES_PATH_ENV, str(custom_dir / "category_rules.yaml"))
-    monkeypatch.setenv(CATEGORY_OVERRIDES_PATH_ENV, str(custom_dir / "category_overrides.yaml"))
     monkeypatch.setenv(PROJECT_RULES_PATH_ENV, str(custom_dir / "project_rules.yaml"))
     monkeypatch.setenv(BUDGET_TARGETS_PATH_ENV, str(custom_dir / "budget_targets.yaml"))
     monkeypatch.setenv(PROJECT_OVERRIDES_PATH_ENV, str(custom_dir / "project_overrides.yaml"))
@@ -133,7 +129,6 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.staged_transactions_path == (custom_dir / "staged.parquet").resolve()
     assert settings.fx_cache_path == (custom_dir / "fx.parquet").resolve()
     assert settings.category_rules_path == (custom_dir / "category_rules.yaml").resolve()
-    assert settings.category_overrides_path == (custom_dir / "category_overrides.yaml").resolve()
     assert settings.project_rules_path == (custom_dir / "project_rules.yaml").resolve()
     assert settings.budget_targets_path == (custom_dir / "budget_targets.yaml").resolve()
     assert settings.project_overrides_path == (custom_dir / "project_overrides.yaml").resolve()
@@ -218,4 +213,4 @@ def test_load_settings_rejects_invalid_ingest_workers(monkeypatch, tmp_path: Pat
     except ValueError as exc:
         assert ">= 1" in str(exc)
     else:
-        raise AssertionError("Expected ValueError for invalid FINANCE_INGEST_WORKERS")
+        raise AssertionError("Expected ValueError for ingest_workers < 1")

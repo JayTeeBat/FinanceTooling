@@ -67,7 +67,6 @@ def _settings(input_dir: Path, *, base_currency: str = "EUR") -> Settings:
         ingest_text_cache_enabled=False,
         ingest_text_cache_path=input_dir / "ingest_text_cache.parquet",
         category_rules_path=input_dir / "category_rules.json",
-        category_overrides_path=input_dir / "category_overrides.json",
         project_rules_path=input_dir / "project_rules.yaml",
         budget_targets_path=input_dir / "budget_targets.yaml",
         project_overrides_path=Path("config/project_overrides.yaml").resolve(),
@@ -510,7 +509,7 @@ def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Pat
         source_file=source_file,
         bank="DummyBank",
         parser="dummy",
-        category_source="fallback",
+        category_source="uncategorized",
     )
     tx_id = compute_transaction_id(staged_transaction)
     settings.transaction_overrides_path.write_text(

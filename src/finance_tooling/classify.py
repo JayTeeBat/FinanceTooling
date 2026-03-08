@@ -368,7 +368,7 @@ def build_classification_diagnostics(transactions: list[Transaction]) -> Classif
             rule_hit_counts[tx.category_rule_id] += 1
 
         is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
-            (tx.category_source or "").strip().lower() == "fallback"
+            (tx.category_source or "").strip().lower() == "uncategorized"
         )
         if is_uncategorized:
             normalized_description = normalize_description(tx.description) or "unknown"
@@ -404,30 +404,12 @@ def classify_transactions_with_diagnostics(
     transactions: list[Transaction],
     *,
     rules: ClassificationRules,
-    overrides: OverrideStore,
 ) -> tuple[list[Transaction], ClassificationDiagnostics]:
     """Classify transactions and return diagnostics for run summary."""
     classified: list[Transaction] = []
 
     for tx in transactions:
         normalized = normalize_description(tx.description)
-        override = overrides.lookup(
-            fingerprint=normalized,
-            bank=tx.bank,
-            account_label=tx.account_label,
-        )
-        if override is not None:
-            classified.append(
-                replace(
-                    tx,
-                    category=override.category,
-                    subcategory=override.subcategory,
-                    category_confidence=1.0,
-                    category_source="override",
-                    category_rule_id=None,
-                )
-            )
-            continue
 
         matched_rule: CategoryRule | None = None
         for rule in rules.rules:
@@ -442,7 +424,7 @@ def classify_transactions_with_diagnostics(
                     category="Uncategorized",
                     subcategory=None,
                     category_confidence=0.0,
-                    category_source="fallback",
+                    category_source="uncategorized",
                     category_rule_id=None,
                 )
             )
@@ -466,14 +448,11 @@ def classify_transactions(
     transactions: list[Transaction],
     *,
     rules: ClassificationRules | None = None,
-    overrides: OverrideStore | None = None,
 ) -> list[Transaction]:
     """Return a new list of transactions with categories assigned."""
     active_rules = rules or _default_rules()
-    active_overrides = overrides or OverrideStore(entries=())
     classified, _ = classify_transactions_with_diagnostics(
         transactions,
         rules=active_rules,
-        overrides=active_overrides,
     )
     return classified

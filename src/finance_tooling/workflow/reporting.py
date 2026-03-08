@@ -127,7 +127,7 @@ def persist_and_report(
         if tx.reviewed:
             counters["reviewed_count"] += 1
         is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
-            (tx.category_source or "").strip().lower() == "fallback"
+            (tx.category_source or "").strip().lower() == "uncategorized"
         )
         if is_uncategorized:
             counters["uncategorized_count"] += 1
@@ -264,7 +264,6 @@ def persist_and_report(
         ),
         "top_rules_by_hits": classification_diagnostics.top_rules_by_hits,
         "category_rules_path": str(settings.category_rules_path),
-        "category_overrides_path": str(settings.category_overrides_path),
         "project_rules_path": str(settings.project_rules_path),
         "budget_targets_path": str(settings.budget_targets_path),
         "project_overrides_path": str(settings.project_overrides_path),

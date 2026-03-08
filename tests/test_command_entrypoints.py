@@ -38,7 +38,10 @@ class _CommandModule(Protocol):
         (transform_command, ["--input-staged-path", "staged.parquet"]),
         (update_command, ["--ingest-only"]),
         (review_export_command, ["--normalized-path", "n.csv", "--output-path", "r.csv"]),
-        (review_import_command, ["--review-path", "r.csv", "--overrides-path", "o.yaml"]),
+        (
+            review_import_command,
+            ["--review-path", "r.csv", "--transaction-overrides-path", "o.yaml"],
+        ),
         (metrics_log_update_command, ["--summary-path", "run_summary.json"]),
     ],
 )

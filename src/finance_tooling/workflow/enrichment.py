@@ -10,7 +10,6 @@ from finance_tooling.classify import (
     build_classification_diagnostics,
     classify_transactions_with_diagnostics,
     load_classification_rules,
-    load_override_store,
 )
 from finance_tooling.config import Settings
 from finance_tooling.fx import ensure_fx_cache, resolve_rate
@@ -85,22 +84,17 @@ def enrich_transactions(transactions: list[Transaction], settings: Settings) -> 
     warnings: list[str] = []
 
     category_rules, category_rule_warnings = load_classification_rules(settings.category_rules_path)
-    category_overrides, category_override_warnings = load_override_store(
-        settings.category_overrides_path
-    )
     project_config, project_warnings = load_project_config(settings.project_overrides_path)
     transaction_overrides, transaction_override_warnings = load_transaction_override_store(
         settings.transaction_overrides_path
     )
     warnings.extend(category_rule_warnings)
-    warnings.extend(category_override_warnings)
     warnings.extend(project_warnings)
     warnings.extend(transaction_override_warnings)
 
     classified, _classification_diagnostics = classify_transactions_with_diagnostics(
         transactions,
         rules=category_rules,
-        overrides=category_overrides,
     )
     projected = assign_projects_to_transactions(classified, project_config)
     overridden = apply_transaction_overrides(projected, transaction_overrides)

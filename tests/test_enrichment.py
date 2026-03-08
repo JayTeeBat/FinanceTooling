@@ -26,7 +26,6 @@ def _settings(tmp_path: Path) -> Settings:
         ingest_text_cache_enabled=False,
         ingest_text_cache_path=tmp_path / "ingest_text_cache.parquet",
         category_rules_path=tmp_path / "category_rules.yaml",
-        category_overrides_path=tmp_path / "category_overrides.yaml",
         project_rules_path=tmp_path / "project_rules.yaml",
         budget_targets_path=tmp_path / "budget_targets.yaml",
         project_overrides_path=tmp_path / "project_overrides.yaml",
@@ -43,7 +42,6 @@ def test_enrich_transactions_applies_transaction_overrides_and_project_tags(
     settings.input_path.mkdir(parents=True, exist_ok=True)
 
     settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
-    settings.category_overrides_path.write_text("version: 1\noverrides: []\n", encoding="utf-8")
     settings.project_overrides_path.write_text(
         "version: 1\nrules: []\noverrides: []\n",
         encoding="utf-8",

@@ -28,7 +28,6 @@ def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
         ingest_text_cache_enabled=False,
         ingest_text_cache_path=processed_dir / "ingest_text_cache.parquet",
         category_rules_path=processed_dir / "category_rules.yaml",
-        category_overrides_path=processed_dir / "category_overrides.yaml",
         project_rules_path=processed_dir / "project_rules.yaml",
         budget_targets_path=processed_dir / "budget_targets.yaml",
         project_overrides_path=Path("config/project_overrides.yaml").resolve(),

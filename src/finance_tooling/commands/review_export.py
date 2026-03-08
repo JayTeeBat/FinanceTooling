@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from finance_tooling.commands.common import resolve_review_export_paths
-from finance_tooling.review_export import export_fallback_review_rows
+from finance_tooling.review_export import export_review_rows
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
@@ -26,7 +26,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--include-categorized",
         action="store_true",
-        help="Include already-categorized rows in addition to fallback rows.",
+        help="Include already-categorized rows in addition to uncategorized rows.",
     )
     parser.add_argument(
         "--start-date",
@@ -90,7 +90,7 @@ def handle(args: argparse.Namespace) -> int:
                 args.output_path,
             )
         )
-        exported = export_fallback_review_rows(
+        exported = export_review_rows(
             normalized_path,
             output_path,
             include_categorized=bool(args.include_categorized),
@@ -107,7 +107,7 @@ def handle(args: argparse.Namespace) -> int:
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Review export error: {exc}")
         return 1
-    print(f"Exported {exported} fallback review rows to {output_path}")
+    print(f"Exported {exported} review rows to {output_path}")
     return 0
 
 
@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     """Standalone CLI entrypoint for review-export."""
     parser = argparse.ArgumentParser(
         prog="review-export",
-        description="Export fallback categorization rows for manual review.",
+        description="Export uncategorized transaction rows for manual review.",
     )
     configure_parser(parser)
     args = parser.parse_args(argv)
