@@ -51,6 +51,7 @@ _PROVENANCE_EXPORT_COLUMNS = (
     EXISTING_PROJECT_TAGS_COLUMN,
     "source_file",
 )
+_LEGACY_UNCATEGORIZED_SOURCES = {"fallback", "uncategorized"}
 
 
 def _apply_existing_review_values(
@@ -146,6 +147,28 @@ def _order_review_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe.loc[:, ordered]
 
 
+def _filter_review_scope(dataframe: pd.DataFrame, *, include_categorized: bool) -> pd.DataFrame:
+    if include_categorized:
+        return dataframe
+
+    uncategorized_by_category = (
+        dataframe["category"].fillna("").astype(str).str.strip().str.casefold() == "uncategorized"
+        if "category" in dataframe.columns
+        else pd.Series(False, index=dataframe.index)
+    )
+    uncategorized_by_source = (
+        dataframe["category_source"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+        .isin(_LEGACY_UNCATEGORIZED_SOURCES)
+        if "category_source" in dataframe.columns
+        else pd.Series(False, index=dataframe.index)
+    )
+    return dataframe.loc[uncategorized_by_category | uncategorized_by_source]
+
+
 def export_review_rows(
     normalized_path: Path,
     review_output_path: Path,
@@ -184,10 +207,7 @@ def export_review_rows(
         lambda value: normalize_description(str(value))
     )
 
-    if not include_categorized and "category_source" in filtered_rows.columns:
-        filtered_rows = filtered_rows.loc[
-            filtered_rows["category_source"].astype(str).str.strip().str.lower() == "uncategorized"
-        ]
+    filtered_rows = _filter_review_scope(filtered_rows, include_categorized=include_categorized)
 
     if start_date_value is not None or end_date_value is not None:
         booking_dates = pd.to_datetime(filtered_rows["booking_date"], errors="coerce")

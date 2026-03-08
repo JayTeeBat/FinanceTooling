@@ -116,6 +116,47 @@ def test_export_review_rows_include_categorized_option_includes_all_sources(
     assert exported_df["transaction_id"].tolist() == ["tx_1", "tx_2"]
 
 
+def test_export_review_rows_includes_legacy_fallback_uncategorized_rows(
+    tmp_path: Path,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN MERCHANT 123",
+                "amount_native": -10.5,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "fallback",
+            },
+            {
+                "transaction_id": "tx_2",
+                "booking_date": "2026-01-02",
+                "description": "CARD UBER",
+                "amount_native": -12.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Transport",
+                "subcategory": "Mobility",
+                "category_source": "rule",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_review_rows(normalized_path, output_path)
+
+    assert exported == 1
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == ["tx_1"]
+
+
 def test_export_review_rows_applies_review_state_and_only_unreviewed(tmp_path: Path) -> None:
     normalized_path = tmp_path / "transactions_normalized.csv"
     output_path = tmp_path / "review.xlsx"
