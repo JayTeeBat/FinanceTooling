@@ -179,6 +179,7 @@ def apply_review_state(transactions: list[Transaction], path: Path) -> list[Tran
                 fx_rate_date=transaction.fx_rate_date,
                 fx_source=transaction.fx_source,
                 amount_eur=transaction.amount_eur,
+                source_record_index=transaction.source_record_index,
                 source_file_mtime=transaction.source_file_mtime,
             )
         )

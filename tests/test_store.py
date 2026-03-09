@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 from finance_tooling.models import Transaction
-from finance_tooling.store import compute_transaction_id, upsert_transactions
+from finance_tooling.store import (
+    compute_legacy_transaction_id,
+    compute_transaction_id,
+    upsert_transactions,
+)
 
 HAS_PYARROW = importlib.util.find_spec("pyarrow") is not None
 pytestmark = pytest.mark.skipif(not HAS_PYARROW, reason="pyarrow is required")
@@ -33,6 +37,16 @@ def test_compute_transaction_id_is_stable(tmp_path: Path) -> None:
     tx = _sample_transaction(source)
 
     assert compute_transaction_id(tx) == compute_transaction_id(tx)
+
+
+def test_compute_transaction_id_uses_source_record_index(tmp_path: Path) -> None:
+    source = tmp_path / "sample.pdf"
+    source.write_text("x", encoding="utf-8")
+    tx_a = replace(_sample_transaction(source), source_record_index=0)
+    tx_b = replace(_sample_transaction(source), source_record_index=1)
+
+    assert compute_transaction_id(tx_a) != compute_transaction_id(tx_b)
+    assert compute_legacy_transaction_id(tx_a) == compute_legacy_transaction_id(tx_b)
 
 
 def test_upsert_transactions_is_idempotent(tmp_path: Path) -> None:
@@ -92,3 +106,19 @@ def test_upsert_transactions_replaces_rows_by_source_file_when_ids_change(tmp_pa
     assert second.total_rows == 1
     assert second.new_rows == 1
     assert second.dataframe.loc[0, "description"] == "Salary payment updated"
+
+
+def test_upsert_transactions_keeps_repeated_rows_with_distinct_source_record_index(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "sample.pdf"
+    source.write_text("x", encoding="utf-8")
+    parquet_path = tmp_path / "transactions_master.parquet"
+
+    first = replace(_sample_transaction(source), source_record_index=0)
+    second = replace(_sample_transaction(source), source_record_index=1)
+
+    result = upsert_transactions(parquet_path, [first, second])
+
+    assert result.total_rows == 2
+    assert result.new_rows == 2

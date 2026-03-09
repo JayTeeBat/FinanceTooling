@@ -11,6 +11,7 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "transaction_id",
     "booking_date",
     "description",
+    "source_record_index",
     "amount_native",
     "currency",
     "fx_rate_to_eur",
@@ -60,6 +61,7 @@ class Transaction:
     fx_rate_date: date | None = None
     fx_source: str | None = None
     amount_eur: Decimal | None = None
+    source_record_index: int | None = None
     source_file_mtime: datetime | None = None
 
 

@@ -3,6 +3,12 @@
 This document defines the human-in-the-loop flow for manual category review,
 transaction-level overrides, and project tagging.
 
+Transaction identity is keyed by the canonical `transaction_id`, which now
+includes a parser-assigned `source_record_index`. That fixes false-positive
+deduplication for repeated same-day same-amount rows within the same statement.
+The row index is persisted in staged/canonical outputs for auditability, but it
+is intentionally not surfaced in the review workbook.
+
 ## Purpose
 
 - Export uncategorized rows with full transaction detail for review in an Excel
@@ -146,6 +152,18 @@ migrated into exact-match rules with:
 ```bash
 uv run migrate-category-overrides-to-rules
 ```
+
+If you are upgrading from a corpus generated before `source_record_index` was
+part of transaction identity:
+
+```bash
+uv run ingest
+uv run migrate-transaction-ids
+```
+
+Then do the first post-migration `transform` against a clean
+`transactions_master.parquet` backup/rename so manual carry-forward does not
+reuse old collapsed identities.
 
 Use `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml` for reusable
 project-tag automation:

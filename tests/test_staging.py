@@ -36,6 +36,7 @@ def test_staging_roundtrip_preserves_transaction_fields(tmp_path: Path) -> None:
         fx_rate_date=date(2024, 5, 6),
         fx_source="BASE",
         amount_eur=Decimal("-10.25"),
+        source_record_index=7,
         source_file_mtime=datetime.fromisoformat("2024-05-06T12:34:56+00:00"),
     )
 

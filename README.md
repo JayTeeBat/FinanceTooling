@@ -176,6 +176,12 @@ Review progress is stored separately in
 `${FINANCE_PROCESSED_PATH}/review_state.parquet` by default and projected into
 `transactions_normalized.csv` as the `reviewed` column after `transform`.
 
+Transaction identity now includes a parser-assigned `source_record_index` so
+repeated same-day same-amount statement rows do not collapse into a single
+canonical transaction during `transform`. This field is persisted in staged and
+canonical outputs for auditability, but it is not shown in the human review
+workbook.
+
 Transaction-level corrections and project tags are configured in:
 
 - `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
@@ -187,6 +193,18 @@ rules with:
 ```bash
 uv run migrate-category-overrides-to-rules
 ```
+
+If you are upgrading from an older corpus built before `source_record_index`
+was added to transaction identity, rerun `ingest` and then migrate ID-keyed
+manual state with:
+
+```bash
+uv run migrate-transaction-ids
+```
+
+That command rewrites uniquely mappable `transaction_overrides` and
+`review_state` entries to the new transaction IDs, and writes sidecar files for
+ambiguous or unmatched rows instead of guessing.
 
 Related docs and diagrams:
 

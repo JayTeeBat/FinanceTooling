@@ -17,7 +17,11 @@ from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
-from finance_tooling.store import UpsertResult, upsert_transactions
+from finance_tooling.store import (
+    UpsertResult,
+    compute_legacy_transaction_id,
+    upsert_transactions,
+)
 from finance_tooling.workflow.types import (
     HsbcBoundaryDiagnostic,
     HsbcSelectionDiagnostic,
@@ -31,6 +35,41 @@ def write_json(path: Path, payload: dict[str, object] | SummaryPayload) -> None:
     """Write JSON payload with stable formatting."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+
+
+def _write_legacy_identity_collision_candidates(
+    transactions: list[Transaction],
+    output_path: Path,
+) -> tuple[int, int]:
+    grouped: dict[str, list[Transaction]] = defaultdict(list)
+    for transaction in transactions:
+        grouped[compute_legacy_transaction_id(transaction)].append(transaction)
+
+    rows: list[dict[str, object]] = []
+    for legacy_id, collisions in grouped.items():
+        if len(collisions) <= 1:
+            continue
+        for group_row_number, transaction in enumerate(collisions, start=1):
+            rows.append(
+                {
+                    "legacy_transaction_id": legacy_id,
+                    "collision_group_size": len(collisions),
+                    "group_row_number": group_row_number,
+                    "booking_date": transaction.booking_date.isoformat(),
+                    "description": transaction.description,
+                    "source_record_index": transaction.source_record_index,
+                    "amount_native": float(transaction.amount_native),
+                    "currency": transaction.currency,
+                    "bank": transaction.bank,
+                    "account_label": transaction.account_label,
+                    "source_file": str(transaction.source_file),
+                    "parser": transaction.parser,
+                }
+            )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    DataFrame(rows).to_csv(output_path, index=False)
+    return len({row["legacy_transaction_id"] for row in rows}), len(rows)
 
 
 def persist_and_report(
@@ -110,6 +149,12 @@ def persist_and_report(
         new_rows=upsert.new_rows,
         project_rules_path=settings.project_rules_path,
         budget_targets_path=settings.budget_targets_path,
+    )
+    collision_candidates_path = (
+        settings.summary_json_path.parent / "legacy_identity_collision_candidates.csv"
+    )
+    legacy_identity_collision_group_count, legacy_identity_collision_row_count = (
+        _write_legacy_identity_collision_candidates(transactions, collision_candidates_path)
     )
 
     category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
@@ -257,6 +302,9 @@ def persist_and_report(
         "manual_category_carry_forward_unmatched_count": (
             manual_category_carry_forward_unmatched_count
         ),
+        "legacy_identity_collision_group_count": legacy_identity_collision_group_count,
+        "legacy_identity_collision_row_count": legacy_identity_collision_row_count,
+        "legacy_identity_collision_candidates_path": str(collision_candidates_path),
         "category_source_counts": classification_diagnostics.category_source_counts,
         "category_metrics_by_bank": category_metrics_by_bank,
         "top_uncategorized_descriptions": (

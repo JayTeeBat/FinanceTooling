@@ -15,6 +15,7 @@ from finance_tooling.workflow.types import StagingWriteResult
 _REQUIRED_STAGED_COLUMNS = (
     "booking_date",
     "description",
+    "source_record_index",
     "amount_native",
     "currency",
     "source_file",
@@ -116,6 +117,7 @@ def write_staged_transactions(path: Path, transactions: list[Transaction]) -> St
         {
             "booking_date": tx.booking_date.isoformat(),
             "description": tx.description,
+            "source_record_index": tx.source_record_index,
             "amount_native": str(tx.amount_native),
             "currency": tx.currency,
             "source_file": str(tx.source_file),
@@ -172,6 +174,11 @@ def read_staged_transactions(path: Path) -> list[Transaction]:
             Transaction(
                 booking_date=date.fromisoformat(str(row["booking_date"])),
                 description=str(row["description"]),
+                source_record_index=(
+                    int(row["source_record_index"])
+                    if not _is_missing(row["source_record_index"])
+                    else None
+                ),
                 amount_native=Decimal(str(row["amount_native"])),
                 currency=str(row["currency"]),
                 source_file=Path(str(row["source_file"])),

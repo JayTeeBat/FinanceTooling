@@ -285,3 +285,45 @@ def test_migrate_category_overrides_command_prints_summary(
     assert exit_code == 0
     assert "Migrated rules: 2" in stdio.out
     assert str(rules_path) in stdio.out
+
+
+def test_migrate_transaction_ids_command_prints_summary(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    transaction_overrides_path = tmp_path / "config" / "transaction_overrides.yaml"
+    report_path = processed_dir / "transaction_id_migration_report.json"
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: SimpleNamespace(
+            staged_transactions_path=processed_dir / "staged_transactions.parquet",
+            transaction_overrides_path=transaction_overrides_path,
+            review_state_path=processed_dir / "review_state.parquet",
+            summary_json_path=processed_dir / "run_summary.json",
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.migrate_transaction_ids.migrate_transaction_ids",
+        lambda **_: SimpleNamespace(
+            migrated_override_count=3,
+            skipped_override_ambiguous_count=1,
+            skipped_override_unmatched_count=2,
+            migrated_review_state_count=4,
+            skipped_review_state_ambiguous_count=0,
+            skipped_review_state_unmatched_count=1,
+            report_path=report_path,
+            unmigrated_overrides_path=processed_dir / "transaction_overrides_unmigrated.yaml",
+            unmigrated_review_state_path=processed_dir / "review_state_unmigrated.csv",
+            backup_dir=processed_dir / "backups",
+        ),
+    )
+
+    exit_code = main(["migrate-transaction-ids"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Migrated overrides: 3" in stdio.out
+    assert "Migrated review-state rows: 4" in stdio.out
+    assert str(report_path) in stdio.out
