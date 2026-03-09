@@ -150,4 +150,5 @@ def normalize_row_to_transaction(
         source_file=file_path,
         bank=bank,
         parser=parser_name,
+        source_record_index=row.source_record_index,
     )

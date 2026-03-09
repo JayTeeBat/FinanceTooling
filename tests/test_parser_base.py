@@ -67,6 +67,8 @@ def test_base_parser_builds_pass_validation() -> None:
     assert result.validation.status == "pass"
     assert result.validation.severity == "none"
     assert result.warnings == []
+    assert len(result.transactions) == 1
+    assert result.transactions[0].source_record_index == 0
 
 
 def test_base_parser_builds_fail_validation_with_warning() -> None:
@@ -190,6 +192,7 @@ def test_normalize_row_to_transaction_uses_defaults() -> None:
     assert tx.description == "Unknown transaction"
     assert tx.currency == "EUR"
     assert tx.amount_native == Decimal("1200.50")
+    assert tx.source_record_index is None
 
 
 class _MarkerParser(_DummyParser):

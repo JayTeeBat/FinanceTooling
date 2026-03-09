@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Protocol
@@ -59,6 +59,7 @@ class ParsedRow:
     raw_description: str
     raw_amount: str
     raw_currency_hint: str | None = None
+    source_record_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -114,9 +115,14 @@ class BaseStatementParser(ABC):
         config = self._normalize_config()
 
         transactions: list[Transaction] = []
-        for row in rows:
+        for index, row in enumerate(rows):
+            normalized_row = (
+                row
+                if row.source_record_index is not None
+                else replace(row, source_record_index=index)
+            )
             transaction = normalize_row_to_transaction(
-                row=row,
+                row=normalized_row,
                 file_path=file_path,
                 bank=self.bank,
                 parser_name=self.name,

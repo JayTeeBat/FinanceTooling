@@ -36,6 +36,21 @@ def _normalize_description(description: str) -> str:
     return " ".join(description.strip().lower().split())
 
 
+def compute_legacy_transaction_id(transaction: Transaction) -> str:
+    """Compute the pre-source-record-index transaction id for migration/audits."""
+    key_parts = [
+        transaction.booking_date.isoformat(),
+        _normalize_description(transaction.description),
+        str(transaction.amount_native),
+        transaction.currency.upper(),
+        transaction.bank,
+        transaction.account_label or "",
+        str(transaction.source_file),
+    ]
+    payload = "|".join(key_parts).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def compute_transaction_id(transaction: Transaction) -> str:
     """Compute a stable transaction id used for idempotent upserts."""
     key_parts = [
@@ -46,6 +61,7 @@ def compute_transaction_id(transaction: Transaction) -> str:
         transaction.bank,
         transaction.account_label or "",
         str(transaction.source_file),
+        "" if transaction.source_record_index is None else str(transaction.source_record_index),
     ]
     payload = "|".join(key_parts).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
@@ -64,6 +80,7 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "transaction_id": compute_transaction_id(tx),
             "booking_date": tx.booking_date.isoformat(),
             "description": tx.description,
+            "source_record_index": tx.source_record_index,
             "amount_native": float(tx.amount_native),
             "currency": tx.currency,
             "fx_rate_to_eur": float(tx.fx_rate_to_eur) if tx.fx_rate_to_eur is not None else None,

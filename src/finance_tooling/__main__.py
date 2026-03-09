@@ -14,6 +14,9 @@ from finance_tooling.commands import (
     migrate_category_overrides_to_rules as migrate_category_overrides_command,
 )
 from finance_tooling.commands import (
+    migrate_transaction_ids as migrate_transaction_ids_command,
+)
+from finance_tooling.commands import (
     review_export as review_export_command,
 )
 from finance_tooling.commands import (
@@ -69,6 +72,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Migrate legacy category overrides into exact-match rules.",
     )
     migrate_category_overrides_command.configure_parser(migrate_category_overrides_parser)
+
+    migrate_transaction_ids_parser = subparsers.add_parser(
+        "migrate-transaction-ids",
+        help="Migrate old transaction-id keyed manual state after identity changes.",
+    )
+    migrate_transaction_ids_command.configure_parser(migrate_transaction_ids_parser)
 
     metrics_log_parser = subparsers.add_parser(
         "metrics-log-update",

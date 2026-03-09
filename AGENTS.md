@@ -190,6 +190,23 @@ Success target for the 2026 validation campaign:
 ### 2026-03-08 - codex
 - Branch: `feature/excel-review-workbook`
 - Completed:
+  - Added `source_record_index` to parsed, staged, and canonical transactions and updated `transaction_id` generation so repeated same-day same-amount rows in the same statement no longer collapse during canonical upsert.
+  - Added `migrate-transaction-ids` plus migration helpers for `transaction_overrides` and `review_state`, with explicit sidecars for ambiguous or unmatched rows instead of guessing.
+  - Added legacy-identity collision diagnostics to `run_summary.json`, updated README/review workflow docs, and refreshed metrics logs from an isolated real-data validation run.
+- Checks:
+  - `uv run ruff check .`: pass
+  - `uv run ruff format .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - The isolated migration run reported `10` ambiguous and `34` unmatched transaction-override rows that will need sidecar review during the live rollout.
+  - The first live post-migration `transform` should run against a clean/renamed `transactions_master.parquet` backup to avoid old carry-forward contamination.
+- Next action:
+  - Run the live `ingest` -> `migrate-transaction-ids` -> clean `transform` rollout after reviewing the migration sidecars.
+
+### 2026-03-08 - codex
+- Branch: `feature/excel-review-workbook`
+- Completed:
   - Removed the old fallback categorization workflow from active runtime behavior: unmatched transactions are now `uncategorized`, manual review edits route to `transaction_overrides.yaml`, and active settings no longer load `category_overrides.yaml`.
   - Simplified the review workbook and CLI around `transactions_review.xlsx`, uncategorized-first export, and transaction-override-only import semantics.
   - Added a one-off `migrate-category-overrides-to-rules` command to convert legacy fingerprint overrides into exact-match category rules.
@@ -226,34 +243,3 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Review the exported workbook in LibreOffice dark mode and confirm whether
     the current palette should remain the default.
-
-### 2026-03-07 - codex
-- Branch: `main`
-- Completed:
-  - Migrated the human review workflow to be Excel-first by default:
-    `review-export` now defaults to
-    `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx` and supports
-    workbook formatting plus review filters (`--contains`, `--bank`,
-    `--account-label`, `--only-unreviewed`).
-  - Added durable review-state persistence in
-    `src/finance_tooling/review_state.py` backed by
-    `${FINANCE_PROCESSED_PATH}/review_state.parquet` (or
-    `FINANCE_REVIEW_STATE_PATH`), with `reviewed` projected into canonical
-    outputs and `transactions_normalized.csv`.
-  - Extended `review-import` to persist review state, accept `.xlsx`, and
-    optionally run `transform` immediately via `--run-transform`.
-  - Added regression coverage for review-state persistence, `.xlsx`
-    export/import, new CLI behavior, and reviewed summary fields; updated
-    README and review docs for the new workflow.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - No real-data validation run had been performed yet when this package was
-    first completed.
-- Next action:
-  - Run `review-export` -> Excel review -> `review-import --run-transform` on a
-    real month slice and validate `reviewed` propagation in
-    `transactions_normalized.csv`.
