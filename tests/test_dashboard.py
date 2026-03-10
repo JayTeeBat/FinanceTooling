@@ -44,6 +44,15 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
                 "bank": "HSBC",
                 "account_label": None,
             },
+            {
+                "booking_date": "2026-01-10",
+                "description": "Transfer to savings",
+                "amount_native": -300.0,
+                "amount_eur": -300.0,
+                "category": "Transfers",
+                "bank": "HSBC",
+                "account_label": None,
+            },
         ]
     )
     project_rules_path = tmp_path / "project_rules.yaml"
@@ -98,6 +107,7 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
     assert "Last 3 Years" in html
     assert "Last 5 Years" in html
     assert "Last 10 Years" in html
+    assert ">Transfers<" in html
     assert "Full History" in html
     assert "Specific Year" in html
     assert 'id="specific-year"' in html
@@ -108,6 +118,7 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
     transactions = cast(list[dict[str, object]], transactions_raw)
     assert transactions[0]["project"] == "Mobility"
     assert transactions[1]["project"] == "Unassigned"
+    assert transactions[2]["is_transfer"] is True
     budget_targets_raw = payload["budget_targets"]
     assert isinstance(budget_targets_raw, list)
     budget_targets = cast(list[dict[str, object]], budget_targets_raw)

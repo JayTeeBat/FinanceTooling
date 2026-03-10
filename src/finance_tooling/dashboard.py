@@ -70,16 +70,19 @@ def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
         booking_date = _normalize_booking_date(raw_row.get("booking_date"))
         if booking_date is None:
             continue
+        category = _to_str_or_default(
+            _to_str_or_none(raw_row.get("category")), default="Uncategorized"
+        )
+        project = _to_str_or_default(
+            _to_str_or_none(raw_row.get("project")), default="Unassigned"
+        )
         rows.append(
             {
                 "booking_date": booking_date,
-                "category": _to_str_or_default(
-                    _to_str_or_none(raw_row.get("category")), default="Uncategorized"
-                ),
-                "project": _to_str_or_default(
-                    _to_str_or_none(raw_row.get("project")), default="Unassigned"
-                ),
+                "category": category,
+                "project": project,
                 "amount_eur": _to_optional_float(raw_row.get("amount_eur")),
+                "is_transfer": category.strip().casefold() == "transfers",
             }
         )
 
@@ -483,6 +486,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="kpis" style="margin-top: 10px;">
         <article class="kpi"><span class="label">Income</span><span class="value" id="kpi-income">-</span></article>
         <article class="kpi"><span class="label">Expense</span><span class="value" id="kpi-expense">-</span></article>
+        <article class="kpi"><span class="label">Transfers</span><span class="value" id="kpi-transfers">-</span></article>
         <article class="kpi"><span class="label">Net</span><span class="value" id="kpi-net">-</span></article>
         <article class="kpi"><span class="label">Transactions</span><span class="value" id="kpi-tx-count">-</span></article>
         <article class="kpi"><span class="label">Budget Month</span><span class="value" id="kpi-budget-month">-</span></article>
@@ -665,6 +669,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               ? item.project.trim()
               : "Unassigned",
             amountEur: toNumber(item.amount_eur),
+            isTransfer: Boolean(item.is_transfer) || (typeof item.category === "string" && item.category.trim().toLowerCase() === "transfers"),
           };
         })
         .filter((item) => item !== null);
@@ -859,7 +864,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateMonthlyNet(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null) {
+          if (tx.amountEur === null || tx.isTransfer) {
             continue;
           }
           const existing = totals.get(tx.month) || 0;
@@ -874,7 +879,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0) {
+          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
@@ -888,7 +893,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function collectYears(filtered) {
         const years = new Set();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0) {
+          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
             continue;
           }
           years.add(Number(tx.bookingDate.slice(0, 4)));
@@ -918,7 +923,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const current = new Array(12).fill(0);
         const previous = new Array(12).fill(0);
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0) {
+          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
             continue;
           }
           const year = Number(tx.bookingDate.slice(0, 4));
@@ -944,7 +949,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const categoryActual = new Map();
         const projectActual = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0) {
+          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
             continue;
           }
           const spend = Math.abs(tx.amountEur);
@@ -1104,9 +1109,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const categoryProjectFiltered = filterByCategoryProject(state);
         let income = 0;
         let expense = 0;
+        let transfers = 0;
         let net = 0;
         for (const tx of filtered) {
           if (tx.amountEur === null) {
+            continue;
+          }
+          if (tx.isTransfer) {
+            transfers += Math.abs(tx.amountEur);
             continue;
           }
           net += tx.amountEur;
@@ -1119,6 +1129,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
         setKpi("kpi-income", money.format(income));
         setKpi("kpi-expense", money.format(expense));
+        setKpi("kpi-transfers", money.format(transfers));
         setKpi("kpi-net", money.format(net));
         setKpi("kpi-tx-count", String(filtered.length));
 

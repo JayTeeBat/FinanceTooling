@@ -7,12 +7,23 @@ import pandas as pd
 SUMMARY_COLUMNS = ["currency", "income", "expense", "net", "transactions"]
 
 
+def _exclude_transfers(dataframe: pd.DataFrame) -> pd.DataFrame:
+    if dataframe.empty or "category" not in dataframe.columns:
+        return dataframe
+    categories = dataframe["category"].fillna("").astype(str).str.strip().str.casefold()
+    return dataframe[categories != "transfers"]
+
+
 def build_summary_by_currency(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Compute income/expense/net per currency from canonical dataframe."""
     if dataframe.empty:
         return pd.DataFrame(columns=SUMMARY_COLUMNS)
 
-    grouped = dataframe.groupby("currency")
+    filtered = _exclude_transfers(dataframe)
+    if filtered.empty:
+        return pd.DataFrame(columns=SUMMARY_COLUMNS)
+
+    grouped = filtered.groupby("currency")
     income = grouped["amount_native"].apply(lambda values: values[values > 0].sum())
     expense = grouped["amount_native"].apply(lambda values: values[values < 0].sum())
     transactions_count = grouped["amount_native"].count()
@@ -34,8 +45,9 @@ def build_spend_by_category_native(dataframe: pd.DataFrame) -> pd.DataFrame:
     if dataframe.empty:
         return pd.DataFrame(columns=["category", "spend_native"])
 
+    filtered = _exclude_transfers(dataframe)
     spend = (
-        dataframe[dataframe["amount_native"] < 0]
+        filtered[filtered["amount_native"] < 0]
         .assign(spend_native=lambda frame: frame["amount_native"].abs())
         .groupby("category")["spend_native"]
         .sum()
@@ -51,7 +63,8 @@ def build_spend_by_category_eur(dataframe: pd.DataFrame) -> pd.DataFrame:
     if dataframe.empty:
         return pd.DataFrame(columns=["category", "spend_eur"])
 
-    filtered = dataframe[dataframe["amount_eur"].notna() & (dataframe["amount_eur"] < 0)]
+    filtered = _exclude_transfers(dataframe)
+    filtered = filtered[filtered["amount_eur"].notna() & (filtered["amount_eur"] < 0)]
     if filtered.empty:
         return pd.DataFrame(columns=["category", "spend_eur"])
 
@@ -71,7 +84,8 @@ def build_base_currency_summary(dataframe: pd.DataFrame) -> dict[str, float]:
     if dataframe.empty:
         return {"income": 0.0, "expense": 0.0, "net": 0.0}
 
-    converted = dataframe[dataframe["amount_eur"].notna()]["amount_eur"]
+    filtered = _exclude_transfers(dataframe)
+    converted = filtered[filtered["amount_eur"].notna()]["amount_eur"]
     income = float(converted[converted > 0].sum())
     expense = float(converted[converted < 0].sum())
     return {"income": income, "expense": expense, "net": income + expense}
@@ -82,7 +96,8 @@ def build_monthly_net_eur(dataframe: pd.DataFrame) -> pd.DataFrame:
     if dataframe.empty:
         return pd.DataFrame(columns=["month", "net_eur"])
 
-    converted = dataframe[dataframe["amount_eur"].notna()].copy()
+    filtered = _exclude_transfers(dataframe)
+    converted = filtered[filtered["amount_eur"].notna()].copy()
     if converted.empty:
         return pd.DataFrame(columns=["month", "net_eur"])
 
