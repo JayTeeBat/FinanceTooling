@@ -59,6 +59,18 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         help="Optional exact account label filter.",
     )
     parser.add_argument(
+        "--min-abs-amount",
+        type=str,
+        default=None,
+        help="Optional inclusive lower bound on abs(amount_native).",
+    )
+    parser.add_argument(
+        "--max-abs-amount",
+        type=str,
+        default=None,
+        help="Optional inclusive upper bound on abs(amount_native).",
+    )
+    parser.add_argument(
         "--only-unreviewed",
         action="store_true",
         help="Export only rows that are not marked reviewed in persisted review state.",
@@ -99,6 +111,8 @@ def handle(args: argparse.Namespace) -> int:
             contains=args.contains,
             bank=args.bank,
             account_label=args.account_label,
+            min_abs_amount=args.min_abs_amount,
+            max_abs_amount=args.max_abs_amount,
             only_unreviewed=bool(args.only_unreviewed),
             preserve_review_state=bool(args.preserve_review_state),
             review_state_path=review_state_path,

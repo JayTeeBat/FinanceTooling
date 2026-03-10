@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import pandas as pd
@@ -132,6 +133,40 @@ def _apply_exact_filter(dataframe: pd.DataFrame, column: str, value: str | None)
     return dataframe.loc[values == normalized]
 
 
+def _parse_decimal_filter(value: str | None, *, label: str) -> Decimal | None:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return Decimal(text)
+    except InvalidOperation as exc:
+        raise ValueError(f"{label} must be a valid decimal value") from exc
+
+
+def _apply_abs_amount_filter(
+    dataframe: pd.DataFrame,
+    *,
+    min_abs_amount: str | None,
+    max_abs_amount: str | None,
+) -> pd.DataFrame:
+    min_value = _parse_decimal_filter(min_abs_amount, label="min_abs_amount")
+    max_value = _parse_decimal_filter(max_abs_amount, label="max_abs_amount")
+    if min_value is not None and max_value is not None and min_value > max_value:
+        raise ValueError("min_abs_amount must be <= max_abs_amount")
+    if min_value is None and max_value is None:
+        return dataframe
+
+    absolute_amounts = dataframe["amount_native"].map(lambda value: abs(Decimal(str(value))))
+    mask = pd.Series(True, index=dataframe.index)
+    if min_value is not None:
+        mask = mask & (absolute_amounts >= min_value)
+    if max_value is not None:
+        mask = mask & (absolute_amounts <= max_value)
+    return dataframe.loc[mask]
+
+
 def _order_review_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
     ordered: list[str] = []
     for column in (
@@ -179,6 +214,8 @@ def export_review_rows(
     contains: str | None = None,
     bank: str | None = None,
     account_label: str | None = None,
+    min_abs_amount: str | None = None,
+    max_abs_amount: str | None = None,
     only_unreviewed: bool = False,
     preserve_review_state: bool = True,
     review_state_path: Path | None = None,
@@ -220,6 +257,11 @@ def export_review_rows(
     filtered_rows = _apply_contains_filter(filtered_rows, contains)
     filtered_rows = _apply_exact_filter(filtered_rows, "bank", bank)
     filtered_rows = _apply_exact_filter(filtered_rows, "account_label", account_label)
+    filtered_rows = _apply_abs_amount_filter(
+        filtered_rows,
+        min_abs_amount=min_abs_amount,
+        max_abs_amount=max_abs_amount,
+    )
 
     review_rows = filtered_rows.copy()
     if PROJECT_TAGS_COLUMN in review_rows.columns:
