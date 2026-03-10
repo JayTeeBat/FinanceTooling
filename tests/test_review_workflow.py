@@ -241,6 +241,98 @@ def test_export_review_rows_invalid_date_filters_raise_value_error(tmp_path: Pat
         )
 
 
+def test_export_review_rows_filters_by_absolute_amount_bounds(tmp_path: Path) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_small",
+                "booking_date": "2026-01-01",
+                "description": "Small expense",
+                "amount_native": -9.99,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_mid",
+                "booking_date": "2026-01-02",
+                "description": "Mid expense",
+                "amount_native": -100.00,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_large",
+                "booking_date": "2026-01-03",
+                "description": "Large refund",
+                "amount_native": 250.00,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_review_rows(
+        normalized_path,
+        output_path,
+        min_abs_amount="50",
+        max_abs_amount="200",
+    )
+
+    assert exported == 1
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == ["tx_mid"]
+
+
+def test_export_review_rows_rejects_invalid_absolute_amount_bounds(tmp_path: Path) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            }
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    with pytest.raises(ValueError, match="min_abs_amount must be <= max_abs_amount"):
+        export_review_rows(
+            normalized_path,
+            output_path,
+            min_abs_amount="200",
+            max_abs_amount="100",
+        )
+
+    with pytest.raises(ValueError, match="min_abs_amount must be a valid decimal value"):
+        export_review_rows(
+            normalized_path,
+            output_path,
+            min_abs_amount="abc",
+        )
+
+
 def test_import_review_into_overrides_writes_transaction_overrides_and_review_state(
     tmp_path: Path,
 ) -> None:

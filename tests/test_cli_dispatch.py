@@ -52,6 +52,8 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         contains: str | None = None,
         bank: str | None = None,
         account_label: str | None = None,
+        min_abs_amount: str | None = None,
+        max_abs_amount: str | None = None,
         only_unreviewed: bool = False,
         preserve_review_state: bool = True,
         review_state_path: Path | None = None,
@@ -99,6 +101,8 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
         contains: str | None = None,
         bank: str | None = None,
         account_label: str | None = None,
+        min_abs_amount: str | None = None,
+        max_abs_amount: str | None = None,
         only_unreviewed: bool = False,
         preserve_review_state: bool = True,
         review_state_path: Path | None = None,
@@ -114,6 +118,8 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
                 "contains": contains,
                 "bank": bank,
                 "account_label": account_label,
+                "min_abs_amount": min_abs_amount,
+                "max_abs_amount": max_abs_amount,
                 "only_unreviewed": only_unreviewed,
                 "preserve_review_state": preserve_review_state,
                 "review_state_path": review_state_path,
@@ -142,6 +148,10 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
             "revolut",
             "--account-label",
             "main",
+            "--min-abs-amount",
+            "50",
+            "--max-abs-amount",
+            "200",
             "--only-unreviewed",
             "--no-dark-safe",
         ]
@@ -157,6 +167,8 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert captured["contains"] == "merchant"
     assert captured["bank"] == "revolut"
     assert captured["account_label"] == "main"
+    assert captured["min_abs_amount"] == "50"
+    assert captured["max_abs_amount"] == "200"
     assert captured["only_unreviewed"] is True
     assert captured["dark_safe"] is False
     assert "Exported 1 review rows" in stdio.out
