@@ -144,6 +144,16 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
         reconciliation_fail_count=0,
         reconciliation_uncheckable_file_count=0,
         reconciliation_pass_ratio=1.0,
+        categorized_count=1,
+        uncategorized_count=0,
+        categorized_amount_eur_abs=100.0,
+        uncategorized_amount_eur_abs=0.0,
+        categorized_amount_eur_abs_ratio=1.0,
+        uncategorized_amount_eur_abs_ratio=0.0,
+        categorized_count_delta=None,
+        uncategorized_count_delta=None,
+        categorized_amount_eur_abs_delta=None,
+        uncategorized_amount_eur_abs_delta=None,
         warnings=(),
     )
 

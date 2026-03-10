@@ -9,7 +9,7 @@ import pandas as pd
 
 from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText
-from finance_tooling.models import Transaction
+from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import ParserOutput, StatementParser, StatementValidation
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
 from finance_tooling.store import UpsertResult, compute_transaction_id, upsert_transactions
@@ -195,6 +195,11 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["categorized_count"] == 1
     assert summary_payload["uncategorized_count"] == 0
     assert summary_payload["uncategorized_ratio"] == 0.0
+    assert summary_payload["categorized_amount_eur_abs"] == 100.0
+    assert summary_payload["uncategorized_amount_eur_abs"] == 0.0
+    assert summary_payload["total_amount_eur_abs"] == 100.0
+    assert summary_payload["categorized_amount_eur_abs_ratio"] == 1.0
+    assert summary_payload["uncategorized_amount_eur_abs_ratio"] == 0.0
     assert summary_payload["reviewed_count"] == 0
     assert summary_payload["reviewed_ratio"] == 0.0
     assert summary_payload["category_source_counts"]["rule"] == 1
@@ -210,6 +215,93 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert result.reconciliation_fail_count == 0
     assert result.reconciliation_uncheckable_file_count == 0
     assert result.reconciliation_pass_ratio is None
+    assert result.categorized_count == 1
+    assert result.uncategorized_count == 0
+    assert result.categorized_amount_eur_abs == 100.0
+    assert result.uncategorized_amount_eur_abs == 0.0
+    assert result.categorized_count_delta is None
+    assert result.uncategorized_count_delta is None
+    assert result.categorized_amount_eur_abs_delta is None
+    assert result.uncategorized_amount_eur_abs_delta is None
+
+
+def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    previous_summary = {
+        "categorized_count": 4,
+        "uncategorized_count": 6,
+        "categorized_amount_eur_abs": 40.0,
+        "uncategorized_amount_eur_abs": 60.0,
+    }
+    settings.summary_json_path.write_text(json.dumps(previous_summary), encoding="utf-8")
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.read_staged_transactions",
+        lambda _: [],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.enrich_transactions",
+        lambda *_args, **_kwargs: type(
+            "EnrichmentStub",
+            (),
+            {
+                "transactions": [],
+                "warnings": [],
+                "classification_diagnostics": None,
+                "manual_category_carry_forward_applied_count": 0,
+                "manual_category_carry_forward_ambiguous_skipped_count": 0,
+                "manual_category_carry_forward_unmatched_count": 0,
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.apply_review_state",
+        lambda transactions, _path: transactions,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.persist_and_report",
+        lambda **_kwargs: (
+            WorkflowResult(
+                dashboard_path=settings.output_path,
+                parquet_path=settings.master_parquet_path,
+                csv_path=settings.export_csv_path,
+                json_path=settings.export_json_path,
+                summary_path=settings.summary_json_path,
+                completeness_path=settings.completeness_json_path,
+                files_scanned=0,
+                files_failed=0,
+                transactions_parsed=10,
+                new_rows=0,
+                total_rows=10,
+                completeness_status="pass",
+                completeness_coverage_ratio=1.0,
+                missing_source_file_count=0,
+                reconciliation_checkable_file_count=0,
+                reconciliation_fail_count=0,
+                reconciliation_uncheckable_file_count=0,
+                reconciliation_pass_ratio=None,
+                categorized_count=7,
+                uncategorized_count=3,
+                categorized_amount_eur_abs=70.0,
+                uncategorized_amount_eur_abs=30.0,
+                categorized_amount_eur_abs_ratio=0.7,
+                uncategorized_amount_eur_abs_ratio=0.3,
+                warnings=(),
+            ),
+            {
+                "categorized_count": 7,
+                "uncategorized_count": 3,
+                "categorized_amount_eur_abs": 70.0,
+                "uncategorized_amount_eur_abs": 30.0,
+            },
+        ),
+    )
+
+    result = run_transform(settings)
+
+    assert result.categorized_count_delta == 3
+    assert result.uncategorized_count_delta == -3
+    assert result.categorized_amount_eur_abs_delta == 30.0
+    assert result.uncategorized_amount_eur_abs_delta == -30.0
 
 
 def test_parse_hsbc_statement_period_parses_inclusive_window() -> None:

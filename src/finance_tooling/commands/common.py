@@ -146,6 +146,36 @@ def print_workflow_result(result: WorkflowResult) -> int:
         f"{result.reconciliation_uncheckable_file_count} info "
         f"(pass_ratio={pass_ratio})"
     )
+    print(
+        "Categorization: "
+        f"{result.categorized_count} categorized / "
+        f"{result.uncategorized_count} uncategorized "
+        f"(abs EUR categorized={result.categorized_amount_eur_abs:.2f}, "
+        f"uncategorized={result.uncategorized_amount_eur_abs:.2f})"
+    )
+    print(
+        "Categorization coverage by absolute EUR amount: "
+        f"{result.categorized_amount_eur_abs_ratio * 100.0:.2f}% categorized / "
+        f"{result.uncategorized_amount_eur_abs_ratio * 100.0:.2f}% uncategorized"
+    )
+    if (
+        result.categorized_count_delta is None
+        or result.uncategorized_count_delta is None
+        or result.categorized_amount_eur_abs_delta is None
+        or result.uncategorized_amount_eur_abs_delta is None
+    ):
+        print("Delta since last run: n/a")
+    else:
+        print(
+            "Delta since last run: "
+            f"categorized {result.categorized_count_delta:+d}, "
+            f"uncategorized {result.uncategorized_count_delta:+d}"
+        )
+        print(
+            "Delta abs EUR: "
+            f"categorized {result.categorized_amount_eur_abs_delta:+.2f}, "
+            f"uncategorized {result.uncategorized_amount_eur_abs_delta:+.2f}"
+        )
     print(f"Dashboard: {result.dashboard_path}")
     print(f"Parquet: {result.parquet_path}")
     print(f"CSV export: {result.csv_path}")

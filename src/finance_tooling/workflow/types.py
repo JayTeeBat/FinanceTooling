@@ -138,6 +138,11 @@ class SummaryPayload(TypedDict):
     categorized_count: int
     uncategorized_count: int
     uncategorized_ratio: float
+    categorized_amount_eur_abs: float
+    uncategorized_amount_eur_abs: float
+    total_amount_eur_abs: float
+    categorized_amount_eur_abs_ratio: float
+    uncategorized_amount_eur_abs_ratio: float
     reviewed_count: int
     reviewed_ratio: float
     manual_category_carry_forward_applied_count: int
