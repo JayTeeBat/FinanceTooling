@@ -87,4 +87,14 @@ class WorkflowResult:
     reconciliation_fail_count: int
     reconciliation_uncheckable_file_count: int
     reconciliation_pass_ratio: float | None
-    warnings: tuple[str, ...]
+    categorized_count: int
+    uncategorized_count: int
+    categorized_amount_eur_abs: float
+    uncategorized_amount_eur_abs: float
+    categorized_amount_eur_abs_ratio: float
+    uncategorized_amount_eur_abs_ratio: float
+    warnings: tuple[str, ...] = ()
+    categorized_count_delta: int | None = None
+    uncategorized_count_delta: int | None = None
+    categorized_amount_eur_abs_delta: float | None = None
+    uncategorized_amount_eur_abs_delta: float | None = None

@@ -85,6 +85,12 @@ def handle(args: argparse.Namespace) -> int:
     print(f"- parsing_success_pct: {snapshot.parsing_success_pct:.2f}%")
     print(f"- categorized_pct: {snapshot.categorized_pct:.2f}%")
     print(f"- uncategorized_pct: {snapshot.uncategorized_pct:.2f}%")
+    print(f"- categorized_amount_eur_abs: {snapshot.categorized_amount_eur_abs:.2f}")
+    print(f"- uncategorized_amount_eur_abs: {snapshot.uncategorized_amount_eur_abs:.2f}")
+    print(f"- categorized_amount_eur_abs_pct: {snapshot.categorized_amount_eur_abs_pct:.2f}%")
+    print(
+        f"- uncategorized_amount_eur_abs_pct: {snapshot.uncategorized_amount_eur_abs_pct:.2f}%"
+    )
     print(f"- reconciliation_pass_pct: {reconciliation_pct}")
     print(f"- rows in log: {total_rows}")
     print(

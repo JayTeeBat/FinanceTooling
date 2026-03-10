@@ -163,8 +163,12 @@ def persist_and_report(
             "categorized_count": 0,
             "uncategorized_count": 0,
             "reviewed_count": 0,
+            "categorized_amount_eur_abs": 0.0,
+            "uncategorized_amount_eur_abs": 0.0,
         }
     )
+    categorized_amount_eur_abs = 0.0
+    uncategorized_amount_eur_abs = 0.0
     for tx in transactions:
         bank = tx.bank.strip() if tx.bank.strip() else "UNKNOWN"
         counters = category_metrics_by_bank_counters[bank]
@@ -174,33 +178,64 @@ def persist_and_report(
         is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
             (tx.category_source or "").strip().lower() == "uncategorized"
         )
+        absolute_amount_eur = abs(float(tx.amount_eur)) if tx.amount_eur is not None else 0.0
         if is_uncategorized:
             counters["uncategorized_count"] += 1
+            counters["uncategorized_amount_eur_abs"] += absolute_amount_eur
+            uncategorized_amount_eur_abs += absolute_amount_eur
         else:
             counters["categorized_count"] += 1
+            counters["categorized_amount_eur_abs"] += absolute_amount_eur
+            categorized_amount_eur_abs += absolute_amount_eur
 
     category_metrics_by_bank = []
+    total_amount_eur_abs = categorized_amount_eur_abs + uncategorized_amount_eur_abs
     for bank in sorted(category_metrics_by_bank_counters):
         counters = category_metrics_by_bank_counters[bank]
         total = counters["transactions_count"]
         categorized_pct = (counters["categorized_count"] / total) * 100.0 if total > 0 else 0.0
         uncategorized_pct = (counters["uncategorized_count"] / total) * 100.0 if total > 0 else 0.0
         reviewed_pct = (counters["reviewed_count"] / total) * 100.0 if total > 0 else 0.0
+        total_bank_amount = (
+            counters["categorized_amount_eur_abs"] + counters["uncategorized_amount_eur_abs"]
+        )
+        categorized_amount_eur_abs_ratio = (
+            (counters["categorized_amount_eur_abs"] / total_bank_amount) * 100.0
+            if total_bank_amount > 0
+            else 0.0
+        )
+        uncategorized_amount_eur_abs_ratio = (
+            (counters["uncategorized_amount_eur_abs"] / total_bank_amount) * 100.0
+            if total_bank_amount > 0
+            else 0.0
+        )
         category_metrics_by_bank.append(
             {
                 "bank": bank,
                 "transactions_count": total,
                 "categorized_count": counters["categorized_count"],
                 "uncategorized_count": counters["uncategorized_count"],
+                "categorized_amount_eur_abs": round(counters["categorized_amount_eur_abs"], 4),
+                "uncategorized_amount_eur_abs": round(counters["uncategorized_amount_eur_abs"], 4),
                 "reviewed_count": counters["reviewed_count"],
                 "categorized_pct": round(categorized_pct, 4),
                 "uncategorized_pct": round(uncategorized_pct, 4),
+                "categorized_amount_eur_abs_ratio": round(categorized_amount_eur_abs_ratio, 4),
+                "uncategorized_amount_eur_abs_ratio": round(uncategorized_amount_eur_abs_ratio, 4),
                 "reviewed_pct": round(reviewed_pct, 4),
             }
         )
 
     reviewed_count = sum(1 for tx in transactions if tx.reviewed)
     reviewed_ratio = (reviewed_count / len(transactions)) if transactions else 0.0
+    categorized_amount_eur_abs_ratio = (
+        (categorized_amount_eur_abs / total_amount_eur_abs) if total_amount_eur_abs > 0 else 0.0
+    )
+    uncategorized_amount_eur_abs_ratio = (
+        (uncategorized_amount_eur_abs / total_amount_eur_abs)
+        if total_amount_eur_abs > 0
+        else 0.0
+    )
 
     summary_payload: SummaryPayload = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -291,6 +326,11 @@ def persist_and_report(
         "categorized_count": classification_diagnostics.categorized_count,
         "uncategorized_count": classification_diagnostics.uncategorized_count,
         "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
+        "categorized_amount_eur_abs": round(categorized_amount_eur_abs, 4),
+        "uncategorized_amount_eur_abs": round(uncategorized_amount_eur_abs, 4),
+        "total_amount_eur_abs": round(total_amount_eur_abs, 4),
+        "categorized_amount_eur_abs_ratio": round(categorized_amount_eur_abs_ratio, 4),
+        "uncategorized_amount_eur_abs_ratio": round(uncategorized_amount_eur_abs_ratio, 4),
         "reviewed_count": reviewed_count,
         "reviewed_ratio": reviewed_ratio,
         "manual_category_carry_forward_applied_count": (
@@ -341,6 +381,12 @@ def persist_and_report(
         reconciliation_fail_count=reconciliation_fail_count,
         reconciliation_uncheckable_file_count=reconciliation_uncheckable_count,
         reconciliation_pass_ratio=reconciliation_pass_ratio,
+        categorized_count=classification_diagnostics.categorized_count,
+        uncategorized_count=classification_diagnostics.uncategorized_count,
+        categorized_amount_eur_abs=round(categorized_amount_eur_abs, 4),
+        uncategorized_amount_eur_abs=round(uncategorized_amount_eur_abs, 4),
+        categorized_amount_eur_abs_ratio=round(categorized_amount_eur_abs_ratio, 4),
+        uncategorized_amount_eur_abs_ratio=round(uncategorized_amount_eur_abs_ratio, 4),
         warnings=tuple(warnings),
     )
 

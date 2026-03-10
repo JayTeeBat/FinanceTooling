@@ -20,6 +20,9 @@ def test_build_snapshot_computes_percentage_metrics(tmp_path: Path) -> None:
                 "transactions_parsed": 1000,
                 "categorized_count": 620,
                 "uncategorized_count": 380,
+                "categorized_amount_eur_abs": 6200.0,
+                "uncategorized_amount_eur_abs": 3800.0,
+                "total_amount_eur_abs": 10000.0,
                 "file_coverage_ratio": 0.97,
                 "statement_reconciliation_pass_ratio": 0.81,
             }
@@ -35,6 +38,10 @@ def test_build_snapshot_computes_percentage_metrics(tmp_path: Path) -> None:
     assert snapshot.completeness_coverage_pct == 97.0
     assert snapshot.categorized_pct == 62.0
     assert snapshot.uncategorized_pct == 38.0
+    assert snapshot.categorized_amount_eur_abs == 6200.0
+    assert snapshot.uncategorized_amount_eur_abs == 3800.0
+    assert snapshot.categorized_amount_eur_abs_pct == 62.0
+    assert snapshot.uncategorized_amount_eur_abs_pct == 38.0
     assert snapshot.reconciliation_pass_pct == 81.0
 
 
@@ -48,6 +55,9 @@ def test_upsert_snapshot_replaces_existing_commit_row(tmp_path: Path) -> None:
                 "transactions_parsed": 100,
                 "categorized_count": 50,
                 "uncategorized_count": 50,
+                "categorized_amount_eur_abs": 500.0,
+                "uncategorized_amount_eur_abs": 500.0,
+                "total_amount_eur_abs": 1000.0,
                 "file_coverage_ratio": 1.0,
                 "statement_reconciliation_pass_ratio": 0.5,
             }
@@ -69,6 +79,9 @@ def test_upsert_snapshot_replaces_existing_commit_row(tmp_path: Path) -> None:
                 "transactions_parsed": 100,
                 "categorized_count": 90,
                 "uncategorized_count": 10,
+                "categorized_amount_eur_abs": 900.0,
+                "uncategorized_amount_eur_abs": 100.0,
+                "total_amount_eur_abs": 1000.0,
                 "file_coverage_ratio": 0.9,
                 "statement_reconciliation_pass_ratio": 0.8,
             }
@@ -86,6 +99,10 @@ def test_upsert_snapshot_replaces_existing_commit_row(tmp_path: Path) -> None:
     assert rows[0]["commit"] == "abc1234"
     assert rows[0]["categorized_pct"] == "90.0000"
     assert rows[0]["uncategorized_pct"] == "10.0000"
+    assert rows[0]["categorized_amount_eur_abs"] == "900.0000"
+    assert rows[0]["uncategorized_amount_eur_abs"] == "100.0000"
+    assert rows[0]["categorized_amount_eur_abs_pct"] == "90.0000"
+    assert rows[0]["uncategorized_amount_eur_abs_pct"] == "10.0000"
 
 
 def test_build_bank_snapshots_and_upsert(tmp_path: Path) -> None:
@@ -101,6 +118,10 @@ def test_build_bank_snapshots_and_upsert(tmp_path: Path) -> None:
                         "uncategorized_count": 1,
                         "categorized_pct": 66.6667,
                         "uncategorized_pct": 33.3333,
+                        "categorized_amount_eur_abs": 120.0,
+                        "uncategorized_amount_eur_abs": 30.0,
+                        "categorized_amount_eur_abs_ratio": 80.0,
+                        "uncategorized_amount_eur_abs_ratio": 20.0,
                     },
                     {
                         "bank": "Revolut",
@@ -109,6 +130,10 @@ def test_build_bank_snapshots_and_upsert(tmp_path: Path) -> None:
                         "uncategorized_count": 2,
                         "categorized_pct": 0.0,
                         "uncategorized_pct": 100.0,
+                        "categorized_amount_eur_abs": 0.0,
+                        "uncategorized_amount_eur_abs": 75.0,
+                        "categorized_amount_eur_abs_ratio": 0.0,
+                        "uncategorized_amount_eur_abs_ratio": 100.0,
                     },
                 ]
             }
@@ -123,11 +148,16 @@ def test_build_bank_snapshots_and_upsert(tmp_path: Path) -> None:
     assert hsbc.categorized_count == 2
     assert hsbc.uncategorized_count == 1
     assert hsbc.categorized_pct == 66.6667
+    assert hsbc.categorized_amount_eur_abs == 120.0
+    assert hsbc.uncategorized_amount_eur_abs == 30.0
+    assert hsbc.categorized_amount_eur_abs_pct == 80.0
     revolut = next(item for item in snapshots if item.bank == "Revolut")
     assert revolut.transactions_count == 2
     assert revolut.categorized_count == 0
     assert revolut.uncategorized_count == 2
     assert revolut.uncategorized_pct == 100.0
+    assert revolut.uncategorized_amount_eur_abs == 75.0
+    assert revolut.uncategorized_amount_eur_abs_pct == 100.0
 
     by_bank_path = tmp_path / "metrics_commit_log_by_bank.csv"
     bank_rows, replaced = upsert_bank_snapshots(by_bank_path, snapshots)

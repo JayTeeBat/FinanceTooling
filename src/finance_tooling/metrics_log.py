@@ -24,6 +24,10 @@ class MetricsSnapshot:
     reconciliation_pass_pct: float | None
     categorized_pct: float
     uncategorized_pct: float
+    categorized_amount_eur_abs: float
+    uncategorized_amount_eur_abs: float
+    categorized_amount_eur_abs_pct: float
+    uncategorized_amount_eur_abs_pct: float
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,10 @@ class BankMetricsSnapshot:
     uncategorized_count: int
     categorized_pct: float
     uncategorized_pct: float
+    categorized_amount_eur_abs: float
+    uncategorized_amount_eur_abs: float
+    categorized_amount_eur_abs_pct: float
+    uncategorized_amount_eur_abs_pct: float
 
 
 _LOG_COLUMNS: tuple[str, ...] = (
@@ -52,6 +60,10 @@ _LOG_COLUMNS: tuple[str, ...] = (
     "reconciliation_pass_pct",
     "categorized_pct",
     "uncategorized_pct",
+    "categorized_amount_eur_abs",
+    "uncategorized_amount_eur_abs",
+    "categorized_amount_eur_abs_pct",
+    "uncategorized_amount_eur_abs_pct",
 )
 
 _BANK_LOG_COLUMNS: tuple[str, ...] = (
@@ -64,6 +76,10 @@ _BANK_LOG_COLUMNS: tuple[str, ...] = (
     "uncategorized_count",
     "categorized_pct",
     "uncategorized_pct",
+    "categorized_amount_eur_abs",
+    "uncategorized_amount_eur_abs",
+    "categorized_amount_eur_abs_pct",
+    "uncategorized_amount_eur_abs_pct",
 )
 
 
@@ -126,6 +142,11 @@ def build_snapshot(
     categorized_count = _to_int(payload.get("categorized_count"))
     uncategorized_count = _to_int(payload.get("uncategorized_count"))
     transactions_parsed = _to_int(payload.get("transactions_parsed"))
+    categorized_amount_eur_abs = _to_float(payload.get("categorized_amount_eur_abs"), default=0.0)
+    uncategorized_amount_eur_abs = _to_float(
+        payload.get("uncategorized_amount_eur_abs"), default=0.0
+    )
+    total_amount_eur_abs = _to_float(payload.get("total_amount_eur_abs"), default=0.0)
 
     file_coverage_ratio = _to_float(payload.get("file_coverage_ratio"), default=0.0)
     reconciliation_pass_ratio_raw = payload.get("statement_reconciliation_pass_ratio")
@@ -152,6 +173,15 @@ def build_snapshot(
         ),
         categorized_pct=round(_pct(categorized_count, transactions_parsed), 4),
         uncategorized_pct=round(_pct(uncategorized_count, transactions_parsed), 4),
+        categorized_amount_eur_abs=round(categorized_amount_eur_abs, 4),
+        uncategorized_amount_eur_abs=round(uncategorized_amount_eur_abs, 4),
+        categorized_amount_eur_abs_pct=round(
+            _pct(categorized_amount_eur_abs, total_amount_eur_abs),
+            4,
+        ),
+        uncategorized_amount_eur_abs_pct=round(
+            _pct(uncategorized_amount_eur_abs, total_amount_eur_abs), 4
+        ),
     )
 
 
@@ -181,6 +211,10 @@ def upsert_snapshot(log_path: Path, snapshot: MetricsSnapshot) -> tuple[int, int
         ),
         "categorized_pct": f"{snapshot.categorized_pct:.4f}",
         "uncategorized_pct": f"{snapshot.uncategorized_pct:.4f}",
+        "categorized_amount_eur_abs": f"{snapshot.categorized_amount_eur_abs:.4f}",
+        "uncategorized_amount_eur_abs": f"{snapshot.uncategorized_amount_eur_abs:.4f}",
+        "categorized_amount_eur_abs_pct": f"{snapshot.categorized_amount_eur_abs_pct:.4f}",
+        "uncategorized_amount_eur_abs_pct": f"{snapshot.uncategorized_amount_eur_abs_pct:.4f}",
     }
 
     replaced = 0
@@ -224,6 +258,15 @@ def build_bank_snapshots(
         count = _to_int(raw_metric.get("transactions_count"))
         categorized_count = _to_int(raw_metric.get("categorized_count"))
         uncategorized_count = _to_int(raw_metric.get("uncategorized_count"))
+        categorized_amount_eur_abs = _to_float(
+            raw_metric.get("categorized_amount_eur_abs"),
+            default=0.0,
+        )
+        uncategorized_amount_eur_abs = _to_float(
+            raw_metric.get("uncategorized_amount_eur_abs"),
+            default=0.0,
+        )
+        total_amount = categorized_amount_eur_abs + uncategorized_amount_eur_abs
         snapshots.append(
             BankMetricsSnapshot(
                 generated_at=generated_at,
@@ -244,6 +287,22 @@ def build_bank_snapshots(
                     _to_float(
                         raw_metric.get("uncategorized_pct"),
                         default=_pct(uncategorized_count, count),
+                    ),
+                    4,
+                ),
+                categorized_amount_eur_abs=round(categorized_amount_eur_abs, 4),
+                uncategorized_amount_eur_abs=round(uncategorized_amount_eur_abs, 4),
+                categorized_amount_eur_abs_pct=round(
+                    _to_float(
+                        raw_metric.get("categorized_amount_eur_abs_ratio"),
+                        default=_pct(categorized_amount_eur_abs, total_amount),
+                    ),
+                    4,
+                ),
+                uncategorized_amount_eur_abs_pct=round(
+                    _to_float(
+                        raw_metric.get("uncategorized_amount_eur_abs_ratio"),
+                        default=_pct(uncategorized_amount_eur_abs, total_amount),
                     ),
                     4,
                 ),
@@ -291,6 +350,10 @@ def upsert_bank_snapshots(
             "uncategorized_count": str(snapshot.uncategorized_count),
             "categorized_pct": f"{snapshot.categorized_pct:.4f}",
             "uncategorized_pct": f"{snapshot.uncategorized_pct:.4f}",
+            "categorized_amount_eur_abs": f"{snapshot.categorized_amount_eur_abs:.4f}",
+            "uncategorized_amount_eur_abs": f"{snapshot.uncategorized_amount_eur_abs:.4f}",
+            "categorized_amount_eur_abs_pct": f"{snapshot.categorized_amount_eur_abs_pct:.4f}",
+            "uncategorized_amount_eur_abs_pct": f"{snapshot.uncategorized_amount_eur_abs_pct:.4f}",
         }
         for snapshot in snapshots
     )

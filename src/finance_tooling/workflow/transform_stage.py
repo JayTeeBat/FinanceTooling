@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 
 from finance_tooling.config import Settings
@@ -13,6 +16,45 @@ from finance_tooling.workflow.enrichment import enrich_transactions
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 from finance_tooling.workflow.reporting import persist_and_report
 from finance_tooling.workflow.staging import read_staged_transactions
+
+
+def _load_previous_summary(summary_path: Path) -> dict[str, object] | None:
+    if not summary_path.exists():
+        return None
+    try:
+        return json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _summary_int(payload: Mapping[str, object], key: str) -> int:
+    value = payload.get(key, 0)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return 0
+    return 0
+
+
+def _summary_float(payload: Mapping[str, object], key: str) -> float:
+    value = payload.get(key, 0.0)
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return 0.0
+    return 0.0
 
 
 def _default_hsbc_merge_metrics() -> dict[str, int]:
@@ -62,6 +104,7 @@ def run_transform(
     ingest_result: IngestExecutionResult | None = None,
 ) -> WorkflowResult:
     """Execute transform stage from staged transaction artifact."""
+    previous_summary = _load_previous_summary(settings.summary_json_path)
     input_staged_path = staged_path or settings.staged_transactions_path
     staged_transactions = read_staged_transactions(input_staged_path)
     enrichment = enrich_transactions(staged_transactions, settings)
@@ -118,7 +161,7 @@ def run_transform(
         ingest_text_cache_write_count = 0
         warnings = [*enrichment.warnings]
 
-    result, _summary_payload = persist_and_report(
+    result, summary_payload = persist_and_report(
         settings=settings,
         source_files=source_files,
         files_failed=files_failed,
@@ -154,4 +197,25 @@ def run_transform(
         upsert_transactions_fn=upsert_transactions,
         render_dashboard_html_fn=render_dashboard_html,
     )
-    return result
+    if previous_summary is None:
+        return result
+
+    return replace(
+        result,
+        categorized_count_delta=(
+            _summary_int(summary_payload, "categorized_count")
+            - _summary_int(previous_summary, "categorized_count")
+        ),
+        uncategorized_count_delta=(
+            _summary_int(summary_payload, "uncategorized_count")
+            - _summary_int(previous_summary, "uncategorized_count")
+        ),
+        categorized_amount_eur_abs_delta=(
+            _summary_float(summary_payload, "categorized_amount_eur_abs")
+            - _summary_float(previous_summary, "categorized_amount_eur_abs")
+        ),
+        uncategorized_amount_eur_abs_delta=(
+            _summary_float(summary_payload, "uncategorized_amount_eur_abs")
+            - _summary_float(previous_summary, "uncategorized_amount_eur_abs")
+        ),
+    )
