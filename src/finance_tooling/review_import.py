@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from finance_tooling.review_common import (
+    ORIGINAL_CATEGORY_COLUMN,
+    ORIGINAL_SUBCATEGORY_COLUMN,
     PROJECT_TAGS_COLUMN,
     REQUIRED_REVIEW_COLUMNS,
     REVIEW_COMMENT_COLUMN,
@@ -70,11 +72,16 @@ def _parse_category_transaction_override_row(
     if category is None or category.lower() == "uncategorized":
         return None
 
+    original_category = normalize_optional_text(row.get(ORIGINAL_CATEGORY_COLUMN))
+    original_subcategory = normalize_optional_text(row.get(ORIGINAL_SUBCATEGORY_COLUMN))
+
     transaction_id = normalize_optional_text(row.get("transaction_id"))
     if transaction_id is None:
         return None
 
     subcategory = normalize_optional_text(row.get("subcategory"))
+    if category == original_category and subcategory == original_subcategory:
+        return None
     return TransactionOverrideEntry(
         override_id=None,
         transaction_id=transaction_id,
@@ -160,8 +167,11 @@ def import_review_into_overrides(
         elif category is not None:
             parsed_transaction = _parse_category_transaction_override_row(row)
             if parsed_transaction is None:
-                invalid_rows.add(index)
-                invalid_category_rows.add(index)
+                original_category = normalize_optional_text(row.get(ORIGINAL_CATEGORY_COLUMN))
+                original_subcategory = normalize_optional_text(row.get(ORIGINAL_SUBCATEGORY_COLUMN))
+                if category != original_category or subcategory != original_subcategory:
+                    invalid_rows.add(index)
+                    invalid_category_rows.add(index)
             else:
                 dedupe_key = transaction_override_entry_key(parsed_transaction)
                 existing = parsed_transaction_entries.get(dedupe_key)
