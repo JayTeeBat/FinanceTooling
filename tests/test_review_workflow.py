@@ -62,10 +62,12 @@ def test_export_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> Non
         "bank",
         "category",
         "subcategory",
+        "original_category",
+        "original_subcategory",
         "project_tags",
-        "reviewed",
-        "review_comment",
     ]
+    assert exported_df.loc[0, "original_category"] == "Uncategorized"
+    assert pd.isna(exported_df.loc[0, "original_subcategory"])
     assert "normalized_description" in exported_df.columns
     assert "fingerprint" not in exported_df.columns
     assert "category_source" not in exported_df.columns
@@ -353,6 +355,8 @@ def test_import_review_into_overrides_writes_transaction_overrides_and_review_st
                 "account_label": None,
                 "category": "Shopping",
                 "subcategory": "General Retail",
+                "original_category": "Uncategorized",
+                "original_subcategory": None,
                 "project_tags": "Family|Shared",
                 "reviewed": True,
                 "review_comment": "done",
@@ -379,6 +383,82 @@ def test_import_review_into_overrides_writes_transaction_overrides_and_review_st
     assert review_state.loc[0, "transaction_id"] == "tx_1"
     assert bool(review_state.loc[0, "reviewed"]) is True
     assert review_state.loc[0, "review_comment"] == "done"
+
+
+def test_import_review_into_overrides_skips_unchanged_categorized_rows(tmp_path: Path) -> None:
+    review_path = tmp_path / "transactions_review.xlsx"
+    transaction_overrides_path = tmp_path / "transaction_overrides.yaml"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "CARD UBER",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Transport",
+                "subcategory": "Mobility",
+                "original_category": "Transport",
+                "original_subcategory": "Mobility",
+                "project_tags": None,
+                "reviewed": True,
+                "review_comment": "checked",
+            }
+        ]
+    ).to_excel(review_path, index=False, engine="openpyxl")
+
+    result = import_review_into_overrides(
+        review_path=review_path,
+        transaction_overrides_path=transaction_overrides_path,
+        review_state_path=None,
+        dry_run=False,
+    )
+
+    assert result.transaction_overrides_upserted == 0
+    assert not transaction_overrides_path.exists()
+
+
+def test_import_review_into_overrides_creates_override_when_category_changes_from_baseline(
+    tmp_path: Path,
+) -> None:
+    review_path = tmp_path / "transactions_review.xlsx"
+    transaction_overrides_path = tmp_path / "transaction_overrides.yaml"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "CARD UBER",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Shopping",
+                "subcategory": "General Retail",
+                "original_category": "Transport",
+                "original_subcategory": "Mobility",
+                "project_tags": None,
+                "reviewed": False,
+                "review_comment": None,
+            }
+        ]
+    ).to_excel(review_path, index=False, engine="openpyxl")
+
+    result = import_review_into_overrides(
+        review_path=review_path,
+        transaction_overrides_path=transaction_overrides_path,
+        review_state_path=None,
+        dry_run=False,
+    )
+
+    assert result.transaction_overrides_upserted == 1
+    store, warnings = load_transaction_override_store(transaction_overrides_path)
+    assert warnings == []
+    assert len(store.entries) == 1
+    assert store.entries[0].category == "Shopping"
+    assert store.entries[0].subcategory == "General Retail"
 
 
 def test_import_review_into_overrides_rejects_subcategory_without_category(tmp_path: Path) -> None:

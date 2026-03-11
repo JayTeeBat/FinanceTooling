@@ -27,6 +27,8 @@ EXISTING_PROJECT_TAGS_COLUMN = "existing_project_tags"
 REVIEWED_COLUMN = "reviewed"
 REVIEW_COMMENT_COLUMN = "review_comment"
 NORMALIZED_DESCRIPTION_COLUMN = "normalized_description"
+ORIGINAL_CATEGORY_COLUMN = "original_category"
+ORIGINAL_SUBCATEGORY_COLUMN = "original_subcategory"
 # Backward-compatible alias for older internal references.
 FINGERPRINT_COLUMN = NORMALIZED_DESCRIPTION_COLUMN
 EDITABLE_REVIEW_COLUMNS = (

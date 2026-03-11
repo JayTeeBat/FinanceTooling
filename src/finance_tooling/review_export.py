@@ -11,6 +11,8 @@ from finance_tooling.classify import normalize_description
 from finance_tooling.review_common import (
     EXISTING_PROJECT_TAGS_COLUMN,
     FINGERPRINT_COLUMN,
+    ORIGINAL_CATEGORY_COLUMN,
+    ORIGINAL_SUBCATEGORY_COLUMN,
     PROJECT_TAGS_COLUMN,
     REQUIRED_REVIEW_COLUMNS,
     REVIEW_COMMENT_COLUMN,
@@ -41,6 +43,8 @@ _CONTEXT_EXPORT_COLUMNS = (
 _EDITABLE_EXPORT_COLUMNS = (
     "category",
     "subcategory",
+    ORIGINAL_CATEGORY_COLUMN,
+    ORIGINAL_SUBCATEGORY_COLUMN,
     PROJECT_TAGS_COLUMN,
     REVIEWED_COLUMN,
     REVIEW_COMMENT_COLUMN,
@@ -268,6 +272,8 @@ def export_review_rows(
         review_rows[EXISTING_PROJECT_TAGS_COLUMN] = review_rows[PROJECT_TAGS_COLUMN]
     else:
         review_rows[EXISTING_PROJECT_TAGS_COLUMN] = None
+    review_rows[ORIGINAL_CATEGORY_COLUMN] = review_rows["category"]
+    review_rows[ORIGINAL_SUBCATEGORY_COLUMN] = review_rows["subcategory"]
     review_rows[PROJECT_TAGS_COLUMN] = None
     review_rows[REVIEWED_COLUMN] = False
     review_rows[REVIEW_COMMENT_COLUMN] = None
