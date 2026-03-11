@@ -187,6 +187,20 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-11 - codex
+- Branch: `fix/rule-pattern-normalization-review-column`
+- Completed:
+  - Normalized `contains` and `exact` category-rule patterns on load so rules written from human-readable review descriptions match the same normalized transaction text used by the classifier.
+  - Renamed the review workbook helper column from `fingerprint` to `normalized_description` and updated the review docs/README wording accordingly.
+  - Added focused regression tests for normalized rule-pattern loading and the updated review export column set.
+- Checks:
+  - `uv run pytest tests/test_classify.py tests/test_review_workflow.py`: pass
+  - `uv run ruff check src/finance_tooling/classify.py src/finance_tooling/review_common.py tests/test_classify.py tests/test_review_workflow.py`: pass
+- Open items:
+  - Existing live rule/config files authored before this change will still work, but they can now be written directly from review descriptions without having to think about normalization details.
+- Next action:
+  - Merge the rule-pattern normalization PR so future review-driven rule authoring is less error-prone.
+
 ### 2026-03-08 - codex
 - Branch: `feature/excel-review-workbook`
 - Completed:
@@ -220,26 +234,3 @@ Success target for the 2026 validation campaign:
   - `docs/diagrams/*.svg` were not regenerated in this session if `plantuml` is unavailable in `PATH`.
 - Next action:
   - Run one real `review-export` -> `review-import --dry-run` cycle on current data to confirm the simplified workbook feels right in daily use.
-
-### 2026-03-08 - codex
-- Branch: `main`
-- Completed:
-  - Added dark-safe review workbook export control with
-    `FINANCE_REVIEW_EXPORT_DARK_SAFE` and
-    `review-export --dark-safe/--no-dark-safe`.
-  - Updated `.xlsx` review formatting to write explicit light text on dark
-    fills so exported workbooks are readable by default in dark
-    LibreOffice/Excel.
-  - Updated docs/config/tests for the dark-safe default and validated a real
-    `uv run review-export` against the production processed path.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Validate visually in LibreOffice/Excel that the chosen dark-safe palette is
-    comfortable for long review sessions and adjust if needed.
-- Next action:
-  - Review the exported workbook in LibreOffice dark mode and confirm whether
-    the current palette should remain the default.

@@ -54,7 +54,7 @@ Default export behavior is uncategorized-only. Optional filters:
 - `--include-categorized`: include categorized rows in the review export.
 - `--start-date YYYY-MM-DD`: inclusive lower `booking_date` bound.
 - `--end-date YYYY-MM-DD`: inclusive upper `booking_date` bound.
-- `--contains TEXT`: case-insensitive match across description/fingerprint/bank/account.
+- `--contains TEXT`: case-insensitive match across description/normalized description/bank/account.
 - `--bank BANK`: exact bank filter.
 - `--account-label LABEL`: exact account-label filter.
 - `--only-unreviewed`: export only rows whose persisted review marker is false.
@@ -77,7 +77,7 @@ Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
 
 - Keep `description`, `bank`, `account_label` unchanged.
 - Set `category` and optional `subcategory` when a category correction is needed.
-- Use `fingerprint` as a read-only normalized search/grouping helper.
+- Use `normalized_description` as a read-only normalized search/grouping helper.
 - Use extra transaction columns (for example `booking_date`, `amount_native`,
   `currency`, `source_file`) to disambiguate similar descriptions when needed.
 - Use `reviewed` to mark a transaction as reviewed.

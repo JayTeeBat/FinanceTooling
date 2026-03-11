@@ -47,7 +47,7 @@ uv run review-export
 - The review workbook includes:
   - `reviewed`: persistent review-progress marker
   - `review_comment`: freeform review note
-  - `fingerprint`: normalized description helper for search/filtering
+  - `normalized_description`: normalized description helper for search/filtering
 - Dry-run import:
 
 ```bash
