@@ -124,6 +124,39 @@ def test_load_classification_rules_supports_yaml_schema_aliases(tmp_path: Path) 
     assert rules.rules[0].patterns == ("exchanged to gbp", "exchange to gbp")
 
 
+def test_load_classification_rules_normalizes_contains_and_exact_patterns(tmp_path: Path) -> None:
+    rules_path = tmp_path / "category_rules.yaml"
+    rules_path.write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "rules:",
+                "  - id: housing.mortgage",
+                "    priority: 200",
+                "    category: Housing",
+                "    subcategory: Mortgage",
+                "    match: contains",
+                "    patterns:",
+                "      - PRELEVEMENT DE ECHEANCE PRET REF",
+                "  - id: transfers.paypal",
+                "    priority: 100",
+                "    category: Transfers",
+                "    subcategory: Wallet Transfer",
+                "    match: exact",
+                "    patterns:",
+                "      - PAYPAL PAYMENT REF : 123456",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rules, warnings = load_classification_rules(rules_path)
+
+    assert warnings == []
+    assert rules.rules[0].patterns == (normalize_description("PRELEVEMENT DE ECHEANCE PRET REF"),)
+    assert rules.rules[1].patterns == (normalize_description("PAYPAL PAYMENT REF : 123456"),)
+
+
 def test_load_override_store_supports_yaml_for_migration_use(tmp_path: Path) -> None:
     overrides_path = tmp_path / "category_overrides.yaml"
     overrides_path.write_text(

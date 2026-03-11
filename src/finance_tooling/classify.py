@@ -194,7 +194,12 @@ def _parse_rules_payload(payload: object) -> ClassificationRules:
         patterns_raw = raw_rule.get("patterns")
         if not isinstance(patterns_raw, list):
             continue
-        patterns = tuple(str(item).strip().lower() for item in patterns_raw if str(item).strip())
+        raw_patterns = [str(item).strip() for item in patterns_raw if str(item).strip()]
+        if typed_match_type in {"contains", "exact"}:
+            normalized_patterns = [normalize_description(pattern) for pattern in raw_patterns]
+            patterns = tuple(pattern for pattern in normalized_patterns if pattern)
+        else:
+            patterns = tuple(pattern.lower() for pattern in raw_patterns)
         if not patterns:
             continue
         rule_id_raw = raw_rule.get("rule_id", raw_rule.get("id"))

@@ -66,6 +66,8 @@ def test_export_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> Non
         "reviewed",
         "review_comment",
     ]
+    assert "normalized_description" in exported_df.columns
+    assert "fingerprint" not in exported_df.columns
     assert "category_source" not in exported_df.columns
     assert "override_level" not in exported_df.columns
     assert exported_df.loc[0, "existing_project_tags"] == "OldTagA|OldTagB"
