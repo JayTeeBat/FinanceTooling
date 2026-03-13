@@ -156,6 +156,9 @@ uv run review-import \
 ```
 
 By default, `review-import` aborts when existing override-load warnings are present.
+When backups are enabled, it now stores timestamped config backups under the
+config `backup/` folder by default instead of cluttering the main config
+directory.
 Use `--allow-load-warnings` only for deliberate recovery flows.
 For `review-export`, output is uncategorized-only by default; use
 `--include-categorized` to include already-categorized rows. Optional

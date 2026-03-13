@@ -126,7 +126,8 @@ Default safety behavior:
 
 - abort on transaction-override load warnings (unless `--allow-load-warnings`)
 - create timestamped backup before writing changed files (disable with
-  `--no-backup`)
+  `--no-backup`); by default backups are written under the config `backup/`
+  folder
 
 ### 5. Re-run transform
 
@@ -210,7 +211,8 @@ Review file must include:
 - `--allow-load-warnings`: proceed even if existing override file fails parsing.
 - `--dry-run`: preview only, no writes.
 - `--backup/--no-backup`: enable/disable pre-write backup.
-- `--backup-path`: custom backup destination.
+- `--backup-path`: custom backup destination (overrides the default config
+  `backup/` folder).
 - `--transaction-overrides-path`: optional explicit transaction-override target.
 - `--run-transform`: import and immediately run `transform`.
 
