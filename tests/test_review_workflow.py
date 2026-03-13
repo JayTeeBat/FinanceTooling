@@ -9,7 +9,12 @@ from finance_tooling.migrate_category_overrides import migrate_category_override
 from finance_tooling.review_export import export_review_rows
 from finance_tooling.review_import import import_review_into_overrides
 from finance_tooling.review_state import load_review_state
-from finance_tooling.transaction_overrides import load_transaction_override_store
+from finance_tooling.transaction_overrides import (
+    TransactionOverrideEntry,
+    TransactionOverrideStore,
+    load_transaction_override_store,
+    write_transaction_override_store,
+)
 
 
 def test_export_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> None:
@@ -383,6 +388,72 @@ def test_import_review_into_overrides_writes_transaction_overrides_and_review_st
     assert review_state.loc[0, "transaction_id"] == "tx_1"
     assert bool(review_state.loc[0, "reviewed"]) is True
     assert review_state.loc[0, "review_comment"] == "done"
+    assert result.transaction_backup_path is None
+
+
+def test_import_review_into_overrides_defaults_backup_into_config_backup_folder(
+    tmp_path: Path,
+) -> None:
+    review_path = tmp_path / "transactions_review.xlsx"
+    transaction_overrides_path = tmp_path / "transaction_overrides.yaml"
+    review_state_path = tmp_path / "review_state.parquet"
+    write_transaction_override_store(
+        transaction_overrides_path,
+        TransactionOverrideStore(
+            entries=(
+                TransactionOverrideEntry(
+                    override_id="existing",
+                    transaction_id="existing_tx",
+                    fingerprint=None,
+                    booking_date=None,
+                    amount_native=None,
+                    currency=None,
+                    bank=None,
+                    account_label=None,
+                    category="Transfers",
+                    set_category=True,
+                    subcategory=None,
+                    set_subcategory=False,
+                    project=None,
+                    set_project=False,
+                    project_tags=(),
+                    set_project_tags=False,
+                ),
+            )
+        ),
+    )
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN MERCHANT 123",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Shopping",
+                "subcategory": "General Retail",
+                "original_category": "Uncategorized",
+                "original_subcategory": None,
+                "project_tags": None,
+                "reviewed": True,
+                "review_comment": "done",
+            }
+        ]
+    ).to_excel(review_path, index=False, engine="openpyxl")
+
+    result = import_review_into_overrides(
+        review_path=review_path,
+        transaction_overrides_path=transaction_overrides_path,
+        review_state_path=review_state_path,
+    )
+
+    assert result.transaction_backup_path is not None
+    assert result.transaction_backup_path.parent == transaction_overrides_path.parent / "backup"
+    assert result.transaction_backup_path.name.startswith("transaction_overrides.yaml.")
+    assert result.transaction_backup_path.name.endswith(".bak")
+    assert result.transaction_backup_path.exists()
 
 
 def test_import_review_into_overrides_skips_unchanged_categorized_rows(tmp_path: Path) -> None:

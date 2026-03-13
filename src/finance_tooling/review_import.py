@@ -53,7 +53,8 @@ class ReviewImportResult:
 
 def _default_backup_path(path: Path) -> Path:
     timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    return path.with_name(f"{path.name}.{timestamp}.bak")
+    backup_dir = path.parent / "backup"
+    return backup_dir / f"{path.name}.{timestamp}.bak"
 
 
 def _backup_override_store(path: Path, backup_path: Path | None) -> Path | None:

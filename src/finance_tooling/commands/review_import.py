@@ -40,13 +40,16 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         "--backup",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Create a timestamped backup before writing overrides (default: enabled).",
+        help=(
+            "Create a timestamped backup before writing overrides "
+            "(default: enabled, stored under the config backup/ folder)."
+        ),
     )
     parser.add_argument(
         "--backup-path",
         type=Path,
         default=None,
-        help="Optional explicit backup destination path.",
+        help="Optional explicit backup destination path (overrides the default backup/ folder).",
     )
     parser.add_argument(
         "--run-transform",
