@@ -1,0 +1,67 @@
+household:
+  adults:
+    adult_1_current_age:
+    adult_2_current_age:
+  children:
+    child_1_current_age:
+    child_2_current_age:
+    child_3_current_age:
+
+income:
+  taxable_household_income_eur:
+  estimated_net_household_income_eur:
+  annual_income_growth_pct:
+
+liquidity:
+  emergency_fund_target_months:
+  essential_monthly_spend_eur:
+
+retirement:
+  target_retirement_age_adult_1:
+  target_retirement_age_adult_2:
+  expected_annual_state_pension_eur:
+  expected_annual_state_pension_is_today_eur: true
+  target_annual_spending_in_retirement_eur:
+  target_annual_spending_is_today_eur: true
+  target_annual_spending_gap_eur:
+  target_annual_spending_gap_is_today_eur: true
+  safe_withdrawal_rate_pct:
+  current_retirement_assets_eur:
+  monthly_retirement_contribution_eur:
+  expected_nominal_return_pct:
+
+education:
+  child_1_target_fund_eur:
+  child_1_target_fund_is_today_eur: true
+  child_1_target_age:
+  child_1_current_fund_eur:
+  child_1_expected_return_pct:
+  child_2_target_fund_eur:
+  child_2_target_fund_is_today_eur: true
+  child_2_target_age:
+  child_2_current_fund_eur:
+  child_2_expected_return_pct:
+  child_3_target_fund_eur:
+  child_3_target_fund_is_today_eur: true
+  child_3_target_age:
+  child_3_current_fund_eur:
+  child_3_expected_return_pct:
+
+house_project:
+  target_cost_eur:
+  target_cost_is_today_eur: true
+  contingency_pct:
+  target_date:
+  current_reserved_amount_eur:
+  expected_return_pct:
+
+net_worth:
+  current_total_financial_assets_eur:
+  current_home_equity_eur:
+  current_mortgage_balance_eur:
+
+assumptions:
+  inflation_pct:
+  cash_return_pct:
+  conservative_growth_return_pct:
+  growth_return_pct:

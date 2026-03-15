@@ -1,0 +1,4 @@
+snapshot_date,account_id,asset_or_liability,category,owner,balance_eur,goal_link,notes
+2026-01-31,ACC-001,asset,cash,,,,
+2026-01-31,ACC-002,asset,investment,,,,
+2026-01-31,ACC-003,liability,mortgage,,,,

@@ -3,6 +3,9 @@
 Python tooling for monitoring personal finances, starting with import pipelines for
 bank statements and expanding toward categorization, reconciliation, and reporting.
 
+For higher-level household planning alongside the transaction pipeline, see the
+starter workspace in `planning/household_finance_360/`.
+
 ## Tech Stack
 
 - `uv` for environment and dependency management

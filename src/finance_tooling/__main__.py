@@ -11,6 +11,9 @@ from finance_tooling.commands import (
     metrics_log_update as metrics_log_update_command,
 )
 from finance_tooling.commands import (
+    plan_savings as plan_savings_command,
+)
+from finance_tooling.commands import (
     migrate_category_overrides_to_rules as migrate_category_overrides_command,
 )
 from finance_tooling.commands import (
@@ -84,6 +87,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Append or update commit-level percentage metrics from run_summary.json.",
     )
     metrics_log_update_command.configure_parser(metrics_log_parser)
+
+    plan_savings_parser = subparsers.add_parser(
+        "plan-savings",
+        help="Calculate goal-based monthly savings needs from planning assumptions.",
+    )
+    plan_savings_command.configure_parser(plan_savings_parser)
 
     return parser
 

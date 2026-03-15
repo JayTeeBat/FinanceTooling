@@ -187,6 +187,22 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-15 - codex
+- Branch: `feature/household-finance-planning`
+- Completed:
+  - Added a separate `planning/household_finance_360/` workspace with starter templates for household profile, account inventory, monthly budget tracking, net worth snapshots, goal planning, investment policy, monitoring, and annual reviews.
+  - Added a `plan-savings` CLI calculator plus planning input/output files so retirement, education, and house-project assumptions can be converted into required monthly savings by goal, including inflation-aware target sizing.
+  - Documented a practical monthly / quarterly / annual workflow for 360-degree household financial planning and linked the new workspace from `README.md`.
+- Checks:
+  - `documentation/template review`: pass
+  - `uv run pytest tests/test_planning.py tests/test_plan_savings_cli.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
+  - `uv run ruff check src/finance_tooling/planning.py src/finance_tooling/commands/plan_savings.py tests/test_planning.py tests/test_plan_savings_cli.py tests/test_command_entrypoints.py`: pass
+  - `uv run ty check src/finance_tooling tests`: not run
+- Open items:
+  - The planning calculator currently produces JSON output and console summaries, but it does not yet auto-update the scenario matrix or generate a dedicated planning dashboard.
+- Next action:
+  - Populate the planning inputs with your real household assumptions and run `uv run plan-savings` to establish a first baseline monthly savings target.
+
 ### 2026-03-11 - codex
 - Branch: `fix/rule-pattern-normalization-review-column`
 - Completed:
@@ -217,20 +233,3 @@ Success target for the 2026 validation campaign:
   - The first live post-migration `transform` should run against a clean/renamed `transactions_master.parquet` backup to avoid old carry-forward contamination.
 - Next action:
   - Run the live `ingest` -> `migrate-transaction-ids` -> clean `transform` rollout after reviewing the migration sidecars.
-
-### 2026-03-08 - codex
-- Branch: `feature/excel-review-workbook`
-- Completed:
-  - Removed the old fallback categorization workflow from active runtime behavior: unmatched transactions are now `uncategorized`, manual review edits route to `transaction_overrides.yaml`, and active settings no longer load `category_overrides.yaml`.
-  - Simplified the review workbook and CLI around `transactions_review.xlsx`, uncategorized-first export, and transaction-override-only import semantics.
-  - Added a one-off `migrate-category-overrides-to-rules` command to convert legacy fingerprint overrides into exact-match category rules.
-  - Updated tests, README, workflow docs, and diagram sources to reflect the new review model.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - `docs/diagrams/*.svg` were not regenerated in this session if `plantuml` is unavailable in `PATH`.
-- Next action:
-  - Run one real `review-export` -> `review-import --dry-run` cycle on current data to confirm the simplified workbook feels right in daily use.

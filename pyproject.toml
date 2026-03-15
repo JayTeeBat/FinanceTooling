@@ -28,6 +28,7 @@ review-import = "finance_tooling.commands.review_import:main"
 migrate-category-overrides-to-rules = "finance_tooling.commands.migrate_category_overrides_to_rules:main"
 migrate-transaction-ids = "finance_tooling.commands.migrate_transaction_ids:main"
 metrics-log-update = "finance_tooling.commands.metrics_log_update:main"
+plan-savings = "finance_tooling.commands.plan_savings:main"
 perf-check = "finance_tooling.perf_check:main"
 
 [dependency-groups]
