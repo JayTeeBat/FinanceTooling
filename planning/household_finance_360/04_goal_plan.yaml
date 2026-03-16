@@ -1,0 +1,66 @@
+goals:
+  emergency_fund:
+    priority: high
+    purpose: Maintain household resilience against income shocks and major surprises.
+    target_amount_eur:
+    current_amount_eur:
+    target_date:
+    monthly_contribution_eur:
+    risk_level: very_low
+    funding_account_ids: []
+    notes:
+
+  house_expansion:
+    priority: high
+    purpose: Fund the planned house expansion and contingency budget.
+    target_amount_eur:
+    current_amount_eur:
+    target_date:
+    monthly_contribution_eur:
+    risk_level: low
+    funding_account_ids: []
+    notes:
+
+  child_1_education:
+    priority: medium
+    purpose: Higher-education funding for child 1.
+    target_amount_eur:
+    current_amount_eur:
+    target_date:
+    monthly_contribution_eur:
+    risk_level:
+    funding_account_ids: []
+    notes:
+
+  child_2_education:
+    priority: medium
+    purpose: Higher-education funding for child 2.
+    target_amount_eur:
+    current_amount_eur:
+    target_date:
+    monthly_contribution_eur:
+    risk_level:
+    funding_account_ids: []
+    notes:
+
+  child_3_education:
+    priority: medium
+    purpose: Higher-education funding for child 3.
+    target_amount_eur:
+    current_amount_eur:
+    target_date:
+    monthly_contribution_eur:
+    risk_level:
+    funding_account_ids: []
+    notes:
+
+  retirement:
+    priority: high
+    purpose: Long-term retirement capital for both spouses.
+    target_amount_eur:
+    current_amount_eur:
+    target_date:
+    monthly_contribution_eur:
+    risk_level: medium_high
+    funding_account_ids: []
+    notes:

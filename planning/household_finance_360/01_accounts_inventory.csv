@@ -1,0 +1,4 @@
+account_id,institution,account_name,owner,account_type,purpose,liquidity_level,target_allocation,include_in_net_worth,notes
+ACC-001,,,,,,,,yes,
+ACC-002,,,,,,,,yes,
+ACC-003,,,,,,,,yes,

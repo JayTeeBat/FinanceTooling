@@ -1,0 +1,11 @@
+house_target_date: 2031-03-16
+house_contingency_pct: 0
+
+ranges:
+  retirement_ages: [64, 65, 66, 67]
+  pension_before_tax_eur: [60000, 70000, 85000]
+  retirement_spending_before_tax_eur: [60000, 80000, 100000]
+  kids_target_fund_eur: [10000]
+  house_project_cost_eur: [0, 50000, 100000]
+  inflation_pct: [1.5, 2.0, 2.5]
+  expected_return_pct: [4.0, 6.0, 8.0]

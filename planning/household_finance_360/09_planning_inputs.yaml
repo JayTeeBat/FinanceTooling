@@ -1,0 +1,67 @@
+household:
+  adults:
+    adult_1_current_age: 38
+    adult_2_current_age: 37
+  children:
+    child_1_current_age: 13
+    child_2_current_age: 11
+    child_3_current_age: 7
+
+income:
+  taxable_household_income_eur: 102000
+  estimated_net_household_income_eur: 85000
+  annual_income_growth_pct: 2.0
+
+liquidity:
+  emergency_fund_target_months: 6
+  essential_monthly_spend_eur: 4500
+
+retirement:
+  target_retirement_age_adult_1: 62
+  target_retirement_age_adult_2: 62
+  expected_annual_state_pension_eur: 30000
+  expected_annual_state_pension_is_today_eur: true
+  target_annual_spending_in_retirement_eur: 60000
+  target_annual_spending_is_today_eur: true
+  target_annual_spending_gap_eur:
+  target_annual_spending_gap_is_today_eur: true
+  safe_withdrawal_rate_pct: 3.0
+  current_retirement_assets_eur: 50000
+  monthly_retirement_contribution_eur: 0
+  expected_nominal_return_pct: 5.0
+
+education:
+  child_1_target_fund_eur: 25000
+  child_1_target_fund_is_today_eur: true
+  child_1_target_age: 18
+  child_1_current_fund_eur: 0
+  child_1_expected_return_pct: 2.0
+  child_2_target_fund_eur: 30000
+  child_2_target_fund_is_today_eur: true
+  child_2_target_age: 18
+  child_2_current_fund_eur: 0
+  child_2_expected_return_pct: 3.0
+  child_3_target_fund_eur: 35000
+  child_3_target_fund_is_today_eur: true
+  child_3_target_age: 18
+  child_3_current_fund_eur: 0
+  child_3_expected_return_pct: 4.5
+
+house_project:
+  target_cost_eur: 110000
+  target_cost_is_today_eur: true
+  contingency_pct: 10
+  target_date: 2031-03-15
+  current_reserved_amount_eur: 50000
+  expected_return_pct: 1.5
+
+net_worth:
+  current_total_financial_assets_eur: 200000
+  current_home_equity_eur: 0
+  current_mortgage_balance_eur: 200000
+
+assumptions:
+  inflation_pct: 2.0
+  cash_return_pct: 1.5
+  conservative_growth_return_pct: 3.0
+  growth_return_pct: 5.0

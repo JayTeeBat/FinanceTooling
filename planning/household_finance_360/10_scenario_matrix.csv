@@ -1,0 +1,5 @@
+scenario_name,retirement_age_adult_1,retirement_age_adult_2,annual_state_pension_eur,target_annual_retirement_spending_eur,safe_withdrawal_rate_pct,child_1_target_fund_eur,child_2_target_fund_eur,child_3_target_fund_eur,house_project_total_eur,house_target_date,required_monthly_retirement_saving_eur,required_monthly_education_saving_eur,required_monthly_house_saving_eur,total_required_monthly_saving_eur,notes
+base_case,,,,,,,,,,,,,,, 
+earlier_retirement,,,,,,,,,,,,,,, 
+larger_house_project,,,,,,,,,,,,,,, 
+higher_education_costs,,,,,,,,,,,,,,, 
