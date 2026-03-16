@@ -15,6 +15,9 @@ from finance_tooling.commands import (
     plan_savings as plan_savings_command,
 )
 from finance_tooling.commands import (
+    plan_savings_doe as plan_savings_doe_command,
+)
+from finance_tooling.commands import (
     review_export as review_export_command,
 )
 from finance_tooling.commands import (
@@ -47,6 +50,10 @@ class _CommandModule(Protocol):
         ),
         (metrics_log_update_command, ["--summary-path", "run_summary.json"]),
         (plan_savings_command, ["--inputs-path", "planning_inputs.yaml"]),
+        (
+            plan_savings_doe_command,
+            ["--base-inputs-path", "planning_inputs.yaml", "--doe-inputs-path", "doe.yaml"],
+        ),
     ],
 )
 def test_command_main_delegates_to_handle(

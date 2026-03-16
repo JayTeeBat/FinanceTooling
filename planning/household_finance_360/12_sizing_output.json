@@ -1,0 +1,57 @@
+{
+  "as_of_date": "2026-03-15",
+  "inflation_pct": 2.0,
+  "retirement_target_capital_eur": 1378660.4995501938,
+  "retirement_target_capital_today_eur": 857142.857142857,
+  "retirement_annual_gap_eur": 48253.117484256785,
+  "retirement_annual_gap_today_eur": 30000.0,
+  "emergency_fund_target_eur": 27000.0,
+  "goal_results": [
+    {
+      "goal_name": "retirement",
+      "base_target_amount_eur": 857142.857142857,
+      "inflation_adjusted_target_amount_eur": 1378660.4995501938,
+      "current_amount_eur": 50000.0,
+      "years_to_goal": 24.0,
+      "expected_return_pct": 5.0,
+      "required_monthly_saving_eur": 2229.050755917721
+    },
+    {
+      "goal_name": "child_1_education",
+      "base_target_amount_eur": 25000.0,
+      "inflation_adjusted_target_amount_eur": 27602.020080000002,
+      "current_amount_eur": 0.0,
+      "years_to_goal": 5.0,
+      "expected_return_pct": 2.0,
+      "required_monthly_saving_eur": 437.9960459351366
+    },
+    {
+      "goal_name": "child_2_education",
+      "base_target_amount_eur": 30000.0,
+      "inflation_adjusted_target_amount_eur": 34460.570029478404,
+      "current_amount_eur": 0.0,
+      "years_to_goal": 7.0,
+      "expected_return_pct": 3.0,
+      "required_monthly_saving_eur": 369.72042055746766
+    },
+    {
+      "goal_name": "child_3_education",
+      "base_target_amount_eur": 35000.0,
+      "inflation_adjusted_target_amount_eur": 43518.10079381284,
+      "current_amount_eur": 0.0,
+      "years_to_goal": 11.0,
+      "expected_return_pct": 4.5,
+      "required_monthly_saving_eur": 256.7551479237542
+    },
+    {
+      "goal_name": "house_expansion",
+      "base_target_amount_eur": 121000.00000000001,
+      "inflation_adjusted_target_amount_eur": 133591.966448083,
+      "current_amount_eur": 50000.0,
+      "years_to_goal": 4.999315537303217,
+      "expected_return_pct": 1.5,
+      "required_monthly_saving_eur": 1280.744235407383
+    }
+  ],
+  "total_required_monthly_saving_eur": 4574.266605741463
+}

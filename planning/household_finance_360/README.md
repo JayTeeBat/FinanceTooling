@@ -45,6 +45,10 @@ Suggested use:
   Guide for turning planning assumptions into monthly savings targets.
 - `12_sizing_output.json`
   Generated output from the savings-sizing command.
+- `13_doe_ranges.yaml`
+  Range definitions for a scenario sweep over planning assumptions.
+- `14_doe_results.csv`
+  Ranked DOE output for scenario exploration.
 - `workflow.md`
   Step-by-step operating cadence for using the files.
 
@@ -62,6 +66,7 @@ The calculator explicitly supports hypotheses on:
 - inflation
 - stock / portfolio yield by goal
 - retirement age
+- retirement spending target
 - kids fund size
 
 Optional overrides:
@@ -71,6 +76,15 @@ uv run plan-savings \
   --inputs-path planning/household_finance_360/09_planning_inputs.yaml \
   --output-path planning/household_finance_360/12_sizing_output.json \
   --as-of-date 2026-03-15
+```
+
+For a scenario sweep across assumption ranges:
+
+```bash
+uv run plan-savings-doe \
+  --base-inputs-path planning/household_finance_360/09_planning_inputs.yaml \
+  --doe-inputs-path planning/household_finance_360/13_doe_ranges.yaml \
+  --output-path planning/household_finance_360/14_doe_results.csv
 ```
 
 ## Recommended operating model

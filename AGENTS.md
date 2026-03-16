@@ -187,6 +187,21 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-16 - codex
+- Branch: `feature/household-finance-planning`
+- Completed:
+  - Added a `plan-savings-doe` CLI command and supporting planning logic to run scenario sweeps across retirement age, pension, retirement spending, kids targets, house project size, inflation, and expected returns.
+  - Populated the planning baseline inputs with the household figures discussed, generated baseline sizing output, and produced ranked DOE scenario results in the planning workspace.
+  - Updated planning docs to cover the DOE workflow and added focused regression tests for the new command and scenario-grid builder.
+- Checks:
+  - `uv run pytest tests/test_planning.py tests/test_planning_doe.py tests/test_plan_savings_cli.py tests/test_plan_savings_doe_cli.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
+  - `uv run ruff check src/finance_tooling/planning.py src/finance_tooling/commands/plan_savings.py src/finance_tooling/commands/plan_savings_doe.py tests/test_planning.py tests/test_planning_doe.py tests/test_plan_savings_cli.py tests/test_plan_savings_doe_cli.py tests/test_command_entrypoints.py`: pass
+  - `uv run ty check src/finance_tooling tests`: not run
+- Open items:
+  - The planning workspace still relies on CSV/JSON outputs rather than a dedicated planning dashboard or automatic shortlist generation.
+- Next action:
+  - Review the DOE results and narrow them to a small set of realistic household planning scenarios for decision-making.
+
 ### 2026-03-15 - codex
 - Branch: `feature/household-finance-planning`
 - Completed:
@@ -216,20 +231,3 @@ Success target for the 2026 validation campaign:
   - Existing live rule/config files authored before this change will still work, but they can now be written directly from review descriptions without having to think about normalization details.
 - Next action:
   - Merge the rule-pattern normalization PR so future review-driven rule authoring is less error-prone.
-
-### 2026-03-08 - codex
-- Branch: `feature/excel-review-workbook`
-- Completed:
-  - Added `source_record_index` to parsed, staged, and canonical transactions and updated `transaction_id` generation so repeated same-day same-amount rows in the same statement no longer collapse during canonical upsert.
-  - Added `migrate-transaction-ids` plus migration helpers for `transaction_overrides` and `review_state`, with explicit sidecars for ambiguous or unmatched rows instead of guessing.
-  - Added legacy-identity collision diagnostics to `run_summary.json`, updated README/review workflow docs, and refreshed metrics logs from an isolated real-data validation run.
-- Checks:
-  - `uv run ruff check .`: pass
-  - `uv run ruff format .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - The isolated migration run reported `10` ambiguous and `34` unmatched transaction-override rows that will need sidecar review during the live rollout.
-  - The first live post-migration `transform` should run against a clean/renamed `transactions_master.parquet` backup to avoid old carry-forward contamination.
-- Next action:
-  - Run the live `ingest` -> `migrate-transaction-ids` -> clean `transform` rollout after reviewing the migration sidecars.

@@ -29,6 +29,7 @@ migrate-category-overrides-to-rules = "finance_tooling.commands.migrate_category
 migrate-transaction-ids = "finance_tooling.commands.migrate_transaction_ids:main"
 metrics-log-update = "finance_tooling.commands.metrics_log_update:main"
 plan-savings = "finance_tooling.commands.plan_savings:main"
+plan-savings-doe = "finance_tooling.commands.plan_savings_doe:main"
 perf-check = "finance_tooling.perf_check:main"
 
 [dependency-groups]
