@@ -188,6 +188,36 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-16 - codex
+- Branch: `feature/planning-hypothesis-playground`
+- Completed:
+  - Expanded the live planning hypothesis playground to support spouse-specific dates of birth, retirement ages, and projected pensions.
+  - Added adjustable current investable net worth, total net worth, home value, mortgage balance, mortgage rate, mortgage payment, and mortgage years remaining.
+  - Added retirement-date projections for investable net worth, mortgage balance, home value, home equity, and total net worth, then regenerated `planning/household_finance_360/15_hypothesis_playground.html`.
+- Checks:
+  - `uv run pytest tests/test_planning_dashboard.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
+  - `uv run ruff check src/finance_tooling/planning_dashboard.py tests/test_planning_dashboard.py`: pass
+  - `uv run ty check src/finance_tooling tests`: not run
+- Open items:
+  - The playground now projects housing and net worth trajectories, but it still does not persist edited scenarios back into config files.
+- Next action:
+  - Open the refreshed hypothesis playground and decide whether scenario persistence/export should be the next enhancement.
+
+### 2026-03-16 - codex
+- Branch: `main`
+- Completed:
+  - Added a self-contained planning hypothesis playground generator and CLI command (`plan-hypothesis-page`) that renders an interactive HTML page for testing retirement, pension, spending, kids fund, house project, inflation, and return assumptions.
+  - Added focused tests for the planning dashboard renderer and generated `planning/household_finance_360/15_hypothesis_playground.html` from the current baseline inputs.
+  - Updated the planning workspace docs to include the new live HTML workflow.
+- Checks:
+  - `uv run pytest tests/test_planning.py tests/test_planning_doe.py tests/test_planning_dashboard.py tests/test_plan_savings_cli.py tests/test_plan_savings_doe_cli.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
+  - `uv run ruff check src/finance_tooling/planning.py src/finance_tooling/planning_dashboard.py src/finance_tooling/commands/plan_savings.py src/finance_tooling/commands/plan_savings_doe.py src/finance_tooling/commands/plan_hypothesis_page.py tests/test_planning.py tests/test_planning_doe.py tests/test_planning_dashboard.py tests/test_plan_savings_cli.py tests/test_plan_savings_doe_cli.py tests/test_command_entrypoints.py`: pass
+  - `uv run ty check src/finance_tooling tests`: not run
+- Open items:
+  - The HTML playground is fully client-side and portable, but it does not yet persist edited scenarios back into YAML/CSV files.
+- Next action:
+  - Open the generated hypothesis playground in a browser and validate which savings band feels realistic enough to turn into a shortlist of household planning scenarios.
+
+### 2026-03-16 - codex
 - Branch: `feature/household-finance-planning`
 - Completed:
   - Added a `plan-savings-doe` CLI command and supporting planning logic to run scenario sweeps across retirement age, pension, retirement spending, kids targets, house project size, inflation, and expected returns.
@@ -201,33 +231,3 @@ Success target for the 2026 validation campaign:
   - The planning workspace still relies on CSV/JSON outputs rather than a dedicated planning dashboard or automatic shortlist generation.
 - Next action:
   - Review the DOE results and narrow them to a small set of realistic household planning scenarios for decision-making.
-
-### 2026-03-15 - codex
-- Branch: `feature/household-finance-planning`
-- Completed:
-  - Added a separate `planning/household_finance_360/` workspace with starter templates for household profile, account inventory, monthly budget tracking, net worth snapshots, goal planning, investment policy, monitoring, and annual reviews.
-  - Added a `plan-savings` CLI calculator plus planning input/output files so retirement, education, and house-project assumptions can be converted into required monthly savings by goal, including inflation-aware target sizing.
-  - Documented a practical monthly / quarterly / annual workflow for 360-degree household financial planning and linked the new workspace from `README.md`.
-- Checks:
-  - `documentation/template review`: pass
-  - `uv run pytest tests/test_planning.py tests/test_plan_savings_cli.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
-  - `uv run ruff check src/finance_tooling/planning.py src/finance_tooling/commands/plan_savings.py tests/test_planning.py tests/test_plan_savings_cli.py tests/test_command_entrypoints.py`: pass
-  - `uv run ty check src/finance_tooling tests`: not run
-- Open items:
-  - The planning calculator currently produces JSON output and console summaries, but it does not yet auto-update the scenario matrix or generate a dedicated planning dashboard.
-- Next action:
-  - Populate the planning inputs with your real household assumptions and run `uv run plan-savings` to establish a first baseline monthly savings target.
-
-### 2026-03-11 - codex
-- Branch: `fix/rule-pattern-normalization-review-column`
-- Completed:
-  - Normalized `contains` and `exact` category-rule patterns on load so rules written from human-readable review descriptions match the same normalized transaction text used by the classifier.
-  - Renamed the review workbook helper column from `fingerprint` to `normalized_description` and updated the review docs/README wording accordingly.
-  - Added focused regression tests for normalized rule-pattern loading and the updated review export column set.
-- Checks:
-  - `uv run pytest tests/test_classify.py tests/test_review_workflow.py`: pass
-  - `uv run ruff check src/finance_tooling/classify.py src/finance_tooling/review_common.py tests/test_classify.py tests/test_review_workflow.py`: pass
-- Open items:
-  - Existing live rule/config files authored before this change will still work, but they can now be written directly from review descriptions without having to think about normalization details.
-- Next action:
-  - Merge the rule-pattern normalization PR so future review-driven rule authoring is less error-prone.

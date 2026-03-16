@@ -11,6 +11,9 @@ from finance_tooling.commands import (
     metrics_log_update as metrics_log_update_command,
 )
 from finance_tooling.commands import (
+    plan_hypothesis_page as plan_hypothesis_page_command,
+)
+from finance_tooling.commands import (
     plan_savings as plan_savings_command,
 )
 from finance_tooling.commands import (
@@ -96,6 +99,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Calculate goal-based monthly savings needs from planning assumptions.",
     )
     plan_savings_command.configure_parser(plan_savings_parser)
+
+    plan_hypothesis_page_parser = subparsers.add_parser(
+        "plan-hypothesis-page",
+        help="Render a live HTML hypothesis playground for planning assumptions.",
+    )
+    plan_hypothesis_page_command.configure_parser(plan_hypothesis_page_parser)
 
     plan_savings_doe_parser = subparsers.add_parser(
         "plan-savings-doe",

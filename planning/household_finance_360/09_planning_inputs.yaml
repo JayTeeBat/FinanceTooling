@@ -1,6 +1,8 @@
 household:
   adults:
+    adult_1_date_of_birth: 1988-01-01
     adult_1_current_age: 38
+    adult_2_date_of_birth: 1989-01-01
     adult_2_current_age: 37
   children:
     child_1_current_age: 13
@@ -19,6 +21,8 @@ liquidity:
 retirement:
   target_retirement_age_adult_1: 62
   target_retirement_age_adult_2: 62
+  expected_annual_state_pension_adult_1_eur: 15000
+  expected_annual_state_pension_adult_2_eur: 15000
   expected_annual_state_pension_eur: 30000
   expected_annual_state_pension_is_today_eur: true
   target_annual_spending_in_retirement_eur: 60000
@@ -56,9 +60,17 @@ house_project:
   expected_return_pct: 1.5
 
 net_worth:
+  current_total_net_worth_eur: 200000
+  current_investable_net_worth_eur: 200000
   current_total_financial_assets_eur: 200000
+  current_home_value_eur: 200000
   current_home_equity_eur: 0
   current_mortgage_balance_eur: 200000
+
+mortgage:
+  annual_rate_pct: 2.4
+  monthly_payment_eur: 1300
+  years_remaining: 17
 
 assumptions:
   inflation_pct: 2.0
