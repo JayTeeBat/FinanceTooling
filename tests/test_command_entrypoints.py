@@ -12,6 +12,9 @@ from finance_tooling.commands import (
     metrics_log_update as metrics_log_update_command,
 )
 from finance_tooling.commands import (
+    plan_hypothesis_page as plan_hypothesis_page_command,
+)
+from finance_tooling.commands import (
     plan_savings as plan_savings_command,
 )
 from finance_tooling.commands import (
@@ -50,6 +53,7 @@ class _CommandModule(Protocol):
         ),
         (metrics_log_update_command, ["--summary-path", "run_summary.json"]),
         (plan_savings_command, ["--inputs-path", "planning_inputs.yaml"]),
+        (plan_hypothesis_page_command, ["--inputs-path", "planning_inputs.yaml"]),
         (
             plan_savings_doe_command,
             ["--base-inputs-path", "planning_inputs.yaml", "--doe-inputs-path", "doe.yaml"],

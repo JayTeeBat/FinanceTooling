@@ -49,6 +49,8 @@ Suggested use:
   Range definitions for a scenario sweep over planning assumptions.
 - `14_doe_results.csv`
   Ranked DOE output for scenario exploration.
+- `15_hypothesis_playground.html`
+  Self-contained HTML page for live what-if planning.
 - `workflow.md`
   Step-by-step operating cadence for using the files.
 
@@ -85,6 +87,14 @@ uv run plan-savings-doe \
   --base-inputs-path planning/household_finance_360/09_planning_inputs.yaml \
   --doe-inputs-path planning/household_finance_360/13_doe_ranges.yaml \
   --output-path planning/household_finance_360/14_doe_results.csv
+```
+
+For a live browser playground:
+
+```bash
+uv run plan-hypothesis-page \
+  --inputs-path planning/household_finance_360/09_planning_inputs.yaml \
+  --output-path planning/household_finance_360/15_hypothesis_playground.html
 ```
 
 ## Recommended operating model
