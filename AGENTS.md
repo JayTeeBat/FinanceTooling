@@ -187,6 +187,20 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-19 - codex
+- Branch: `feature/planning-hypothesis-playground`
+- Completed:
+  - Added a shared backup helper and wired `transform` to snapshot `category_rules.yaml` into the sibling `backup/` folder before processing.
+  - Updated `review-import` and `transform` backup handling so both `transaction_overrides.yaml` and `category_rules.yaml` retain only the latest 10 timestamped backups with deterministic FIFO pruning.
+  - Added focused regression coverage for backup creation and retention behavior, and documented the new transform-time backup behavior in `README.md`.
+- Checks:
+  - `uv run pytest tests/test_review_workflow.py tests/test_workflow_stages.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
+  - `uv run ruff check src/finance_tooling/backup.py src/finance_tooling/review_import.py src/finance_tooling/workflow/transform_stage.py tests/test_review_workflow.py tests/test_workflow_stages.py`: pass
+- Open items:
+  - `category_rules.yaml` backups now happen during `transform`, but there is still no equivalent automatic backup for other config artifacts such as `project_rules.yaml`.
+- Next action:
+  - Decide whether the same capped-backup policy should be extended to the other mutable config files used by the pipeline.
+
 ### 2026-03-16 - codex
 - Branch: `feature/planning-hypothesis-playground`
 - Completed:
@@ -216,18 +230,3 @@ Success target for the 2026 validation campaign:
   - The HTML playground is fully client-side and portable, but it does not yet persist edited scenarios back into YAML/CSV files.
 - Next action:
   - Open the generated hypothesis playground in a browser and validate which savings band feels realistic enough to turn into a shortlist of household planning scenarios.
-
-### 2026-03-16 - codex
-- Branch: `feature/household-finance-planning`
-- Completed:
-  - Added a `plan-savings-doe` CLI command and supporting planning logic to run scenario sweeps across retirement age, pension, retirement spending, kids targets, house project size, inflation, and expected returns.
-  - Populated the planning baseline inputs with the household figures discussed, generated baseline sizing output, and produced ranked DOE scenario results in the planning workspace.
-  - Updated planning docs to cover the DOE workflow and added focused regression tests for the new command and scenario-grid builder.
-- Checks:
-  - `uv run pytest tests/test_planning.py tests/test_planning_doe.py tests/test_plan_savings_cli.py tests/test_plan_savings_doe_cli.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
-  - `uv run ruff check src/finance_tooling/planning.py src/finance_tooling/commands/plan_savings.py src/finance_tooling/commands/plan_savings_doe.py tests/test_planning.py tests/test_planning_doe.py tests/test_plan_savings_cli.py tests/test_plan_savings_doe_cli.py tests/test_command_entrypoints.py`: pass
-  - `uv run ty check src/finance_tooling tests`: not run
-- Open items:
-  - The planning workspace still relies on CSV/JSON outputs rather than a dedicated planning dashboard or automatic shortlist generation.
-- Next action:
-  - Review the DOE results and narrow them to a small set of realistic household planning scenarios for decision-making.

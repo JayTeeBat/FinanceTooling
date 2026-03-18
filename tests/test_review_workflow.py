@@ -456,6 +456,73 @@ def test_import_review_into_overrides_defaults_backup_into_config_backup_folder(
     assert result.transaction_backup_path.exists()
 
 
+def test_import_review_into_overrides_prunes_old_backups_to_last_ten(tmp_path: Path) -> None:
+    review_path = tmp_path / "transactions_review.xlsx"
+    transaction_overrides_path = tmp_path / "transaction_overrides.yaml"
+    review_state_path = tmp_path / "review_state.parquet"
+    backup_dir = transaction_overrides_path.parent / "backup"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    write_transaction_override_store(
+        transaction_overrides_path,
+        TransactionOverrideStore(
+            entries=(
+                TransactionOverrideEntry(
+                    override_id="existing",
+                    transaction_id="existing_tx",
+                    fingerprint=None,
+                    booking_date=None,
+                    amount_native=None,
+                    currency=None,
+                    bank=None,
+                    account_label=None,
+                    category="Transfers",
+                    set_category=True,
+                    subcategory=None,
+                    set_subcategory=False,
+                    project=None,
+                    set_project=False,
+                    project_tags=(),
+                    set_project_tags=False,
+                ),
+            )
+        ),
+    )
+    for index in range(10):
+        path = backup_dir / f"transaction_overrides.yaml.20260310-00000{index}.bak"
+        path.write_text(f"backup-{index}", encoding="utf-8")
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN MERCHANT 123",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Shopping",
+                "subcategory": "General Retail",
+                "original_category": "Uncategorized",
+                "original_subcategory": None,
+                "project_tags": None,
+                "reviewed": True,
+                "review_comment": "done",
+            }
+        ]
+    ).to_excel(review_path, index=False, engine="openpyxl")
+
+    result = import_review_into_overrides(
+        review_path=review_path,
+        transaction_overrides_path=transaction_overrides_path,
+        review_state_path=review_state_path,
+    )
+
+    assert result.transaction_backup_path is not None
+    backups = sorted(backup_dir.glob("transaction_overrides.yaml*.bak"))
+    assert len(backups) == 10
+    assert not (backup_dir / "transaction_overrides.yaml.20260310-000000.bak").exists()
+
+
 def test_import_review_into_overrides_skips_unchanged_categorized_rows(tmp_path: Path) -> None:
     review_path = tmp_path / "transactions_review.xlsx"
     transaction_overrides_path = tmp_path / "transaction_overrides.yaml"

@@ -162,6 +162,10 @@ By default, `review-import` aborts when existing override-load warnings are pres
 When backups are enabled, it now stores timestamped config backups under the
 config `backup/` folder by default instead of cluttering the main config
 directory.
+`transform` also snapshots `category_rules.yaml` into the same config `backup/`
+folder before enrichment, and retention keeps only the latest `10` backups for
+both `category_rules.yaml` and `transaction_overrides.yaml` using FIFO
+pruning.
 Use `--allow-load-warnings` only for deliberate recovery flows.
 For `review-export`, output is uncategorized-only by default; use
 `--include-categorized` to include already-categorized rows. Optional

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 
+from finance_tooling.backup import create_backup
 from finance_tooling.review_common import (
     ORIGINAL_CATEGORY_COLUMN,
     ORIGINAL_SUBCATEGORY_COLUMN,
@@ -51,19 +50,8 @@ class ReviewImportResult:
     transaction_backup_path: Path | None = None
 
 
-def _default_backup_path(path: Path) -> Path:
-    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    backup_dir = path.parent / "backup"
-    return backup_dir / f"{path.name}.{timestamp}.bak"
-
-
 def _backup_override_store(path: Path, backup_path: Path | None) -> Path | None:
-    if not path.exists():
-        return None
-    destination = backup_path or _default_backup_path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(path, destination)
-    return destination
+    return create_backup(path, backup_path)
 
 
 def _parse_category_transaction_override_row(
