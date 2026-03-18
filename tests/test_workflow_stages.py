@@ -7,6 +7,7 @@ from typing import cast
 
 import pandas as pd
 
+from finance_tooling.classify import ClassificationDiagnostics
 from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.models import Transaction, WorkflowResult
@@ -21,6 +22,7 @@ from finance_tooling.workflow.ingest_stage import (
 )
 from finance_tooling.workflow.staging import write_staged_transactions
 from finance_tooling.workflow.transform_stage import run_transform
+from finance_tooling.workflow.types import EnrichmentResult
 from finance_tooling.workflow.update_stage import run_update, run_workflow
 
 
@@ -625,6 +627,91 @@ def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Pat
     assert row["category"] == "Work"
     assert row["subcategory"] == "Salary"
     assert row["category_source"] == "transaction_override"
+
+
+def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
+    monkeypatch, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    settings = replace(_settings(input_dir), category_rules_path=input_dir / "category_rules.yaml")
+    settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    backup_dir = settings.category_rules_path.parent / "backup"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    for index in range(10):
+        path = backup_dir / f"category_rules.yaml.20260310-00000{index}.bak"
+        path.write_text(f"backup-{index}", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.read_staged_transactions",
+        lambda _: [],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.enrich_transactions",
+        lambda *_args, **_kwargs: EnrichmentResult(
+            transactions=[],
+            warnings=[],
+            classification_diagnostics=ClassificationDiagnostics(
+                categorized_count=0,
+                uncategorized_count=0,
+                uncategorized_ratio=0.0,
+                category_source_counts={},
+                top_uncategorized_descriptions=[],
+                top_rules_by_hits=[],
+            ),
+            manual_category_carry_forward_applied_count=0,
+            manual_category_carry_forward_ambiguous_skipped_count=0,
+            manual_category_carry_forward_unmatched_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.apply_review_state",
+        lambda transactions, _review_state_path: transactions,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.persist_and_report",
+        lambda **_kwargs: (
+            WorkflowResult(
+                dashboard_path=settings.output_path,
+                parquet_path=settings.master_parquet_path,
+                csv_path=settings.export_csv_path,
+                json_path=settings.export_json_path,
+                summary_path=settings.summary_json_path,
+                completeness_path=settings.completeness_json_path,
+                files_scanned=0,
+                files_failed=0,
+                transactions_parsed=0,
+                new_rows=0,
+                total_rows=0,
+                completeness_status="pass",
+                completeness_coverage_ratio=1.0,
+                missing_source_file_count=0,
+                reconciliation_checkable_file_count=0,
+                reconciliation_fail_count=0,
+                reconciliation_uncheckable_file_count=0,
+                reconciliation_pass_ratio=None,
+                categorized_count=0,
+                uncategorized_count=0,
+                categorized_amount_eur_abs=0.0,
+                uncategorized_amount_eur_abs=0.0,
+                categorized_amount_eur_abs_ratio=0.0,
+                uncategorized_amount_eur_abs_ratio=0.0,
+                warnings=(),
+            ),
+            {
+                "categorized_count": 0,
+                "uncategorized_count": 0,
+                "categorized_amount_eur_abs": 0.0,
+                "uncategorized_amount_eur_abs": 0.0,
+            },
+        ),
+    )
+
+    run_transform(settings)
+
+    backups = sorted(backup_dir.glob("category_rules.yaml*.bak"))
+    assert len(backups) == 10
+    assert not (backup_dir / "category_rules.yaml.20260310-000000.bak").exists()
 
 
 def test_run_update_rejects_conflicting_stage_flags(tmp_path: Path) -> None:

@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 
+from finance_tooling.backup import create_backup
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.models import WorkflowResult
@@ -105,6 +106,12 @@ def run_transform(
 ) -> WorkflowResult:
     """Execute transform stage from staged transaction artifact."""
     previous_summary = _load_previous_summary(settings.summary_json_path)
+    try:
+        create_backup(settings.category_rules_path)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Failed to back up category rules before transform: {settings.category_rules_path}"
+        ) from exc
     input_staged_path = staged_path or settings.staged_transactions_path
     staged_transactions = read_staged_transactions(input_staged_path)
     enrichment = enrich_transactions(staged_transactions, settings)
