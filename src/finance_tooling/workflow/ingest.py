@@ -29,6 +29,7 @@ from finance_tooling.parsers.registry import (
     select_parser_with_diagnostics as default_select_parser_with_diagnostics,
 )
 from finance_tooling.source_inventory import (
+    SourceInventorySnapshot,
     build_source_inventory,
     representative_source_files,
     write_source_inventory,
@@ -360,10 +361,19 @@ def ingest_statements(
     discover_statement_pdfs: Callable[[Path], list[Path]],
     extract_text_from_pdf: Callable[[Path], ExtractedPdfText],
     select_parser_with_diagnostics: Callable[[Path, str], ParserSelection],
+    source_inventory: SourceInventorySnapshot | None = None,
+    selected_source_files: list[Path] | None = None,
+    run_mode: str = "incremental",
+    files_skipped_already_committed: int = 0,
+    files_skipped_modified_existing: int = 0,
+    files_missing_since_last_commit: int = 0,
+    dataset_stale: bool = False,
+    stale_reasons: list[str] | None = None,
 ) -> IngestResult:
     """Run ingestion stage from raw source discovery through PDF parsing."""
     warnings: list[str] = []
     files_failed = 0
+    processed_source_files: list[Path] = []
     extracted: list[Transaction] = []
     validations: list[StatementValidation] = []
     parser_selection_diagnostics: list[ParserSelectionDiagnostic] = []
@@ -398,22 +408,43 @@ def ingest_statements(
     text_cache_write_count = 0
 
     discovered_files = discover_statement_pdfs(settings.input_path)
-    source_inventory = build_source_inventory(discovered_files)
+    resolved_inventory = (
+        source_inventory
+        if source_inventory is not None
+        else build_source_inventory(discovered_files)
+    )
     source_inventory_path = settings.summary_json_path.parent / "source_inventory.json"
-    write_source_inventory(source_inventory_path, source_inventory)
-    files = representative_source_files(source_inventory)
+    write_source_inventory(source_inventory_path, resolved_inventory)
+    representative_files = representative_source_files(resolved_inventory)
+    files = selected_source_files if selected_source_files is not None else representative_files
     source_document_ids = {
         Path(entry.source_file): entry.source_document_id
-        for entry in source_inventory.entries
+        for entry in resolved_inventory.entries
         if entry.is_representative
     }
-    duplicate_groups = source_inventory.ignored_duplicate_file_count
+    duplicate_groups = resolved_inventory.ignored_duplicate_file_count
     if duplicate_groups > 0:
         warnings.append(
             "Duplicate raw source files detected and ignored: "
             f"{duplicate_groups} duplicate file(s) across "
-            f"{source_inventory.raw_file_count} discovered file(s)"
+            f"{resolved_inventory.raw_file_count} discovered file(s)"
         )
+    for stale_reason in stale_reasons or []:
+        if stale_reason == "raw_source_modified_since_commit":
+            warnings.append(
+                "Incremental ingest skipped modified previously committed source files; "
+                "run --full-refresh to reparse them."
+            )
+        elif stale_reason == "raw_source_missing_since_commit":
+            warnings.append(
+                "Incremental ingest detected previously committed source files missing from the "
+                "raw corpus; canonical rows are retained until --full-refresh."
+            )
+        elif stale_reason == "config_changed_since_last_full_refresh":
+            warnings.append(
+                "Config drift detected since the last full refresh; historical rows may be stale "
+                "until --full-refresh."
+            )
     prepared_cache_hits: list[_PreparedStatement] = []
     cache_write_rows: list[CachedExtractionRow] = []
     files_for_prepare = files
@@ -544,6 +575,7 @@ def ingest_statements(
                 replace(transaction, source_document_id=prepared.source_document_id)
                 for transaction in output.transactions
             )
+            processed_source_files.append(prepared.source_file)
             warnings.extend(output.warnings)
             if output.validation is not None:
                 validations.append(output.validation)
@@ -671,14 +703,17 @@ def ingest_statements(
             warnings.append(f"Failed to process {prepared.source_file}: {exc}")
 
     return IngestResult(
-        source_files=files,
-        raw_file_count=source_inventory.raw_file_count,
-        duplicate_raw_file_count=source_inventory.ignored_duplicate_file_count,
+        source_files=representative_files,
+        raw_file_count=resolved_inventory.raw_file_count,
+        duplicate_raw_file_count=resolved_inventory.ignored_duplicate_file_count,
         source_inventory_path=source_inventory_path,
+        all_source_files=representative_files,
+        selected_source_files=files,
         transactions=extracted,
         validations=validations,
         warnings=warnings,
         files_failed=files_failed,
+        processed_source_files=processed_source_files,
         parser_selection_diagnostics=parser_selection_diagnostics,
         parser_low_confidence_file_count=parser_low_confidence_file_count,
         hsbc_statement_periods_by_date=hsbc_statement_periods_by_date,
@@ -694,4 +729,11 @@ def ingest_statements(
         text_cache_hits=text_cache_hits,
         text_cache_misses=text_cache_misses,
         text_cache_write_count=text_cache_write_count,
+        run_mode=run_mode,
+        files_selected_for_processing=len(files),
+        files_skipped_already_committed=files_skipped_already_committed,
+        files_skipped_modified_existing=files_skipped_modified_existing,
+        files_missing_since_last_commit=files_missing_since_last_commit,
+        dataset_stale=dataset_stale,
+        stale_reasons=tuple(stale_reasons or []),
     )

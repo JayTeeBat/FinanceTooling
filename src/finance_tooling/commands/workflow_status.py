@@ -28,6 +28,30 @@ def handle(_args: argparse.Namespace) -> int:
         return 1
 
     raw_state = payload["raw_source_state"]
+    staged_state = payload.get(
+        "staged_state",
+        {
+            "exists": False,
+            "manifest_exists": False,
+            "run_mode": None,
+            "files_selected_for_processing": 0,
+        },
+    )
+    committed_state = payload.get(
+        "committed_state",
+        {
+            "committed_source_count": 0,
+            "last_run_mode": None,
+            "last_full_refresh_at": None,
+        },
+    )
+    drift_state = payload.get(
+        "drift_state",
+        {
+            "dataset_stale": False,
+            "full_refresh_risk": "unknown",
+        },
+    )
     transformed_state = payload["transformed_state"]
     master_state = transformed_state["master"]
     findings: list[PipelineFinding] = payload["findings"]
@@ -40,11 +64,29 @@ def handle(_args: argparse.Namespace) -> int:
         f"{raw_state['ignored_duplicate_file_count']} ignored duplicates"
     )
     print(
+        "Committed registry: "
+        f"{committed_state['committed_source_count']} documents, "
+        f"last run mode={committed_state['last_run_mode']}, "
+        f"last full refresh={committed_state['last_full_refresh_at']}"
+    )
+    print(
+        "Staged batch: "
+        f"exists={staged_state['exists']}, "
+        f"manifest={staged_state['manifest_exists']}, "
+        f"run mode={staged_state['run_mode']}, "
+        f"selected files={staged_state['files_selected_for_processing']}"
+    )
+    print(
         "Master parquet: "
         f"{master_state['total_rows']} rows "
         f"({master_state['booking_date_min']} -> {master_state['booking_date_max']})"
     )
     print(f"Run summary present: {transformed_state['summary_exists']}")
+    print(
+        "Drift state: "
+        f"stale={drift_state['dataset_stale']}, "
+        f"full refresh risk={drift_state['full_refresh_risk']}"
+    )
     if findings:
         print("Findings:")
         for finding in findings:

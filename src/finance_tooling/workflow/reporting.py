@@ -12,7 +12,7 @@ from typing import cast
 from pandas import DataFrame
 
 from finance_tooling.backup import BackupRunResult
-from finance_tooling.classify import ClassificationDiagnostics
+from finance_tooling.classify import ClassificationDiagnostics, build_classification_diagnostics
 from finance_tooling.completeness import build_completeness_report
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
@@ -21,6 +21,7 @@ from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.store import (
     UpsertResult,
     compute_legacy_transaction_id,
+    transactions_from_dataframe,
     upsert_transactions,
 )
 from finance_tooling.workflow.types import (
@@ -99,16 +100,27 @@ def persist_and_report(
     manual_category_carry_forward_applied_count: int,
     manual_category_carry_forward_ambiguous_skipped_count: int,
     manual_category_carry_forward_unmatched_count: int,
-    classification_diagnostics: ClassificationDiagnostics,
     warnings: list[str],
+    run_mode: str = "incremental",
+    files_selected_for_processing: int = 0,
+    files_skipped_already_committed: int = 0,
+    files_skipped_modified_existing: int = 0,
+    files_missing_since_last_commit: int = 0,
+    dataset_stale: bool = False,
+    stale_reasons: list[str] | None = None,
     backup_run: BackupRunResult | None = None,
     upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
     render_dashboard_html_fn: Callable[..., Path] = render_dashboard_html,
 ) -> tuple[WorkflowResult, SummaryPayload]:
     """Persist artifacts and return final workflow result plus summary payload."""
+    upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
+    full_transactions = transactions_from_dataframe(upsert.dataframe)
+    classification_diagnostics: ClassificationDiagnostics = build_classification_diagnostics(
+        full_transactions
+    )
     completeness_report = build_completeness_report(
         source_files,
-        transactions,
+        full_transactions,
         validations=validations,
     )
     completeness_status = cast(str, completeness_report["status"])
@@ -134,8 +146,6 @@ def persist_and_report(
 
     write_json(settings.completeness_json_path, completeness_report)
 
-    upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
-
     settings.export_csv_path.parent.mkdir(parents=True, exist_ok=True)
     settings.export_json_path.parent.mkdir(parents=True, exist_ok=True)
     dataframe: DataFrame = upsert.dataframe
@@ -156,7 +166,7 @@ def persist_and_report(
         settings.summary_json_path.parent / "legacy_identity_collision_candidates.csv"
     )
     legacy_identity_collision_group_count, legacy_identity_collision_row_count = (
-        _write_legacy_identity_collision_candidates(transactions, collision_candidates_path)
+        _write_legacy_identity_collision_candidates(full_transactions, collision_candidates_path)
     )
 
     category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
@@ -171,7 +181,7 @@ def persist_and_report(
     )
     categorized_amount_eur_abs = 0.0
     uncategorized_amount_eur_abs = 0.0
-    for tx in transactions:
+    for tx in full_transactions:
         bank = tx.bank.strip() if tx.bank.strip() else "UNKNOWN"
         counters = category_metrics_by_bank_counters[bank]
         counters["transactions_count"] += 1
@@ -228,8 +238,8 @@ def persist_and_report(
             }
         )
 
-    reviewed_count = sum(1 for tx in transactions if tx.reviewed)
-    reviewed_ratio = (reviewed_count / len(transactions)) if transactions else 0.0
+    reviewed_count = sum(1 for tx in full_transactions if tx.reviewed)
+    reviewed_ratio = (reviewed_count / len(full_transactions)) if full_transactions else 0.0
     categorized_amount_eur_abs_ratio = (
         (categorized_amount_eur_abs / total_amount_eur_abs) if total_amount_eur_abs > 0 else 0.0
     )
@@ -241,7 +251,7 @@ def persist_and_report(
         "generated_at": datetime.now(UTC).isoformat(),
         "files_scanned": len(source_files),
         "files_failed": files_failed,
-        "transactions_parsed": len(transactions),
+        "transactions_parsed": len(full_transactions),
         "new_rows": upsert.new_rows,
         "total_rows": upsert.total_rows,
         "parquet_path": str(upsert.parquet_path),
@@ -378,6 +388,13 @@ def persist_and_report(
             len(backup_run.skipped_missing_files) if backup_run is not None else 0
         ),
         "backup_pruned_run_ids": list(backup_run.pruned_run_ids) if backup_run is not None else [],
+        "run_mode": run_mode,
+        "files_selected_for_processing": files_selected_for_processing,
+        "files_skipped_already_committed": files_skipped_already_committed,
+        "files_skipped_modified_existing": files_skipped_modified_existing,
+        "files_missing_since_last_commit": files_missing_since_last_commit,
+        "dataset_stale": dataset_stale,
+        "stale_reasons": stale_reasons or [],
         "warnings": warnings,
     }
     write_json(settings.summary_json_path, summary_payload)
@@ -391,7 +408,7 @@ def persist_and_report(
         completeness_path=settings.completeness_json_path,
         files_scanned=len(source_files),
         files_failed=files_failed,
-        transactions_parsed=len(transactions),
+        transactions_parsed=len(full_transactions),
         new_rows=upsert.new_rows,
         total_rows=upsert.total_rows,
         completeness_status=completeness_status,
@@ -409,6 +426,13 @@ def persist_and_report(
         uncategorized_amount_eur_abs_ratio=round(uncategorized_amount_eur_abs_ratio, 4),
         warnings=tuple(warnings),
         backup_run=backup_run,
+        run_mode=run_mode,
+        files_selected_for_processing=files_selected_for_processing,
+        files_skipped_already_committed=files_skipped_already_committed,
+        files_skipped_modified_existing=files_skipped_modified_existing,
+        files_missing_since_last_commit=files_missing_since_last_commit,
+        dataset_stale=dataset_stale,
+        stale_reasons=tuple(stale_reasons or []),
     )
 
     return result, summary_payload

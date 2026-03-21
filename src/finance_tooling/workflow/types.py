@@ -170,6 +170,13 @@ class SummaryPayload(TypedDict):
     backup_copied_file_count: int
     backup_missing_file_count: int
     backup_pruned_run_ids: list[str]
+    run_mode: str
+    files_selected_for_processing: int
+    files_skipped_already_committed: int
+    files_skipped_modified_existing: int
+    files_missing_since_last_commit: int
+    dataset_stale: bool
+    stale_reasons: list[str]
     warnings: list[str]
 
 
@@ -181,10 +188,13 @@ class IngestResult:
     raw_file_count: int
     duplicate_raw_file_count: int
     source_inventory_path: Path
+    all_source_files: list[Path]
+    selected_source_files: list[Path]
     transactions: list[Transaction]
     validations: list[StatementValidation]
     warnings: list[str]
     files_failed: int
+    processed_source_files: list[Path]
     parser_selection_diagnostics: list[ParserSelectionDiagnostic]
     parser_low_confidence_file_count: int
     hsbc_statement_periods_by_date: dict[str, tuple[date, date]]
@@ -200,6 +210,14 @@ class IngestResult:
     text_cache_hits: int
     text_cache_misses: int
     text_cache_write_count: int
+    run_mode: str = "incremental"
+    files_selected_for_processing: int = 0
+    files_skipped_already_committed: int = 0
+    files_skipped_modified_existing: int = 0
+    files_missing_since_last_commit: int = 0
+    dataset_stale: bool = False
+    stale_reasons: tuple[str, ...] = ()
+    staged_batch_manifest_path: Path | None = None
 
 
 @dataclass(frozen=True)

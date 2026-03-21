@@ -13,15 +13,22 @@ def run_update(
     *,
     ingest_only: bool = False,
     transform_only: bool = False,
+    full_refresh: bool = False,
 ) -> WorkflowResult | IngestExecutionResult:
     """Run ingest+transform orchestration with optional stage-only execution."""
     if ingest_only and transform_only:
         raise ValueError("--ingest-only and --transform-only are mutually exclusive.")
+    if transform_only and full_refresh:
+        raise ValueError("--transform-only cannot be combined with --full-refresh.")
 
     if transform_only:
         return run_transform(settings, backup_command="update")
 
-    ingest_result = run_ingest(settings, backup_command="update")
+    ingest_result = run_ingest(
+        settings,
+        backup_command="update",
+        run_mode="full_refresh" if full_refresh else "incremental",
+    )
     if ingest_only:
         return ingest_result
 

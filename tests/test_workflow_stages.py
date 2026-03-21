@@ -14,7 +14,14 @@ from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import ParserOutput, StatementParser, StatementValidation
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
+from finance_tooling.source_inventory import build_source_inventory, write_source_inventory
 from finance_tooling.store import UpsertResult, compute_transaction_id, upsert_transactions
+from finance_tooling.workflow.incremental_state import (
+    RunMode,
+    StagedBatchManifest,
+    staged_batch_manifest_path,
+    write_staged_batch_manifest,
+)
 from finance_tooling.workflow.ingest_stage import (
     parse_hsbc_statement_period_compat as _parse_hsbc_statement_period,
 )
@@ -77,6 +84,35 @@ def _settings(input_dir: Path, *, base_currency: str = "EUR") -> Settings:
         review_state_path=input_dir / "review_state.parquet",
         review_export_dark_safe=True,
     )
+
+
+def _write_transform_manifest(
+    settings: Settings,
+    source_files: list[Path],
+    *,
+    run_mode: str = "incremental",
+) -> None:
+    inventory = build_source_inventory(source_files)
+    inventory_path = settings.summary_json_path.parent / "source_inventory.json"
+    write_source_inventory(inventory_path, inventory)
+    manifest = StagedBatchManifest(
+        generated_at="2026-03-21T00:00:00+00:00",
+        run_mode=cast(RunMode, run_mode),
+        source_inventory_path=str(inventory_path),
+        selected_source_files=tuple(str(path) for path in source_files),
+        selected_source_document_ids=tuple(
+            entry.source_document_id for entry in inventory.entries if entry.is_representative
+        ),
+        files_selected_for_processing=len(source_files),
+        files_skipped_already_committed=0,
+        files_skipped_modified_existing=0,
+        files_missing_since_last_commit=0,
+        dataset_stale=False,
+        stale_reasons=(),
+        config_fingerprint="config-fingerprint",
+        context={},
+    )
+    write_staged_batch_manifest(staged_batch_manifest_path(settings), manifest)
 
 
 def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_path: Path) -> None:
@@ -230,6 +266,7 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
 
 def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_path: Path) -> None:
     settings = _settings(tmp_path)
+    _write_transform_manifest(settings, [])
     previous_summary = {
         "categorized_count": 4,
         "uncategorized_count": 6,
@@ -525,6 +562,7 @@ def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_
         parser="dummy",
     )
     write_staged_transactions(settings.staged_transactions_path, [staged_transaction])
+    _write_transform_manifest(settings, [source_file])
 
     monkeypatch.setattr(
         "finance_tooling.workflow.transform_stage.render_dashboard_html",
@@ -620,6 +658,7 @@ def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Pat
 
     upsert_transactions(settings.master_parquet_path, [staged_transaction])
     write_staged_transactions(settings.staged_transactions_path, [staged_transaction])
+    _write_transform_manifest(settings, [source_file])
 
     run_transform(settings)
 
@@ -662,6 +701,7 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
         "finance_tooling.workflow.transform_stage.read_staged_transactions",
         lambda _: [],
     )
+    _write_transform_manifest(settings, [])
     monkeypatch.setattr(
         "finance_tooling.workflow.transform_stage.enrich_transactions",
         lambda *_args, **_kwargs: EnrichmentResult(
@@ -755,10 +795,13 @@ def test_run_ingest_creates_staged_backup_run(tmp_path: Path, monkeypatch) -> No
             raw_file_count=0,
             duplicate_raw_file_count=0,
             source_inventory_path=input_dir / "source_inventory.json",
+            all_source_files=[],
+            selected_source_files=[],
             transactions=[],
             validations=[],
             warnings=[],
             files_failed=0,
+            processed_source_files=[],
             parser_selection_diagnostics=[],
             parser_low_confidence_file_count=0,
             hsbc_statement_periods_by_date={},

@@ -190,6 +190,21 @@ Success target for the 2026 validation campaign:
 ### 2026-03-21 - codex
 - Branch: `main`
 - Completed:
+  - Implemented Phase 1 incremental pipeline state with a committed `source_registry.json`, a self-describing `staged_batch_manifest.json`, and default incremental selection for `ingest` and `update`.
+  - Made `transform` consume staged manifest metadata, regenerate reporting from the full merged canonical dataset after incremental runs, and update committed source state only after successful transforms.
+  - Added guarded `--full-refresh` preflight/confirmation flows to `ingest` and `update`, expanded `workflow-status` with committed/drift/full-refresh-risk reporting, and documented the new default behavior in `README.md`.
+- Checks:
+  - `uv run ruff check src/finance_tooling/commands/common.py src/finance_tooling/commands/ingest.py src/finance_tooling/commands/update.py src/finance_tooling/commands/workflow_status.py src/finance_tooling/models.py src/finance_tooling/store.py src/finance_tooling/perf_check.py src/finance_tooling/workflow/incremental_state.py src/finance_tooling/workflow/ingest.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/types.py src/finance_tooling/workflow/update_stage.py src/finance_tooling/workflow_status.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_perf_check.py`: pass
+  - `uv run pytest tests/test_cli_dispatch.py tests/test_command_entrypoints.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_ingest.py tests/test_perf_check.py`: pass
+  - `uv run ty check src/finance_tooling tests`: fail, but only on pre-existing diagnostics in `tests/test_planning_dashboard.py`
+- Open items:
+  - Phase 1 does not yet support targeted date-window reruns; modified/missing historical files and config drift are surfaced as stale conditions that still require a guarded full refresh.
+- Next action:
+  - Run `uv run workflow-status` and a real incremental `uv run update` on the live corpus, then validate that stale-state reporting and source-registry commits behave as expected before designing targeted reruns.
+
+### 2026-03-21 - codex
+- Branch: `main`
+- Completed:
   - Added automatic stage-scoped pipeline backups for `ingest`, `transform`, and `update`, with timestamped run folders, backup manifests, and 10-run FIFO retention.
   - Expanded transform backups to snapshot the current master parquet plus category/project rule and override configs, while ingest snapshots the prior staged parquet only.
   - Surfaced backup run metadata in CLI output and stage summaries, and documented the automatic backup behavior in `README.md`.
@@ -214,17 +229,3 @@ Success target for the 2026 validation campaign:
   - The workflow-status healthcheck is intentionally read-only; it surfaces duplicate-path/raw-vs-processed drift but does not yet offer guided remediation steps or auto-repair.
 - Next action:
   - Run the pipeline once on a real corpus, then validate `workflow-status` and `migrate-transaction-ids` against an actual processed dataset before broadening the hardening pass to stale-config and deletion drift detection.
-
-### 2026-03-19 - codex
-- Branch: `feature/planning-hypothesis-playground`
-- Completed:
-  - Added a shared backup helper and wired `transform` to snapshot `category_rules.yaml` into the sibling `backup/` folder before processing.
-  - Updated `review-import` and `transform` backup handling so both `transaction_overrides.yaml` and `category_rules.yaml` retain only the latest 10 timestamped backups with deterministic FIFO pruning.
-  - Added focused regression coverage for backup creation and retention behavior, and documented the new transform-time backup behavior in `README.md`.
-- Checks:
-  - `uv run pytest tests/test_review_workflow.py tests/test_workflow_stages.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
-  - `uv run ruff check src/finance_tooling/backup.py src/finance_tooling/review_import.py src/finance_tooling/workflow/transform_stage.py tests/test_review_workflow.py tests/test_workflow_stages.py`: pass
-- Open items:
-  - `category_rules.yaml` backups now happen during `transform`, but there is still no equivalent automatic backup for other config artifacts such as `project_rules.yaml`.
-- Next action:
-  - Decide whether the same capped-backup policy should be extended to the other mutable config files used by the pipeline.

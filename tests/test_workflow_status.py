@@ -8,6 +8,13 @@ import pandas as pd
 import pytest
 
 from finance_tooling.config import Settings
+from finance_tooling.source_inventory import build_source_inventory
+from finance_tooling.workflow.incremental_state import (
+    build_incremental_selection_plan,
+    source_registry_path,
+    update_source_registry,
+    write_source_registry,
+)
 from finance_tooling.workflow_status import build_pipeline_state
 
 HAS_PYARROW = importlib.util.find_spec("pyarrow") is not None
@@ -86,3 +93,31 @@ def test_build_pipeline_state_reports_staged_newer_than_transform(tmp_path: Path
 
     findings = payload["findings"]
     assert any(item["code"] == "staged_newer_than_transform" for item in findings)
+
+
+def test_bootstrap_incremental_registry_does_not_report_config_drift(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    source = settings.input_path / "statement.pdf"
+    source.write_bytes(b"content")
+
+    inventory = build_source_inventory([source])
+    selection_plan = build_incremental_selection_plan(
+        settings=settings,
+        run_mode="incremental",
+        current_inventory=inventory,
+        registry=None,
+    )
+    registry = update_source_registry(
+        existing=None,
+        selection_plan=selection_plan,
+        processed_source_files=[source],
+        validations=[],
+        transactions=[],
+    )
+    write_source_registry(source_registry_path(settings), registry)
+
+    payload, _ = build_pipeline_state(settings)
+
+    assert payload["drift_state"]["dataset_stale"] is False
+    assert payload["drift_state"]["full_refresh_risk"] == "low"
+    assert payload["committed_state"]["config_drift_since_last_full_refresh"] is False

@@ -201,7 +201,6 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         manual_category_carry_forward_unmatched_count=(
             enrichment.manual_category_carry_forward_unmatched_count
         ),
-        classification_diagnostics=enrichment.classification_diagnostics,
         warnings=warnings,
         upsert_transactions_fn=upsert_transactions,
         render_dashboard_html_fn=render_dashboard_html,

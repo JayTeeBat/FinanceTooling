@@ -103,3 +103,10 @@ class WorkflowResult:
     categorized_amount_eur_abs_delta: float | None = None
     uncategorized_amount_eur_abs_delta: float | None = None
     backup_run: BackupRunResult | None = None
+    run_mode: str = "incremental"
+    files_selected_for_processing: int = 0
+    files_skipped_already_committed: int = 0
+    files_skipped_modified_existing: int = 0
+    files_missing_since_last_commit: int = 0
+    dataset_stale: bool = False
+    stale_reasons: tuple[str, ...] = ()
