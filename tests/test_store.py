@@ -9,6 +9,7 @@ import pytest
 from finance_tooling.models import Transaction
 from finance_tooling.store import (
     compute_legacy_transaction_id,
+    compute_path_based_transaction_id,
     compute_transaction_id,
     upsert_transactions,
 )
@@ -47,6 +48,25 @@ def test_compute_transaction_id_uses_source_record_index(tmp_path: Path) -> None
 
     assert compute_transaction_id(tx_a) != compute_transaction_id(tx_b)
     assert compute_legacy_transaction_id(tx_a) == compute_legacy_transaction_id(tx_b)
+
+
+def test_compute_transaction_id_uses_source_document_id_over_path(tmp_path: Path) -> None:
+    original_source = tmp_path / "sample.pdf"
+    renamed_source = tmp_path / "renamed.pdf"
+    original_source.write_text("x", encoding="utf-8")
+    renamed_source.write_text("x", encoding="utf-8")
+
+    original = replace(
+        _sample_transaction(original_source),
+        source_document_id="doc-123",
+    )
+    renamed = replace(
+        _sample_transaction(renamed_source),
+        source_document_id="doc-123",
+    )
+
+    assert compute_transaction_id(original) == compute_transaction_id(renamed)
+    assert compute_path_based_transaction_id(original) != compute_path_based_transaction_id(renamed)
 
 
 def test_upsert_transactions_is_idempotent(tmp_path: Path) -> None:
@@ -105,6 +125,32 @@ def test_upsert_transactions_replaces_rows_by_source_file_when_ids_change(tmp_pa
 
     assert second.total_rows == 1
     assert second.new_rows == 1
+    assert second.dataframe.loc[0, "description"] == "Salary payment updated"
+
+
+def test_upsert_transactions_replaces_rows_by_source_document_id_across_path_change(
+    tmp_path: Path,
+) -> None:
+    original_source = tmp_path / "sample.pdf"
+    renamed_source = tmp_path / "renamed.pdf"
+    original_source.write_text("x", encoding="utf-8")
+    renamed_source.write_text("x", encoding="utf-8")
+    parquet_path = tmp_path / "transactions_master.parquet"
+
+    initial = replace(_sample_transaction(original_source), source_document_id="doc-123")
+    first = upsert_transactions(parquet_path, [initial])
+    assert first.total_rows == 1
+
+    renamed = replace(
+        initial,
+        source_file=renamed_source,
+        source_document_id="doc-123",
+        description="Salary payment updated",
+    )
+    second = upsert_transactions(parquet_path, [renamed])
+
+    assert second.total_rows == 1
+    assert second.dataframe.loc[0, "source_file"] == str(renamed_source)
     assert second.dataframe.loc[0, "description"] == "Salary payment updated"
 
 

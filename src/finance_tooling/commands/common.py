@@ -196,10 +196,13 @@ def print_workflow_result(result: WorkflowResult) -> int:
 def print_ingest_result(result: IngestExecutionResult) -> int:
     """Print ingest stage summary and return process exit code."""
     print(f"Scanned files: {result.files_scanned}")
+    print(f"Raw files discovered: {result.raw_files_discovered}")
+    print(f"Ignored duplicate raw files: {result.duplicate_raw_file_count}")
     print(f"Failed files: {result.files_failed}")
     print(f"Staged transactions: {result.transactions_parsed}")
     print(f"Staged parquet: {result.staged_path}")
     print(f"Ingest summary: {result.ingest_summary_path}")
+    print(f"Source inventory: {result.source_inventory_path}")
     print(f"HSBC CSV files scanned: {result.hsbc_csv_files_scanned}")
     print(f"Parser low-confidence files: {result.parser_low_confidence_file_count}")
 

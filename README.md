@@ -30,6 +30,10 @@ categorization.
 
 What it does:
 - Scans statements under `FINANCE_STATEMENTS_PATH`.
+- Builds a content-based source inventory so raw-file renames do not change
+  document identity.
+- Ignores duplicate raw files with identical content and records them in
+  `${FINANCE_PROCESSED_PATH}/source_inventory.json`.
 - Parses and normalizes raw transaction records.
 - Writes staged data to `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`.
 - Writes ingest diagnostics to `${FINANCE_PROCESSED_PATH}/ingest_summary.json`.
@@ -112,6 +116,19 @@ uv run update
 
 This runs `ingest` then `transform` end-to-end.
 
+### Status snapshot
+
+To inspect the current raw/staged/transformed pipeline state:
+
+```bash
+uv run workflow-status
+```
+
+This writes `${FINANCE_PROCESSED_PATH}/pipeline_state.json` and prints a compact
+health summary, including duplicate raw-source detection, staged-vs-transform
+timestamp drift, and whether the current raw corpus still matches the last
+ingested source inventory.
+
 ## Code Map
 
 Main CLI entrypoints live in modules named after the commands:
@@ -191,6 +208,10 @@ repeated same-day same-amount statement rows do not collapse into a single
 canonical transaction during `transform`. This field is persisted in staged and
 canonical outputs for auditability, but it is not shown in the human review
 workbook.
+Transaction identity also now uses a content-based `source_document_id`, so
+renaming or moving an unchanged raw statement file does not produce a different
+canonical transaction ID. The original `source_file` path is still retained for
+audit/debugging, but it is no longer treated as stable identity.
 
 Transaction-level corrections and project tags are configured in:
 
@@ -204,17 +225,26 @@ rules with:
 uv run migrate-category-overrides-to-rules
 ```
 
-If you are upgrading from an older corpus built before `source_record_index`
-was added to transaction identity, rerun `ingest` and then migrate ID-keyed
-manual state with:
+If you are upgrading from an older processed corpus that used path-based
+transaction IDs, do a fresh rebuild from raw statements and then migrate
+ID-keyed manual state with:
 
 ```bash
+uv run update
 uv run migrate-transaction-ids
 ```
 
 That command rewrites uniquely mappable `transaction_overrides` and
-`review_state` entries to the new transaction IDs, and writes sidecar files for
-ambiguous or unmatched rows instead of guessing.
+`review_state` entries to the current transaction IDs, and writes sidecar files
+for ambiguous or unmatched rows instead of guessing.
+
+If you are upgrading from a corpus built before `source_record_index` was added
+to transaction identity, the same command remains the right follow-up after
+rerunning ingest:
+
+```bash
+uv run migrate-transaction-ids
+```
 
 Related docs and diagrams:
 
@@ -346,6 +376,8 @@ mismatches are emitted as warnings and included in run-summary reconciliation me
 - FX history cache (`fx_rates_history.parquet`)
 - Normalized CSV + JSON exports
 - Run summary JSON
+- Source inventory JSON (`source_inventory.json`)
+- Pipeline state JSON (`pipeline_state.json`)
 
 ## Repository Layout
 

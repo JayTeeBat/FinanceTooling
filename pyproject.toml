@@ -31,6 +31,7 @@ metrics-log-update = "finance_tooling.commands.metrics_log_update:main"
 plan-savings = "finance_tooling.commands.plan_savings:main"
 plan-hypothesis-page = "finance_tooling.commands.plan_hypothesis_page:main"
 plan-savings-doe = "finance_tooling.commands.plan_savings_doe:main"
+workflow-status = "finance_tooling.commands.workflow_status:main"
 perf-check = "finance_tooling.perf_check:main"
 
 [dependency-groups]

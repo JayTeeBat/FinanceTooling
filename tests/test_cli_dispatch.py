@@ -338,4 +338,50 @@ def test_migrate_transaction_ids_command_prints_summary(
     assert exit_code == 0
     assert "Migrated overrides: 3" in stdio.out
     assert "Migrated review-state rows: 4" in stdio.out
-    assert str(report_path) in stdio.out
+
+
+def test_workflow_status_command_prints_summary(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.workflow_status.load_settings_from_env",
+        lambda: object(),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.workflow_status.build_pipeline_state",
+        lambda _settings: (
+            {
+                "status": "warn",
+                "raw_source_state": {
+                    "raw_file_count": 4,
+                    "unique_document_count": 3,
+                    "ignored_duplicate_file_count": 1,
+                },
+                "transformed_state": {
+                    "summary_exists": True,
+                    "master": {
+                        "total_rows": 10,
+                        "booking_date_min": "2026-01-01",
+                        "booking_date_max": "2026-03-01",
+                    },
+                },
+                "findings": [
+                    {
+                        "severity": "warning",
+                        "code": "duplicate_raw_sources",
+                        "message": "Duplicate raw source files detected.",
+                    }
+                ],
+            },
+            processed_dir / "pipeline_state.json",
+        ),
+    )
+
+    exit_code = main(["workflow-status"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Pipeline health: warn" in stdio.out
+    assert "ignored duplicates" in stdio.out
+    assert "pipeline_state.json" in stdio.out

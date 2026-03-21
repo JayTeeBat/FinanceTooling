@@ -162,6 +162,7 @@ class SummaryPayload(TypedDict):
     transaction_overrides_path: str
     review_state_path: str
     fx_cache_path: str
+    source_inventory_path: str
     warnings: list[str]
 
 
@@ -170,6 +171,9 @@ class IngestResult:
     """Outputs of statement discovery and parsing ingestion."""
 
     source_files: list[Path]
+    raw_file_count: int
+    duplicate_raw_file_count: int
+    source_inventory_path: Path
     transactions: list[Transaction]
     validations: list[StatementValidation]
     warnings: list[str]

@@ -51,6 +51,22 @@ def compute_legacy_transaction_id(transaction: Transaction) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def compute_path_based_transaction_id(transaction: Transaction) -> str:
+    """Compute the pre-source-document-id transaction id for migration/audits."""
+    key_parts = [
+        transaction.booking_date.isoformat(),
+        _normalize_description(transaction.description),
+        str(transaction.amount_native),
+        transaction.currency.upper(),
+        transaction.bank,
+        transaction.account_label or "",
+        str(transaction.source_file),
+        "" if transaction.source_record_index is None else str(transaction.source_record_index),
+    ]
+    payload = "|".join(key_parts).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def compute_transaction_id(transaction: Transaction) -> str:
     """Compute a stable transaction id used for idempotent upserts."""
     key_parts = [
@@ -60,7 +76,7 @@ def compute_transaction_id(transaction: Transaction) -> str:
         transaction.currency.upper(),
         transaction.bank,
         transaction.account_label or "",
-        str(transaction.source_file),
+        transaction.source_document_id or str(transaction.source_file),
         "" if transaction.source_record_index is None else str(transaction.source_record_index),
     ]
     payload = "|".join(key_parts).encode("utf-8")
@@ -98,6 +114,7 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "reviewed": tx.reviewed,
             "bank": tx.bank,
             "account_label": tx.account_label,
+            "source_document_id": tx.source_document_id,
             "source_file": str(tx.source_file),
             "source_file_mtime": tx.source_file_mtime.isoformat() if tx.source_file_mtime else None,
             "parser": tx.parser,
@@ -149,6 +166,11 @@ def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> 
         incoming_ids = set(incoming_deduped["transaction_id"])
         overlapping_ids = existing_ids & incoming_ids
         new_rows = len(incoming_ids - existing_ids)
+        incoming_source_documents = {
+            str(value).strip()
+            for value in incoming_deduped["source_document_id"].dropna().tolist()
+            if str(value).strip()
+        }
         incoming_source_files = set(incoming_deduped["source_file"])
 
         if overlapping_ids:
@@ -165,7 +187,15 @@ def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> 
                 mask, "transaction_id"
             ].map(existing_ingested_at)
 
-        retained_existing = existing[~existing["source_file"].isin(incoming_source_files)]
+        retained_existing = existing
+        if incoming_source_documents:
+            retained_existing = retained_existing[
+                ~retained_existing["source_document_id"].isin(incoming_source_documents)
+            ]
+        if incoming_source_files:
+            retained_existing = retained_existing[
+                ~retained_existing["source_file"].isin(incoming_source_files)
+            ]
         merged = pd.concat([retained_existing, incoming_deduped], ignore_index=True)
 
     merged = merged.sort_values(by=["booking_date", "transaction_id"]).reset_index(drop=True)

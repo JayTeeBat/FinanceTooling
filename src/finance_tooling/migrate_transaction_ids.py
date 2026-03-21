@@ -13,7 +13,11 @@ import pandas as pd
 from finance_tooling.classify import normalize_description
 from finance_tooling.models import Transaction
 from finance_tooling.review_state import REVIEW_STATE_COLUMNS, load_review_state
-from finance_tooling.store import compute_legacy_transaction_id, compute_transaction_id
+from finance_tooling.store import (
+    compute_legacy_transaction_id,
+    compute_path_based_transaction_id,
+    compute_transaction_id,
+)
 from finance_tooling.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
@@ -106,8 +110,10 @@ def migrate_transaction_ids(
     legacy_to_new: dict[str, list[str]] = {}
     for transaction in staged_transactions:
         legacy_id = compute_legacy_transaction_id(transaction)
+        old_current_id = compute_path_based_transaction_id(transaction)
         new_id = compute_transaction_id(transaction)
         legacy_to_new.setdefault(legacy_id, []).append(new_id)
+        legacy_to_new.setdefault(old_current_id, []).append(new_id)
 
     transaction_store, transaction_warnings = load_transaction_override_store(
         transaction_overrides_path
