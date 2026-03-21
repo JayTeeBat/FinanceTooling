@@ -55,6 +55,9 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
     )
     ingest_result = IngestResult(
         source_files=[tx.source_file],
+        raw_file_count=1,
+        duplicate_raw_file_count=0,
+        source_inventory_path=processed_dir / "source_inventory.json",
         transactions=[tx],
         validations=[],
         warnings=[],

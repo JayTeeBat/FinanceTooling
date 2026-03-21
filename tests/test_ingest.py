@@ -92,6 +92,7 @@ def test_ingest_statements_parallel_prepare_path_collects_parser_timings(
     prepared = ingest_module._PreparedStatement(
         index=0,
         source_file=pdf_path,
+        source_document_id="doc-123",
         first_page_text="dummy first page",
         full_text="dummy text",
         selected_parser_name="dummy",
@@ -107,7 +108,7 @@ def test_ingest_statements_parallel_prepare_path_collects_parser_timings(
     )
     monkeypatch.setattr(
         "finance_tooling.workflow.ingest._prepare_statements_parallel",
-        lambda files, max_workers: [prepared],
+        lambda files, source_document_ids, max_workers: [prepared],
     )
     monkeypatch.setattr(
         "finance_tooling.workflow.ingest._PARSERS_BY_NAME",

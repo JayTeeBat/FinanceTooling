@@ -29,6 +29,7 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "reviewed",
     "bank",
     "account_label",
+    "source_document_id",
     "source_file",
     "source_file_mtime",
     "parser",
@@ -57,6 +58,7 @@ class Transaction:
     project_source: str | None = None
     reviewed: bool = False
     account_label: str | None = None
+    source_document_id: str | None = None
     fx_rate_to_eur: Decimal | None = None
     fx_rate_date: date | None = None
     fx_source: str | None = None

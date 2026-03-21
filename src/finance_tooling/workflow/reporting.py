@@ -358,6 +358,7 @@ def persist_and_report(
         "transaction_overrides_path": str(settings.transaction_overrides_path),
         "review_state_path": str(settings.review_state_path),
         "fx_cache_path": str(settings.fx_cache_path),
+        "source_inventory_path": str(settings.summary_json_path.parent / "source_inventory.json"),
         "warnings": warnings,
     }
     write_json(settings.summary_json_path, summary_payload)

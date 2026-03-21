@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     """Standalone CLI entrypoint for transaction-id migration."""
     parser = argparse.ArgumentParser(
         prog="migrate-transaction-ids",
-        description="Migrate transaction-id keyed manual state after the deduplication fix.",
+        description="Migrate transaction-id keyed manual state after transaction identity changes.",
     )
     configure_parser(parser)
     args = parser.parse_args(argv)

@@ -11,6 +11,12 @@ from finance_tooling.commands import (
     metrics_log_update as metrics_log_update_command,
 )
 from finance_tooling.commands import (
+    migrate_category_overrides_to_rules as migrate_category_overrides_command,
+)
+from finance_tooling.commands import (
+    migrate_transaction_ids as migrate_transaction_ids_command,
+)
+from finance_tooling.commands import (
     plan_hypothesis_page as plan_hypothesis_page_command,
 )
 from finance_tooling.commands import (
@@ -18,12 +24,6 @@ from finance_tooling.commands import (
 )
 from finance_tooling.commands import (
     plan_savings_doe as plan_savings_doe_command,
-)
-from finance_tooling.commands import (
-    migrate_category_overrides_to_rules as migrate_category_overrides_command,
-)
-from finance_tooling.commands import (
-    migrate_transaction_ids as migrate_transaction_ids_command,
 )
 from finance_tooling.commands import (
     review_export as review_export_command,
@@ -36,6 +36,9 @@ from finance_tooling.commands import (
 )
 from finance_tooling.commands import (
     update as update_command,
+)
+from finance_tooling.commands import (
+    workflow_status as workflow_status_command,
 )
 
 
@@ -111,6 +114,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run a scenario sweep over planning assumptions.",
     )
     plan_savings_doe_command.configure_parser(plan_savings_doe_parser)
+
+    workflow_status_parser = subparsers.add_parser(
+        "workflow-status",
+        help="Inspect raw, staged, and transformed pipeline state.",
+    )
+    workflow_status_command.configure_parser(workflow_status_parser)
 
     return parser
 

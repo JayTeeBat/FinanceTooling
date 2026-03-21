@@ -84,8 +84,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
 
     parsed_pdf = input_dir / "parsed_2024.pdf"
     missing_pdf = input_dir / "missing_2025.pdf"
-    parsed_pdf.write_text("fake", encoding="utf-8")
-    missing_pdf.write_text("fake", encoding="utf-8")
+    parsed_pdf.write_text("fake parsed", encoding="utf-8")
+    missing_pdf.write_text("fake missing", encoding="utf-8")
 
     settings = _settings(input_dir)
 

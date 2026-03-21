@@ -31,6 +31,9 @@ class IngestExecutionResult:
     staged_path: Path
     ingest_summary_path: Path
     files_scanned: int
+    raw_files_discovered: int
+    duplicate_raw_file_count: int
+    source_inventory_path: Path
     files_failed: int
     transactions_parsed: int
     hsbc_csv_files_scanned: int
@@ -83,9 +86,12 @@ def run_ingest(settings: Settings) -> IngestExecutionResult:
     ingest_summary_payload: dict[str, object] = {
         "generated_at": date.today().isoformat(),
         "files_scanned": len(ingest.source_files),
+        "raw_files_discovered": ingest.raw_file_count,
+        "duplicate_raw_file_count": ingest.duplicate_raw_file_count,
         "files_failed": ingest.files_failed,
         "transactions_parsed": len(hsbc_merge.transactions),
         "staged_transactions_path": str(staging.path),
+        "source_inventory_path": str(ingest.source_inventory_path),
         "hsbc_csv_files_scanned": ingest.hsbc_csv_files_scanned,
         "parser_low_confidence_file_count": ingest.parser_low_confidence_file_count,
         "warnings": warnings,
@@ -102,6 +108,9 @@ def run_ingest(settings: Settings) -> IngestExecutionResult:
         staged_path=staging.path,
         ingest_summary_path=ingest_summary_path,
         files_scanned=len(ingest.source_files),
+        raw_files_discovered=ingest.raw_file_count,
+        duplicate_raw_file_count=ingest.duplicate_raw_file_count,
+        source_inventory_path=ingest.source_inventory_path,
         files_failed=ingest.files_failed,
         transactions_parsed=len(hsbc_merge.transactions),
         hsbc_csv_files_scanned=ingest.hsbc_csv_files_scanned,

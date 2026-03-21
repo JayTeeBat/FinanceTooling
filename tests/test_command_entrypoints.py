@@ -32,6 +32,9 @@ from finance_tooling.commands import (
 from finance_tooling.commands import (
     update as update_command,
 )
+from finance_tooling.commands import (
+    workflow_status as workflow_status_command,
+)
 
 
 class _CommandModule(Protocol):
@@ -58,6 +61,7 @@ class _CommandModule(Protocol):
             plan_savings_doe_command,
             ["--base-inputs-path", "planning_inputs.yaml", "--doe-inputs-path", "doe.yaml"],
         ),
+        (workflow_status_command, []),
     ],
 )
 def test_command_main_delegates_to_handle(

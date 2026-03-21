@@ -7,7 +7,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 from time import perf_counter
@@ -27,6 +27,11 @@ from finance_tooling.parsers.registry import (
 )
 from finance_tooling.parsers.registry import (
     select_parser_with_diagnostics as default_select_parser_with_diagnostics,
+)
+from finance_tooling.source_inventory import (
+    build_source_inventory,
+    representative_source_files,
+    write_source_inventory,
 )
 from finance_tooling.workflow.ingest_cache import (
     CachedExtractionRow,
@@ -61,6 +66,7 @@ _PARSERS_BY_NAME = {parser.name: parser for parser in PARSERS}
 class _PreparedStatement:
     index: int
     source_file: Path
+    source_document_id: str
     first_page_text: str
     full_text: str
     selected_parser_name: str
@@ -146,6 +152,7 @@ def _prepare_statement(
     index: int,
     pdf_path: Path,
     *,
+    source_document_id: str,
     extract_text_from_pdf: Callable[[Path], ExtractedPdfText],
     select_parser_with_diagnostics: Callable[[Path, str], ParserSelection],
 ) -> _PreparedStatement:
@@ -153,6 +160,7 @@ def _prepare_statement(
     return _prepare_statement_from_extracted(
         index,
         pdf_path,
+        source_document_id=source_document_id,
         extracted_text=extracted_text,
         select_parser_with_diagnostics=select_parser_with_diagnostics,
     )
@@ -162,6 +170,7 @@ def _prepare_statement_from_extracted(
     index: int,
     pdf_path: Path,
     *,
+    source_document_id: str,
     extracted_text: ExtractedPdfText,
     select_parser_with_diagnostics: Callable[[Path, str], ParserSelection],
 ) -> _PreparedStatement:
@@ -187,6 +196,7 @@ def _prepare_statement_from_extracted(
     return _PreparedStatement(
         index=index,
         source_file=pdf_path,
+        source_document_id=source_document_id,
         first_page_text=extracted_text.first_page_text,
         full_text=extracted_text.full_text,
         selected_parser_name=selection.parser.name,
@@ -202,11 +212,16 @@ def _prepare_statement_from_extracted(
     )
 
 
-def _prepare_statement_worker(index: int, pdf_path: Path) -> _PreparedStatement:
+def _prepare_statement_worker(
+    index: int,
+    pdf_path: Path,
+    source_document_id: str,
+) -> _PreparedStatement:
     try:
         return _prepare_statement(
             index,
             pdf_path,
+            source_document_id=source_document_id,
             extract_text_from_pdf=default_extract_text_from_pdf,
             select_parser_with_diagnostics=default_select_parser_with_diagnostics,
         )
@@ -214,6 +229,7 @@ def _prepare_statement_worker(index: int, pdf_path: Path) -> _PreparedStatement:
         return _PreparedStatement(
             index=index,
             source_file=pdf_path,
+            source_document_id=source_document_id,
             first_page_text="",
             full_text="",
             selected_parser_name="",
@@ -233,12 +249,18 @@ def _prepare_statement_worker(index: int, pdf_path: Path) -> _PreparedStatement:
 def _prepare_statements_parallel(
     files: list[Path],
     *,
+    source_document_ids: dict[Path, str],
     max_workers: int,
 ) -> list[_PreparedStatement]:
     prepared: list[_PreparedStatement] = []
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         future_to_meta = {
-            executor.submit(_prepare_statement_worker, index, pdf_path): (index, pdf_path)
+            executor.submit(
+                _prepare_statement_worker,
+                index,
+                pdf_path,
+                source_document_ids[pdf_path],
+            ): (index, pdf_path)
             for index, pdf_path in enumerate(files)
         }
         for future in as_completed(future_to_meta):
@@ -250,6 +272,7 @@ def _prepare_statements_parallel(
                     _PreparedStatement(
                         index=index,
                         source_file=pdf_path,
+                        source_document_id=source_document_ids[pdf_path],
                         first_page_text="",
                         full_text="",
                         selected_parser_name="",
@@ -271,6 +294,7 @@ def _prepare_statements_parallel(
 def _prepare_statements_sequential(
     files: list[Path],
     *,
+    source_document_ids: dict[Path, str],
     extract_text_from_pdf: Callable[[Path], ExtractedPdfText],
     select_parser_with_diagnostics: Callable[[Path, str], ParserSelection],
 ) -> list[_PreparedStatement]:
@@ -281,6 +305,7 @@ def _prepare_statements_sequential(
                 _prepare_statement(
                     index,
                     pdf_path,
+                    source_document_id=source_document_ids[pdf_path],
                     extract_text_from_pdf=extract_text_from_pdf,
                     select_parser_with_diagnostics=select_parser_with_diagnostics,
                 )
@@ -290,6 +315,7 @@ def _prepare_statements_sequential(
                 _PreparedStatement(
                     index=index,
                     source_file=pdf_path,
+                    source_document_id=source_document_ids[pdf_path],
                     first_page_text="",
                     full_text="",
                     selected_parser_name="",
@@ -371,7 +397,23 @@ def ingest_statements(
     text_cache_misses = 0
     text_cache_write_count = 0
 
-    files = discover_statement_pdfs(settings.input_path)
+    discovered_files = discover_statement_pdfs(settings.input_path)
+    source_inventory = build_source_inventory(discovered_files)
+    source_inventory_path = settings.summary_json_path.parent / "source_inventory.json"
+    write_source_inventory(source_inventory_path, source_inventory)
+    files = representative_source_files(source_inventory)
+    source_document_ids = {
+        Path(entry.source_file): entry.source_document_id
+        for entry in source_inventory.entries
+        if entry.is_representative
+    }
+    duplicate_groups = source_inventory.ignored_duplicate_file_count
+    if duplicate_groups > 0:
+        warnings.append(
+            "Duplicate raw source files detected and ignored: "
+            f"{duplicate_groups} duplicate file(s) across "
+            f"{source_inventory.raw_file_count} discovered file(s)"
+        )
     prepared_cache_hits: list[_PreparedStatement] = []
     cache_write_rows: list[CachedExtractionRow] = []
     files_for_prepare = files
@@ -399,6 +441,7 @@ def ingest_statements(
                     _prepare_statement_from_extracted(
                         index,
                         pdf_path,
+                        source_document_id=source_document_ids[pdf_path],
                         extracted_text=cached,
                         select_parser_with_diagnostics=select_parser_with_diagnostics,
                     )
@@ -417,11 +460,13 @@ def ingest_statements(
     ):
         prepared_files = _prepare_statements_parallel(
             files_for_prepare,
+            source_document_ids=source_document_ids,
             max_workers=settings.ingest_workers,
         )
     else:
         prepared_files = _prepare_statements_sequential(
             files_for_prepare,
+            source_document_ids=source_document_ids,
             extract_text_from_pdf=extract_text_from_pdf,
             select_parser_with_diagnostics=select_parser_with_diagnostics,
         )
@@ -495,7 +540,10 @@ def ingest_statements(
             parser_duration_seconds_by_parser[parser.name] += parser_duration
             duration_seconds_by_bank[parser.bank] += parser_duration
 
-            extracted.extend(output.transactions)
+            extracted.extend(
+                replace(transaction, source_document_id=prepared.source_document_id)
+                for transaction in output.transactions
+            )
             warnings.extend(output.warnings)
             if output.validation is not None:
                 validations.append(output.validation)
@@ -624,6 +672,9 @@ def ingest_statements(
 
     return IngestResult(
         source_files=files,
+        raw_file_count=source_inventory.raw_file_count,
+        duplicate_raw_file_count=source_inventory.ignored_duplicate_file_count,
+        source_inventory_path=source_inventory_path,
         transactions=extracted,
         validations=validations,
         warnings=warnings,
