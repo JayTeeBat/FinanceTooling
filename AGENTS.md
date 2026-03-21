@@ -190,6 +190,20 @@ Success target for the 2026 validation campaign:
 ### 2026-03-21 - codex
 - Branch: `main`
 - Completed:
+  - Added automatic stage-scoped pipeline backups for `ingest`, `transform`, and `update`, with timestamped run folders, backup manifests, and 10-run FIFO retention.
+  - Expanded transform backups to snapshot the current master parquet plus category/project rule and override configs, while ingest snapshots the prior staged parquet only.
+  - Surfaced backup run metadata in CLI output and stage summaries, and documented the automatic backup behavior in `README.md`.
+- Checks:
+  - `uv run pytest tests/test_backup.py tests/test_workflow_stages.py tests/test_cli_dispatch.py`: pass
+  - `uv run ruff format src/finance_tooling/backup.py src/finance_tooling/models.py src/finance_tooling/workflow/types.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py src/finance_tooling/commands/common.py tests/test_backup.py tests/test_workflow_stages.py tests/test_cli_dispatch.py`: pass
+- Open items:
+  - The automatic pipeline backup flow is stage-scoped, but non-pipeline commands such as `review-import` still use the older per-file backup helper and have not been unified onto run-folder manifests.
+- Next action:
+  - Run the broader lint/type/test gates and decide whether the remaining non-pipeline backup commands should migrate onto the same run-based backup subsystem.
+
+### 2026-03-21 - codex
+- Branch: `main`
+- Completed:
   - Hardened raw source identity by introducing content-based `source_document_id`, duplicate raw-file detection/ignoring, and source-inventory persistence during ingest.
   - Added `workflow-status` plus `pipeline_state.json` to inspect raw, staged, and transformed pipeline state, including duplicate-source and staged-vs-transform drift warnings.
   - Extended transaction-id migration coverage so rebuilt corpora can remap old path-based manual-state IDs onto the new source-document-based identity scheme, and documented the new behavior in `README.md`.
@@ -214,18 +228,3 @@ Success target for the 2026 validation campaign:
   - `category_rules.yaml` backups now happen during `transform`, but there is still no equivalent automatic backup for other config artifacts such as `project_rules.yaml`.
 - Next action:
   - Decide whether the same capped-backup policy should be extended to the other mutable config files used by the pipeline.
-
-### 2026-03-16 - codex
-- Branch: `feature/planning-hypothesis-playground`
-- Completed:
-  - Expanded the live planning hypothesis playground to support spouse-specific dates of birth, retirement ages, and projected pensions.
-  - Added adjustable current investable net worth, total net worth, home value, mortgage balance, mortgage rate, mortgage payment, and mortgage years remaining.
-  - Added retirement-date projections for investable net worth, mortgage balance, home value, home equity, and total net worth, then regenerated `planning/household_finance_360/15_hypothesis_playground.html`.
-- Checks:
-  - `uv run pytest tests/test_planning_dashboard.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py`: pass
-  - `uv run ruff check src/finance_tooling/planning_dashboard.py tests/test_planning_dashboard.py`: pass
-  - `uv run ty check src/finance_tooling tests`: not run
-- Open items:
-  - The playground now projects housing and net worth trajectories, but it still does not persist edited scenarios back into config files.
-- Next action:
-  - Open the refreshed hypothesis playground and decide whether scenario persistence/export should be the next enhancement.

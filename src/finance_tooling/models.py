@@ -7,6 +7,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from finance_tooling.backup import BackupRunResult
+
 CANONICAL_TRANSACTION_COLUMNS = [
     "transaction_id",
     "booking_date",
@@ -100,3 +102,4 @@ class WorkflowResult:
     uncategorized_count_delta: int | None = None
     categorized_amount_eur_abs_delta: float | None = None
     uncategorized_amount_eur_abs_delta: float | None = None
+    backup_run: BackupRunResult | None = None

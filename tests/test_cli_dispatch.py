@@ -5,8 +5,11 @@ from types import SimpleNamespace
 from typing import Any
 
 from finance_tooling.__main__ import main
+from finance_tooling.backup import BackupRunResult
+from finance_tooling.models import WorkflowResult
 from finance_tooling.review_import import ReviewImportResult
 from finance_tooling.transaction_overrides import TransactionOverrideStore
+from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 
 
 def test_main_without_subcommand_prints_help(capsys) -> None:
@@ -385,3 +388,121 @@ def test_workflow_status_command_prints_summary(monkeypatch, tmp_path: Path, cap
     assert "Pipeline health: warn" in stdio.out
     assert "ignored duplicates" in stdio.out
     assert "pipeline_state.json" in stdio.out
+
+
+def test_ingest_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    backup_run = BackupRunResult(
+        run_id="20260321T101530000000Z",
+        stage="ingest",
+        command="ingest",
+        created_at="2026-03-21T10:15:30+00:00",
+        processed_backup_dir=processed_dir / "backup" / "ingest" / "20260321T101530000000Z",
+        config_backup_dir=None,
+        manifest_paths=(),
+        copied_files=(),
+        skipped_missing_files=(),
+        pruned_run_ids=(),
+    )
+
+    monkeypatch.setattr("finance_tooling.commands.ingest.load_settings_from_env", lambda: object())
+    monkeypatch.setattr(
+        "finance_tooling.commands.ingest.run_ingest",
+        lambda _settings: IngestExecutionResult(
+            staged_path=processed_dir / "staged_transactions.parquet",
+            ingest_summary_path=processed_dir / "ingest_summary.json",
+            files_scanned=0,
+            raw_files_discovered=0,
+            duplicate_raw_file_count=0,
+            source_inventory_path=processed_dir / "source_inventory.json",
+            files_failed=0,
+            transactions_parsed=0,
+            hsbc_csv_files_scanned=0,
+            parser_low_confidence_file_count=0,
+            warnings=(),
+            source_files=(),
+            validations=(),
+            parser_selection_diagnostics=(),
+            hsbc_merge_metrics={},
+            hsbc_period_parse_variant_match_count=0,
+            hsbc_boundary_metrics={},
+            hsbc_boundary_diagnostics=(),
+            hsbc_sign_metrics={},
+            hsbc_sign_diagnostics=(),
+            hsbc_selection_diagnostics=(),
+            ingest_parser_duration_seconds_by_parser={},
+            ingest_duration_seconds_by_bank={},
+            ingest_text_cache_enabled=False,
+            ingest_text_cache_hits=0,
+            ingest_text_cache_misses=0,
+            ingest_text_cache_write_count=0,
+            backup_run=backup_run,
+        ),
+    )
+
+    exit_code = main(["ingest"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "Backup run: 20260321T101530000000Z" in stdio.out
+    assert str(backup_run.processed_backup_dir) in stdio.out
+
+
+def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    config_dir = tmp_path / "config"
+    backup_run = BackupRunResult(
+        run_id="20260321T101530000000Z",
+        stage="transform",
+        command="transform",
+        created_at="2026-03-21T10:15:30+00:00",
+        processed_backup_dir=processed_dir / "backup" / "transform" / "20260321T101530000000Z",
+        config_backup_dir=config_dir / "backup" / "transform" / "20260321T101530000000Z",
+        manifest_paths=(),
+        copied_files=(),
+        skipped_missing_files=(),
+        pruned_run_ids=(),
+    )
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.transform.load_settings_from_env", lambda: object()
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.transform.run_transform",
+        lambda _settings, staged_path=None: WorkflowResult(
+            dashboard_path=processed_dir / "finance_dashboard.html",
+            parquet_path=processed_dir / "transactions_master.parquet",
+            csv_path=processed_dir / "transactions_normalized.csv",
+            json_path=processed_dir / "transactions_normalized.json",
+            summary_path=processed_dir / "run_summary.json",
+            completeness_path=processed_dir / "completeness_report.json",
+            files_scanned=1,
+            files_failed=0,
+            transactions_parsed=1,
+            new_rows=1,
+            total_rows=1,
+            completeness_status="pass",
+            completeness_coverage_ratio=1.0,
+            missing_source_file_count=0,
+            reconciliation_checkable_file_count=0,
+            reconciliation_fail_count=0,
+            reconciliation_uncheckable_file_count=0,
+            reconciliation_pass_ratio=None,
+            categorized_count=1,
+            uncategorized_count=0,
+            categorized_amount_eur_abs=1.0,
+            uncategorized_amount_eur_abs=0.0,
+            categorized_amount_eur_abs_ratio=1.0,
+            uncategorized_amount_eur_abs_ratio=0.0,
+            backup_run=backup_run,
+        ),
+    )
+
+    exit_code = main(["transform"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Backup run: 20260321T101530000000Z" in stdio.out
+    assert str(backup_run.config_backup_dir) in stdio.out

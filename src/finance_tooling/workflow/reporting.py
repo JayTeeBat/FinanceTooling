@@ -11,6 +11,7 @@ from typing import cast
 
 from pandas import DataFrame
 
+from finance_tooling.backup import BackupRunResult
 from finance_tooling.classify import ClassificationDiagnostics
 from finance_tooling.completeness import build_completeness_report
 from finance_tooling.config import Settings
@@ -100,6 +101,7 @@ def persist_and_report(
     manual_category_carry_forward_unmatched_count: int,
     classification_diagnostics: ClassificationDiagnostics,
     warnings: list[str],
+    backup_run: BackupRunResult | None = None,
     upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
     render_dashboard_html_fn: Callable[..., Path] = render_dashboard_html,
 ) -> tuple[WorkflowResult, SummaryPayload]:
@@ -232,9 +234,7 @@ def persist_and_report(
         (categorized_amount_eur_abs / total_amount_eur_abs) if total_amount_eur_abs > 0 else 0.0
     )
     uncategorized_amount_eur_abs_ratio = (
-        (uncategorized_amount_eur_abs / total_amount_eur_abs)
-        if total_amount_eur_abs > 0
-        else 0.0
+        (uncategorized_amount_eur_abs / total_amount_eur_abs) if total_amount_eur_abs > 0 else 0.0
     )
 
     summary_payload: SummaryPayload = {
@@ -359,6 +359,25 @@ def persist_and_report(
         "review_state_path": str(settings.review_state_path),
         "fx_cache_path": str(settings.fx_cache_path),
         "source_inventory_path": str(settings.summary_json_path.parent / "source_inventory.json"),
+        "backup_run_id": backup_run.run_id if backup_run is not None else None,
+        "backup_processed_dir": (
+            str(backup_run.processed_backup_dir)
+            if backup_run is not None and backup_run.processed_backup_dir is not None
+            else None
+        ),
+        "backup_config_dir": (
+            str(backup_run.config_backup_dir)
+            if backup_run is not None and backup_run.config_backup_dir is not None
+            else None
+        ),
+        "backup_manifest_paths": (
+            [str(path) for path in backup_run.manifest_paths] if backup_run is not None else []
+        ),
+        "backup_copied_file_count": len(backup_run.copied_files) if backup_run is not None else 0,
+        "backup_missing_file_count": (
+            len(backup_run.skipped_missing_files) if backup_run is not None else 0
+        ),
+        "backup_pruned_run_ids": list(backup_run.pruned_run_ids) if backup_run is not None else [],
         "warnings": warnings,
     }
     write_json(settings.summary_json_path, summary_payload)
@@ -389,6 +408,7 @@ def persist_and_report(
         categorized_amount_eur_abs_ratio=round(categorized_amount_eur_abs_ratio, 4),
         uncategorized_amount_eur_abs_ratio=round(uncategorized_amount_eur_abs_ratio, 4),
         warnings=tuple(warnings),
+        backup_run=backup_run,
     )
 
     return result, summary_payload

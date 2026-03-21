@@ -35,6 +35,9 @@ What it does:
 - Ignores duplicate raw files with identical content and records them in
   `${FINANCE_PROCESSED_PATH}/source_inventory.json`.
 - Parses and normalizes raw transaction records.
+- Creates a pre-run backup snapshot of the current staged parquet under
+  `${FINANCE_PROCESSED_PATH}/backup/ingest/<run_id>/` and keeps the latest 10
+  ingest runs.
 - Writes staged data to `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`.
 - Writes ingest diagnostics to `${FINANCE_PROCESSED_PATH}/ingest_summary.json`.
 
@@ -90,6 +93,10 @@ What it does:
 - Carries forward prior manual category/subcategory (`transaction_override`)
   when parser cleanup changes transaction descriptions but the same transaction can be
   matched deterministically.
+- Creates a pre-run backup snapshot of the current master parquet under
+  `${FINANCE_PROCESSED_PATH}/backup/transform/<run_id>/` and the current
+  categorization/project configs under `${FINANCE_STATEMENTS_PATH}/../config/backup/transform/<run_id>/`.
+  The latest 10 transform runs are retained.
 - Writes canonical outputs (`transactions_master.parquet`,
   `transactions_normalized.csv/json`, `run_summary.json`, dashboard).
 - Projects persisted `reviewed` state into canonical outputs so review progress
@@ -115,6 +122,8 @@ uv run update
 ```
 
 This runs `ingest` then `transform` end-to-end.
+It also takes the same stage-scoped backups before each stage, so a full
+`update` run creates one ingest backup run and one transform backup run.
 
 ### Status snapshot
 
@@ -378,6 +387,8 @@ mismatches are emitted as warnings and included in run-summary reconciliation me
 - Run summary JSON
 - Source inventory JSON (`source_inventory.json`)
 - Pipeline state JSON (`pipeline_state.json`)
+- Automatic backup run folders under `processed/backup/ingest`,
+  `processed/backup/transform`, and `config/backup/transform`
 
 ## Repository Layout
 

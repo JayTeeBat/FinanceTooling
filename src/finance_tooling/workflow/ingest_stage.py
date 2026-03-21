@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from finance_tooling.backup import BackupRunResult, create_stage_backup_run
 from finance_tooling.config import Settings
 from finance_tooling.extract import extract_text_from_pdf
 from finance_tooling.parsers import select_parser_with_diagnostics
@@ -55,6 +56,7 @@ class IngestExecutionResult:
     ingest_text_cache_hits: int
     ingest_text_cache_misses: int
     ingest_text_cache_write_count: int
+    backup_run: BackupRunResult | None = None
 
 
 def parse_hsbc_statement_period_compat(full_text: str) -> tuple[date, date] | None:
@@ -62,8 +64,18 @@ def parse_hsbc_statement_period_compat(full_text: str) -> tuple[date, date] | No
     return parse_hsbc_statement_period(full_text)
 
 
-def run_ingest(settings: Settings) -> IngestExecutionResult:
+def run_ingest(
+    settings: Settings,
+    *,
+    backup_command: str = "ingest",
+) -> IngestExecutionResult:
     """Execute ingest stage and write staged transaction artifacts."""
+    backup_run = create_stage_backup_run(
+        stage="ingest",
+        command=backup_command,
+        processed_dir=settings.summary_json_path.parent,
+        processed_targets=(settings.staged_transactions_path,),
+    )
     ingest = ingest_workflow_stage(
         settings,
         discover_statement_pdfs=discover_statement_pdfs,
@@ -94,6 +106,17 @@ def run_ingest(settings: Settings) -> IngestExecutionResult:
         "source_inventory_path": str(ingest.source_inventory_path),
         "hsbc_csv_files_scanned": ingest.hsbc_csv_files_scanned,
         "parser_low_confidence_file_count": ingest.parser_low_confidence_file_count,
+        "backup_run_id": backup_run.run_id,
+        "backup_processed_dir": (
+            str(backup_run.processed_backup_dir) if backup_run.processed_backup_dir else None
+        ),
+        "backup_config_dir": str(backup_run.config_backup_dir)
+        if backup_run.config_backup_dir
+        else None,
+        "backup_manifest_paths": [str(path) for path in backup_run.manifest_paths],
+        "backup_copied_file_count": len(backup_run.copied_files),
+        "backup_missing_file_count": len(backup_run.skipped_missing_files),
+        "backup_pruned_run_ids": list(backup_run.pruned_run_ids),
         "warnings": warnings,
         "ingest_parser_duration_seconds_by_parser": ingest.parser_duration_seconds_by_parser,
         "ingest_duration_seconds_by_bank": ingest.duration_seconds_by_bank,
@@ -132,4 +155,5 @@ def run_ingest(settings: Settings) -> IngestExecutionResult:
         ingest_text_cache_hits=ingest.text_cache_hits,
         ingest_text_cache_misses=ingest.text_cache_misses,
         ingest_text_cache_write_count=ingest.text_cache_write_count,
+        backup_run=backup_run,
     )
