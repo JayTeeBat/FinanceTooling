@@ -175,6 +175,7 @@ def apply_review_state(transactions: list[Transaction], path: Path) -> list[Tran
                 project_source=transaction.project_source,
                 reviewed=bool(reviewed_by_id.get(transaction_id, transaction.reviewed)),
                 account_label=transaction.account_label,
+                source_document_id=transaction.source_document_id,
                 fx_rate_to_eur=transaction.fx_rate_to_eur,
                 fx_rate_date=transaction.fx_rate_date,
                 fx_source=transaction.fx_source,
