@@ -2,26 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
-from collections import defaultdict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+import pandas as pd
 from pandas import DataFrame
 
 from finance_tooling.backup import BackupRunResult
-from finance_tooling.classify import ClassificationDiagnostics, build_classification_diagnostics
-from finance_tooling.completeness import build_completeness_report
+from finance_tooling.classify import ClassificationDiagnostics, normalize_description
+from finance_tooling.completeness import build_completeness_report_from_dataframe
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.store import (
     UpsertResult,
-    compute_legacy_transaction_id,
-    transactions_from_dataframe,
     upsert_transactions,
 )
 from finance_tooling.workflow.types import (
@@ -40,38 +39,290 @@ def write_json(path: Path, payload: dict[str, object] | SummaryPayload) -> None:
 
 
 def _write_legacy_identity_collision_candidates(
-    transactions: list[Transaction],
+    dataframe: DataFrame,
     output_path: Path,
 ) -> tuple[int, int]:
-    grouped: dict[str, list[Transaction]] = defaultdict(list)
-    for transaction in transactions:
-        grouped[compute_legacy_transaction_id(transaction)].append(transaction)
+    if dataframe.empty:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        DataFrame().to_csv(output_path, index=False)
+        return 0, 0
 
-    rows: list[dict[str, object]] = []
-    for legacy_id, collisions in grouped.items():
-        if len(collisions) <= 1:
-            continue
-        for group_row_number, transaction in enumerate(collisions, start=1):
-            rows.append(
-                {
-                    "legacy_transaction_id": legacy_id,
-                    "collision_group_size": len(collisions),
-                    "group_row_number": group_row_number,
-                    "booking_date": transaction.booking_date.isoformat(),
-                    "description": transaction.description,
-                    "source_record_index": transaction.source_record_index,
-                    "amount_native": float(transaction.amount_native),
-                    "currency": transaction.currency,
-                    "bank": transaction.bank,
-                    "account_label": transaction.account_label,
-                    "source_file": str(transaction.source_file),
-                    "parser": transaction.parser,
-                }
-            )
+    working = dataframe.reindex(
+        columns=[
+            "booking_date",
+            "description",
+            "source_record_index",
+            "amount_native",
+            "currency",
+            "bank",
+            "account_label",
+            "source_file",
+            "parser",
+        ]
+    ).copy()
+    descriptions = working["description"].astype("string").fillna("")
+    working["legacy_transaction_id"] = (
+        working["booking_date"].astype("string").fillna("")
+        + "|"
+        + descriptions.map(lambda value: normalize_description(str(value)))
+        + "|"
+        + working["amount_native"].astype("string").fillna("")
+        + "|"
+        + working["currency"].astype("string").str.upper().fillna("")
+        + "|"
+        + working["bank"].astype("string").fillna("")
+        + "|"
+        + working["account_label"].astype("string").fillna("")
+        + "|"
+        + working["source_file"].astype("string").fillna("")
+    ).map(lambda payload: hashlib.sha256(payload.encode("utf-8")).hexdigest())
+
+    collision_sizes = (
+        working.groupby("legacy_transaction_id")["legacy_transaction_id"].transform("size")
+    )
+    collision_rows = working.loc[collision_sizes > 1].copy()
+    if collision_rows.empty:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        DataFrame().to_csv(output_path, index=False)
+        return 0, 0
+
+    collision_rows["collision_group_size"] = collision_sizes.loc[collision_rows.index]
+    collision_rows["group_row_number"] = (
+        collision_rows.groupby("legacy_transaction_id").cumcount() + 1
+    )
+    rows = collision_rows.loc[
+        :,
+        [
+            "legacy_transaction_id",
+            "collision_group_size",
+            "group_row_number",
+            "booking_date",
+            "description",
+            "source_record_index",
+            "amount_native",
+            "currency",
+            "bank",
+            "account_label",
+            "source_file",
+            "parser",
+        ],
+    ]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    DataFrame(rows).to_csv(output_path, index=False)
-    return len({row["legacy_transaction_id"] for row in rows}), len(rows)
+    rows.to_csv(output_path, index=False)
+    return rows["legacy_transaction_id"].nunique(), len(rows)
+
+
+def _build_classification_diagnostics_from_dataframe(
+    dataframe: DataFrame,
+) -> ClassificationDiagnostics:
+    if dataframe.empty:
+        return ClassificationDiagnostics(
+            categorized_count=0,
+            uncategorized_count=0,
+            uncategorized_ratio=0.0,
+            category_source_counts={},
+            top_uncategorized_descriptions=[],
+            top_rules_by_hits=[],
+        )
+
+    category_series = (
+        dataframe.get("category", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+    )
+    category_source_series = (
+        dataframe.get("category_source", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+    )
+    effective_category_source_series = category_source_series.mask(
+        category_source_series.eq("")
+        & category_series.str.strip().ne("")
+        & category_series.str.strip().str.casefold().ne("uncategorized"),
+        "rule",
+    )
+    category_source_counts = {
+        str(index): int(value)
+        for index, value in effective_category_source_series.replace("", "unknown")
+        .value_counts()
+        .items()
+    }
+    uncategorized_mask = category_series.str.strip().str.casefold().eq("uncategorized") | (
+        effective_category_source_series.str.casefold().eq("uncategorized")
+    )
+    uncategorized_count = int(uncategorized_mask.sum())
+    categorized_count = int(len(dataframe) - uncategorized_count)
+    uncategorized_ratio = (uncategorized_count / len(dataframe)) if len(dataframe) else 0.0
+
+    uncategorized_descriptions: dict[str, int] = {}
+    if uncategorized_count > 0 and "description" in dataframe.columns:
+        normalized_descriptions = (
+            dataframe.loc[uncategorized_mask, "description"]
+            .astype("string")
+            .fillna("")
+            .map(lambda value: normalize_description(str(value)) or "unknown")
+            .value_counts()
+        )
+        uncategorized_descriptions = {
+            str(index): int(value) for index, value in normalized_descriptions.items()
+        }
+    top_uncategorized = [
+        {"description": description, "count": count}
+        for description, count in sorted(
+            uncategorized_descriptions.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:10]
+    ]
+
+    top_rules: list[dict[str, object]] = []
+    if "category_rule_id" in dataframe.columns:
+        rule_hits = (
+            dataframe["category_rule_id"]
+            .dropna()
+            .astype("string")
+            .str.strip()
+            .replace("", pd.NA)
+            .dropna()
+            .value_counts()
+        )
+        top_rules = [
+            {"rule_id": str(rule_id), "count": int(count)}
+            for rule_id, count in sorted(
+                ((str(index), int(value)) for index, value in rule_hits.items()),
+                key=lambda item: (-item[1], item[0]),
+            )[:10]
+        ]
+
+    return ClassificationDiagnostics(
+        categorized_count=categorized_count,
+        uncategorized_count=uncategorized_count,
+        uncategorized_ratio=uncategorized_ratio,
+        category_source_counts=category_source_counts,
+        top_uncategorized_descriptions=top_uncategorized,
+        top_rules_by_hits=top_rules,
+    )
+
+
+def _build_category_metrics_from_dataframe(
+    dataframe: DataFrame,
+) -> tuple[list[dict[str, object]], float, float, int]:
+    if dataframe.empty:
+        return [], 0.0, 0.0, 0
+
+    bank_series = (
+        dataframe.get("bank", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+    )
+    bank_series = bank_series.replace("", "UNKNOWN")
+    category_series = (
+        dataframe.get("category", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+    )
+    category_source_series = (
+        dataframe.get("category_source", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+    )
+    reviewed_series = (
+        dataframe.get("reviewed", pd.Series(False, index=dataframe.index))
+        .fillna(False)
+        .astype(bool)
+    )
+    amount_series = pd.to_numeric(
+        dataframe.get("amount_eur", pd.Series(0.0, index=dataframe.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    absolute_amount_series = amount_series.abs()
+    uncategorized_mask = category_series.str.casefold().eq("uncategorized") | (
+        category_source_series.str.casefold().eq("uncategorized")
+    )
+
+    metrics_frame = pd.DataFrame(
+        {
+            "bank": bank_series,
+            "reviewed": reviewed_series,
+            "uncategorized": uncategorized_mask,
+            "absolute_amount_eur": absolute_amount_series,
+        },
+        index=dataframe.index,
+    )
+    metrics_frame["categorized"] = ~metrics_frame["uncategorized"]
+    metrics_frame["categorized_amount_eur_abs"] = metrics_frame["absolute_amount_eur"].where(
+        metrics_frame["categorized"], 0.0
+    )
+    metrics_frame["uncategorized_amount_eur_abs"] = metrics_frame["absolute_amount_eur"].where(
+        metrics_frame["uncategorized"], 0.0
+    )
+
+    grouped = metrics_frame.groupby("bank", sort=True).agg(
+        transactions_count=("bank", "size"),
+        categorized_count=("categorized", "sum"),
+        uncategorized_count=("uncategorized", "sum"),
+        reviewed_count=("reviewed", "sum"),
+        categorized_amount_eur_abs=("categorized_amount_eur_abs", "sum"),
+        uncategorized_amount_eur_abs=("uncategorized_amount_eur_abs", "sum"),
+    )
+
+    category_metrics_by_bank: list[dict[str, object]] = []
+    for bank, row in grouped.iterrows():
+        transactions_count = int(row["transactions_count"])
+        categorized_count = int(row["categorized_count"])
+        uncategorized_count = int(row["uncategorized_count"])
+        reviewed_count = int(row["reviewed_count"])
+        categorized_amount_eur_abs = float(row["categorized_amount_eur_abs"])
+        uncategorized_amount_eur_abs = float(row["uncategorized_amount_eur_abs"])
+        total_bank_amount = categorized_amount_eur_abs + uncategorized_amount_eur_abs
+        category_metrics_by_bank.append(
+            {
+                "bank": str(bank),
+                "transactions_count": transactions_count,
+                "categorized_count": categorized_count,
+                "uncategorized_count": uncategorized_count,
+                "categorized_amount_eur_abs": round(categorized_amount_eur_abs, 4),
+                "uncategorized_amount_eur_abs": round(uncategorized_amount_eur_abs, 4),
+                "reviewed_count": reviewed_count,
+                "categorized_pct": round(
+                    (categorized_count / transactions_count) * 100.0 if transactions_count else 0.0,
+                    4,
+                ),
+                "uncategorized_pct": round(
+                    (uncategorized_count / transactions_count) * 100.0
+                    if transactions_count
+                    else 0.0,
+                    4,
+                ),
+                "categorized_amount_eur_abs_ratio": round(
+                    (categorized_amount_eur_abs / total_bank_amount) * 100.0
+                    if total_bank_amount
+                    else 0.0,
+                    4,
+                ),
+                "uncategorized_amount_eur_abs_ratio": round(
+                    (uncategorized_amount_eur_abs / total_bank_amount) * 100.0
+                    if total_bank_amount
+                    else 0.0,
+                    4,
+                ),
+                "reviewed_pct": round(
+                    (reviewed_count / transactions_count) * 100.0 if transactions_count else 0.0,
+                    4,
+                ),
+            }
+        )
+
+    return (
+        category_metrics_by_bank,
+        float(metrics_frame["categorized_amount_eur_abs"].sum()),
+        float(metrics_frame["uncategorized_amount_eur_abs"].sum()),
+        int(metrics_frame["reviewed"].sum()),
+    )
 
 
 def persist_and_report(
@@ -114,13 +365,13 @@ def persist_and_report(
 ) -> tuple[WorkflowResult, SummaryPayload]:
     """Persist artifacts and return final workflow result plus summary payload."""
     upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
-    full_transactions = transactions_from_dataframe(upsert.dataframe)
-    classification_diagnostics: ClassificationDiagnostics = build_classification_diagnostics(
-        full_transactions
+    dataframe: DataFrame = upsert.dataframe
+    classification_diagnostics: ClassificationDiagnostics = (
+        _build_classification_diagnostics_from_dataframe(dataframe)
     )
-    completeness_report = build_completeness_report(
+    completeness_report = build_completeness_report_from_dataframe(
         source_files,
-        full_transactions,
+        dataframe,
         validations=validations,
     )
     completeness_status = cast(str, completeness_report["status"])
@@ -148,7 +399,6 @@ def persist_and_report(
 
     settings.export_csv_path.parent.mkdir(parents=True, exist_ok=True)
     settings.export_json_path.parent.mkdir(parents=True, exist_ok=True)
-    dataframe: DataFrame = upsert.dataframe
     dataframe.to_csv(settings.export_csv_path, index=False)
     dataframe.to_json(settings.export_json_path, orient="records", indent=2)
 
@@ -166,80 +416,17 @@ def persist_and_report(
         settings.summary_json_path.parent / "legacy_identity_collision_candidates.csv"
     )
     legacy_identity_collision_group_count, legacy_identity_collision_row_count = (
-        _write_legacy_identity_collision_candidates(full_transactions, collision_candidates_path)
+        _write_legacy_identity_collision_candidates(dataframe, collision_candidates_path)
     )
 
-    category_metrics_by_bank_counters: dict[str, dict[str, int]] = defaultdict(
-        lambda: {
-            "transactions_count": 0,
-            "categorized_count": 0,
-            "uncategorized_count": 0,
-            "reviewed_count": 0,
-            "categorized_amount_eur_abs": 0.0,
-            "uncategorized_amount_eur_abs": 0.0,
-        }
-    )
-    categorized_amount_eur_abs = 0.0
-    uncategorized_amount_eur_abs = 0.0
-    for tx in full_transactions:
-        bank = tx.bank.strip() if tx.bank.strip() else "UNKNOWN"
-        counters = category_metrics_by_bank_counters[bank]
-        counters["transactions_count"] += 1
-        if tx.reviewed:
-            counters["reviewed_count"] += 1
-        is_uncategorized = tx.category.strip().lower() == "uncategorized" or (
-            (tx.category_source or "").strip().lower() == "uncategorized"
-        )
-        absolute_amount_eur = abs(float(tx.amount_eur)) if tx.amount_eur is not None else 0.0
-        if is_uncategorized:
-            counters["uncategorized_count"] += 1
-            counters["uncategorized_amount_eur_abs"] += absolute_amount_eur
-            uncategorized_amount_eur_abs += absolute_amount_eur
-        else:
-            counters["categorized_count"] += 1
-            counters["categorized_amount_eur_abs"] += absolute_amount_eur
-            categorized_amount_eur_abs += absolute_amount_eur
-
-    category_metrics_by_bank = []
+    (
+        category_metrics_by_bank,
+        categorized_amount_eur_abs,
+        uncategorized_amount_eur_abs,
+        reviewed_count,
+    ) = _build_category_metrics_from_dataframe(dataframe)
     total_amount_eur_abs = categorized_amount_eur_abs + uncategorized_amount_eur_abs
-    for bank in sorted(category_metrics_by_bank_counters):
-        counters = category_metrics_by_bank_counters[bank]
-        total = counters["transactions_count"]
-        categorized_pct = (counters["categorized_count"] / total) * 100.0 if total > 0 else 0.0
-        uncategorized_pct = (counters["uncategorized_count"] / total) * 100.0 if total > 0 else 0.0
-        reviewed_pct = (counters["reviewed_count"] / total) * 100.0 if total > 0 else 0.0
-        total_bank_amount = (
-            counters["categorized_amount_eur_abs"] + counters["uncategorized_amount_eur_abs"]
-        )
-        categorized_amount_eur_abs_ratio = (
-            (counters["categorized_amount_eur_abs"] / total_bank_amount) * 100.0
-            if total_bank_amount > 0
-            else 0.0
-        )
-        uncategorized_amount_eur_abs_ratio = (
-            (counters["uncategorized_amount_eur_abs"] / total_bank_amount) * 100.0
-            if total_bank_amount > 0
-            else 0.0
-        )
-        category_metrics_by_bank.append(
-            {
-                "bank": bank,
-                "transactions_count": total,
-                "categorized_count": counters["categorized_count"],
-                "uncategorized_count": counters["uncategorized_count"],
-                "categorized_amount_eur_abs": round(counters["categorized_amount_eur_abs"], 4),
-                "uncategorized_amount_eur_abs": round(counters["uncategorized_amount_eur_abs"], 4),
-                "reviewed_count": counters["reviewed_count"],
-                "categorized_pct": round(categorized_pct, 4),
-                "uncategorized_pct": round(uncategorized_pct, 4),
-                "categorized_amount_eur_abs_ratio": round(categorized_amount_eur_abs_ratio, 4),
-                "uncategorized_amount_eur_abs_ratio": round(uncategorized_amount_eur_abs_ratio, 4),
-                "reviewed_pct": round(reviewed_pct, 4),
-            }
-        )
-
-    reviewed_count = sum(1 for tx in full_transactions if tx.reviewed)
-    reviewed_ratio = (reviewed_count / len(full_transactions)) if full_transactions else 0.0
+    reviewed_ratio = (reviewed_count / len(dataframe)) if len(dataframe) else 0.0
     categorized_amount_eur_abs_ratio = (
         (categorized_amount_eur_abs / total_amount_eur_abs) if total_amount_eur_abs > 0 else 0.0
     )
@@ -251,7 +438,7 @@ def persist_and_report(
         "generated_at": datetime.now(UTC).isoformat(),
         "files_scanned": len(source_files),
         "files_failed": files_failed,
-        "transactions_parsed": len(full_transactions),
+        "transactions_parsed": len(dataframe),
         "new_rows": upsert.new_rows,
         "total_rows": upsert.total_rows,
         "parquet_path": str(upsert.parquet_path),
@@ -408,7 +595,7 @@ def persist_and_report(
         completeness_path=settings.completeness_json_path,
         files_scanned=len(source_files),
         files_failed=files_failed,
-        transactions_parsed=len(full_transactions),
+        transactions_parsed=len(dataframe),
         new_rows=upsert.new_rows,
         total_rows=upsert.total_rows,
         completeness_status=completeness_status,

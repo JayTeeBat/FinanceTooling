@@ -188,6 +188,21 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-21 - codex
+- Branch: `feature/reporting-dataframe-optimizations`
+- Completed:
+  - Vectorized dashboard transaction-row preparation so booking dates, category/project defaults, and transfer flags are normalized at the dataframe level before HTML rendering.
+  - Reworked reporting/completeness to stay dataframe-native, avoiding full `Transaction` reconstruction for classification diagnostics, completeness coverage, legacy-ID collision export, and per-bank category metrics.
+  - Added regression coverage for vectorized dashboard payload normalization and parity coverage for dataframe-based completeness reporting.
+- Checks:
+  - `uv run pytest tests/test_dashboard.py tests/test_completeness.py tests/test_workflow_stages.py tests/test_perf_check.py`: pass
+  - `uv run ruff check src/finance_tooling/dashboard.py src/finance_tooling/completeness.py src/finance_tooling/workflow/reporting.py tests/test_dashboard.py tests/test_completeness.py`: pass
+  - `uv run ty check src/finance_tooling tests`: fail, but only on pre-existing diagnostics in `tests/test_planning_dashboard.py`
+- Open items:
+  - No-op incremental `update`/`transform` runs still spend most of their remaining time on YAML loads, backups, CSV export, and dashboard refresh even when no files were selected.
+- Next action:
+  - Decide whether to implement a true no-op fast path for unchanged incremental runs, since that is now the biggest remaining end-user speed win.
+
+### 2026-03-21 - codex
 - Branch: `main`
 - Completed:
   - Implemented Phase 1 incremental pipeline state with a committed `source_registry.json`, a self-describing `staged_batch_manifest.json`, and default incremental selection for `ingest` and `update`.
@@ -215,17 +230,3 @@ Success target for the 2026 validation campaign:
   - The automatic pipeline backup flow is stage-scoped, but non-pipeline commands such as `review-import` still use the older per-file backup helper and have not been unified onto run-folder manifests.
 - Next action:
   - Run the broader lint/type/test gates and decide whether the remaining non-pipeline backup commands should migrate onto the same run-based backup subsystem.
-
-### 2026-03-21 - codex
-- Branch: `main`
-- Completed:
-  - Hardened raw source identity by introducing content-based `source_document_id`, duplicate raw-file detection/ignoring, and source-inventory persistence during ingest.
-  - Added `workflow-status` plus `pipeline_state.json` to inspect raw, staged, and transformed pipeline state, including duplicate-source and staged-vs-transform drift warnings.
-  - Extended transaction-id migration coverage so rebuilt corpora can remap old path-based manual-state IDs onto the new source-document-based identity scheme, and documented the new behavior in `README.md`.
-- Checks:
-  - `uv run pytest tests/test_store.py tests/test_staging.py tests/test_migrate_transaction_ids.py tests/test_source_inventory.py tests/test_workflow_status.py tests/test_perf_check.py tests/test_cli_dispatch.py tests/test_command_entrypoints.py tests/test_workflow_stages.py tests/test_ingest.py tests/test_review_state.py tests/test_transaction_overrides.py`: pass
-  - `uv run ruff check src/finance_tooling/source_inventory.py src/finance_tooling/workflow_status.py src/finance_tooling/workflow/ingest.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/staging.py src/finance_tooling/store.py src/finance_tooling/models.py src/finance_tooling/migrate_transaction_ids.py src/finance_tooling/commands/workflow_status.py src/finance_tooling/commands/common.py src/finance_tooling/commands/migrate_transaction_ids.py src/finance_tooling/__main__.py tests/test_store.py tests/test_staging.py tests/test_migrate_transaction_ids.py tests/test_source_inventory.py tests/test_workflow_status.py tests/test_perf_check.py tests/test_cli_dispatch.py tests/test_command_entrypoints.py tests/test_workflow_stages.py tests/test_ingest.py tests/test_review_state.py tests/test_transaction_overrides.py`: pass
-- Open items:
-  - The workflow-status healthcheck is intentionally read-only; it surfaces duplicate-path/raw-vs-processed drift but does not yet offer guided remediation steps or auto-repair.
-- Next action:
-  - Run the pipeline once on a real corpus, then validate `workflow-status` and `migrate-transaction-ids` against an actual processed dataset before broadening the hardening pass to stale-config and deletion drift detection.

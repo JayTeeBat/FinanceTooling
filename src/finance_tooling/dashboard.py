@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -17,77 +17,50 @@ from finance_tooling.projecting import (
 )
 
 
-def _to_optional_float(value: object) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return float(int(value))
-    if isinstance(value, int | float):
-        if isinstance(value, float) and pd.isna(value):
-            return None
-        return float(value)
-    if isinstance(value, str) and value.strip():
-        try:
-            return float(value.strip())
-        except ValueError:
-            return None
-    return None
+def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: str) -> pd.Series:
+    values = dataframe[column].astype("string").str.strip()
+    return values.mask(values.isna() | values.eq(""), default)
 
 
-def _normalize_booking_date(value: object) -> str | None:
-    if isinstance(value, pd.Timestamp):
-        return value.date().isoformat()
-    if isinstance(value, str) and value.strip():
-        timestamp = pd.to_datetime(value.strip(), errors="coerce")
-        if pd.isna(timestamp):
-            return None
-        return timestamp.date().isoformat()
-    if isinstance(value, datetime):
-        return value.date().isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    return None
+def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
+    if dataframe.empty:
+        return pd.DataFrame(
+            columns=["booking_date", "category", "project", "amount_eur", "is_transfer"]
+        )
 
+    working = dataframe.reindex(
+        columns=["booking_date", "category", "project", "amount_eur"]
+    ).copy()
 
-def _to_str_or_default(value: object, *, default: str) -> str:
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    return default
+    booking_dates = pd.to_datetime(working["booking_date"], errors="coerce")
+    working["booking_date"] = booking_dates.dt.strftime("%Y-%m-%d")
+    working = working.loc[working["booking_date"].notna()].copy()
+    if working.empty:
+        return pd.DataFrame(
+            columns=["booking_date", "category", "project", "amount_eur", "is_transfer"]
+        )
 
+    working["category"] = _normalized_string_series(
+        working,
+        "category",
+        default="Uncategorized",
+    )
+    working["project"] = _normalized_string_series(
+        working,
+        "project",
+        default="Unassigned",
+    )
+    amounts = pd.to_numeric(working["amount_eur"], errors="coerce")
+    working["amount_eur"] = amounts.astype(object)
+    working.loc[amounts.isna(), "amount_eur"] = None
+    working["is_transfer"] = working["category"].str.casefold().eq("transfers")
 
-def _to_str_or_none(value: object) -> str | None:
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    return None
+    return working.sort_values("booking_date", kind="stable", ignore_index=True)
 
 
 def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    if dataframe.empty:
-        return rows
-
-    for raw_row in dataframe.to_dict(orient="records"):
-        booking_date = _normalize_booking_date(raw_row.get("booking_date"))
-        if booking_date is None:
-            continue
-        category = _to_str_or_default(
-            _to_str_or_none(raw_row.get("category")), default="Uncategorized"
-        )
-        project = _to_str_or_default(
-            _to_str_or_none(raw_row.get("project")), default="Unassigned"
-        )
-        rows.append(
-            {
-                "booking_date": booking_date,
-                "category": category,
-                "project": project,
-                "amount_eur": _to_optional_float(raw_row.get("amount_eur")),
-                "is_transfer": category.strip().casefold() == "transfers",
-            }
-        )
-
-    rows.sort(key=lambda row: str(row["booking_date"]))
-    return rows
+    rows_frame = _build_transaction_rows_frame(dataframe)
+    return rows_frame.to_dict(orient="records")
 
 
 def _load_projecting(path: Path | None) -> tuple[ProjectConfig, list[str]]:
