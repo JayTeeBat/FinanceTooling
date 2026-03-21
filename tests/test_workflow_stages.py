@@ -14,8 +14,15 @@ from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import ParserOutput, StatementParser, StatementValidation
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
+from finance_tooling.review_import import import_review_into_overrides
+from finance_tooling.review_state import upsert_review_state
 from finance_tooling.source_inventory import build_source_inventory, write_source_inventory
-from finance_tooling.store import UpsertResult, compute_transaction_id, upsert_transactions
+from finance_tooling.store import (
+    UpsertResult,
+    compute_path_based_transaction_id,
+    compute_transaction_id,
+    upsert_transactions,
+)
 from finance_tooling.workflow.incremental_state import (
     RunMode,
     StagedBatchManifest,
@@ -262,6 +269,117 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert result.uncategorized_count_delta is None
     assert result.categorized_amount_eur_abs_delta is None
     assert result.uncategorized_amount_eur_abs_delta is None
+
+
+def test_review_import_then_transform_preserves_source_document_id_identity(
+    monkeypatch, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+
+    settings = replace(
+        _settings(input_dir),
+        category_rules_path=config_dir / "category_rules.yaml",
+        project_rules_path=config_dir / "project_rules.yaml",
+        project_overrides_path=config_dir / "project_overrides.yaml",
+        transaction_overrides_path=config_dir / "transaction_overrides.yaml",
+        budget_targets_path=config_dir / "budget_targets.yaml",
+    )
+    settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_overrides_path.write_text(
+        "version: 1\noverrides: []\nrules: []\n",
+        encoding="utf-8",
+    )
+    settings.transaction_overrides_path.write_text("version: 1\noverrides: []\n", encoding="utf-8")
+    settings.budget_targets_path.write_text("version: 1\ntargets: []\n", encoding="utf-8")
+
+    source_file = input_dir / "statement.pdf"
+    source_file.write_text("fake statement", encoding="utf-8")
+    transaction = Transaction(
+        booking_date=date(2026, 2, 1),
+        description="Manual Review Merchant",
+        amount_native=Decimal("-12.34"),
+        currency="EUR",
+        source_file=source_file,
+        bank="REVOLUT",
+        parser="revolut",
+        source_document_id="doc-123",
+    )
+    new_id = compute_transaction_id(transaction)
+    old_path_id = compute_path_based_transaction_id(replace(transaction, source_document_id=None))
+    assert new_id != old_path_id
+
+    write_staged_transactions(settings.staged_transactions_path, [transaction])
+    _write_transform_manifest(settings, [source_file], run_mode="full_refresh")
+    upsert_review_state(
+        settings.review_state_path,
+        pd.DataFrame(
+            [
+                {
+                    "transaction_id": new_id,
+                    "reviewed": True,
+                    "review_comment": "initial review",
+                    "updated_at": "2026-03-22T00:00:00+00:00",
+                }
+            ]
+        ),
+    )
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.render_dashboard_html",
+        lambda *_args, **_kwargs: settings.output_path,
+    )
+
+    first_result = run_transform(settings)
+    assert first_result.categorized_count == 0
+
+    first_master = pd.read_parquet(settings.master_parquet_path)
+    assert len(first_master) == 1
+    assert str(first_master.loc[0, "transaction_id"]) == new_id
+    assert str(first_master.loc[0, "source_document_id"]) == "doc-123"
+
+    review_path = input_dir / "transactions_review.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": str(first_master.loc[0, "transaction_id"]),
+                "booking_date": "2026-02-01",
+                "description": "Manual Review Merchant",
+                "amount_native": -12.34,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Shopping",
+                "subcategory": "General Retail",
+                "original_category": "Uncategorized",
+                "original_subcategory": None,
+                "project_tags": None,
+                "reviewed": True,
+                "review_comment": "categorized",
+            }
+        ]
+    ).to_excel(review_path, index=False, engine="openpyxl")
+
+    import_result = import_review_into_overrides(
+        review_path=review_path,
+        transaction_overrides_path=settings.transaction_overrides_path,
+        review_state_path=settings.review_state_path,
+    )
+    assert import_result.transaction_overrides_upserted == 1
+
+    second_result = run_transform(settings)
+    assert second_result.categorized_count == 1
+
+    second_master = pd.read_parquet(settings.master_parquet_path)
+    assert len(second_master) == 1
+    assert str(second_master.loc[0, "transaction_id"]) == new_id
+    assert str(second_master.loc[0, "source_document_id"]) == "doc-123"
+    assert str(second_master.loc[0, "category"]) == "Shopping"
+    assert str(second_master.loc[0, "subcategory"]) == "General Retail"
+    assert str(second_master.loc[0, "category_source"]) == "transaction_override"
 
 
 def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_path: Path) -> None:

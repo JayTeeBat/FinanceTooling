@@ -72,6 +72,40 @@ def test_apply_review_state_marks_matching_transactions_reviewed(tmp_path: Path)
     assert updated[0].reviewed is True
 
 
+def test_apply_review_state_preserves_source_document_id(tmp_path: Path) -> None:
+    review_state_path = tmp_path / "review_state.parquet"
+    transaction = Transaction(
+        booking_date=date(2026, 1, 2),
+        description="Merchant 123",
+        amount_native=Decimal("-12.34"),
+        currency="EUR",
+        source_file=tmp_path / "statement.pdf",
+        bank="REVOLUT",
+        parser="revolut",
+        source_document_id="doc-123",
+    )
+    transaction.source_file.write_text("fake", encoding="utf-8")
+    transaction_id = compute_transaction_id(transaction)
+    upsert_review_state(
+        review_state_path,
+        pd.DataFrame(
+            [
+                {
+                    "transaction_id": transaction_id,
+                    "reviewed": True,
+                    "review_comment": "done",
+                    "updated_at": "2026-03-07T10:00:00+00:00",
+                }
+            ]
+        ),
+    )
+
+    updated = apply_review_state([transaction], review_state_path)
+
+    assert len(updated) == 1
+    assert updated[0].source_document_id == "doc-123"
+
+
 def test_build_review_state_updates_skips_rows_without_transaction_id() -> None:
     updates = build_review_state_updates(
         [
