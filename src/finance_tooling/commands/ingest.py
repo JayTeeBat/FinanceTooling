@@ -4,17 +4,33 @@ from __future__ import annotations
 
 import argparse
 
-from finance_tooling.commands.common import print_ingest_result
+from finance_tooling.commands.common import print_full_refresh_preflight, print_ingest_result
 from finance_tooling.config import load_settings_from_env
+from finance_tooling.workflow.incremental_state import build_full_refresh_preflight
 from finance_tooling.workflow.ingest_stage import run_ingest
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     """Register ingest-specific CLI arguments."""
+    parser.add_argument(
+        "--full-refresh",
+        action="store_true",
+        help="Reparse the full representative source corpus instead of only new files.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show the full-refresh impact summary without mutating anything.",
+    )
+    parser.add_argument(
+        "--confirm-full-refresh",
+        default=None,
+        help="Confirmation token required to execute a full refresh.",
+    )
     parser.set_defaults(command="ingest", handler=handle)
 
 
-def handle(_args: argparse.Namespace) -> int:
+def handle(args: argparse.Namespace) -> int:
     """Execute the ingest command from parsed CLI arguments."""
     try:
         settings = load_settings_from_env()
@@ -22,8 +38,28 @@ def handle(_args: argparse.Namespace) -> int:
         print(f"Configuration error: {exc}")
         return 1
 
+    if args.dry_run and not args.full_refresh:
+        print("Ingest error: --dry-run is only supported together with --full-refresh.")
+        return 1
+
+    if args.confirm_full_refresh is not None and not args.full_refresh:
+        print("Ingest error: --confirm-full-refresh requires --full-refresh.")
+        return 1
+
+    if args.full_refresh:
+        preflight = build_full_refresh_preflight(settings=settings, command="ingest")
+        if args.dry_run:
+            print_full_refresh_preflight(preflight)
+            return 0
+        if args.confirm_full_refresh != preflight.confirmation_token:
+            print_full_refresh_preflight(preflight)
+            return 1
+
     try:
-        result = run_ingest(settings)
+        if args.full_refresh:
+            result = run_ingest(settings, run_mode="full_refresh")
+        else:
+            result = run_ingest(settings)
     except (RuntimeError, ValueError) as exc:
         print(f"Ingest error: {exc}")
         return 1

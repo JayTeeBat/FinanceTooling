@@ -21,6 +21,10 @@ uv sync --all-groups
 uv run update
 ```
 
+`update` and `ingest` are incremental by default. They scan the full raw corpus
+but only parse source documents that have not yet been committed into the
+canonical dataset.
+
 ## Workflow Overview (Newcomer)
 
 Use this sequence when processing new statements and optionally refining
@@ -34,11 +38,18 @@ What it does:
   document identity.
 - Ignores duplicate raw files with identical content and records them in
   `${FINANCE_PROCESSED_PATH}/source_inventory.json`.
+- Loads `${FINANCE_PROCESSED_PATH}/source_registry.json` to decide which
+  representative source documents are already committed.
+- In the default incremental path, parses only never-committed representative
+  source documents. Modified or missing previously committed files are reported
+  as stale conditions and require a guarded full refresh to re-sync history.
 - Parses and normalizes raw transaction records.
 - Creates a pre-run backup snapshot of the current staged parquet under
   `${FINANCE_PROCESSED_PATH}/backup/ingest/<run_id>/` and keeps the latest 10
   ingest runs.
 - Writes staged data to `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`.
+- Writes a self-describing staged batch manifest to
+  `${FINANCE_PROCESSED_PATH}/staged_batch_manifest.json`.
 - Writes ingest diagnostics to `${FINANCE_PROCESSED_PATH}/ingest_summary.json`.
 
 ```bash
@@ -89,6 +100,7 @@ uv run transform
 
 What it does:
 - Reads staged data.
+- Requires the staged batch manifest created by `ingest`.
 - Applies category rules, project rules, and transaction overrides.
 - Carries forward prior manual category/subcategory (`transaction_override`)
   when parser cleanup changes transaction descriptions but the same transaction can be
@@ -99,6 +111,9 @@ What it does:
   The latest 10 transform runs are retained.
 - Writes canonical outputs (`transactions_master.parquet`,
   `transactions_normalized.csv/json`, `run_summary.json`, dashboard).
+- In incremental mode, upserts only the staged source documents into the master
+  parquet, then rebuilds summary/dashboard/export artifacts from the full merged
+  canonical dataset.
 - Projects persisted `reviewed` state into canonical outputs so review progress
   survives across sessions and appears in `transactions_normalized.csv`.
 
@@ -125,6 +140,35 @@ This runs `ingest` then `transform` end-to-end.
 It also takes the same stage-scoped backups before each stage, so a full
 `update` run creates one ingest backup run and one transform backup run.
 
+### Guarded full refresh
+
+Use a full refresh only when you intentionally want to reparse and rebuild the
+entire representative raw corpus under current raw/config state.
+
+Preview the impact first:
+
+```bash
+uv run update --full-refresh --dry-run
+```
+
+The real run is intentionally two-step. Plain `--full-refresh` prints a warning,
+impact summary, and a confirmation token, then exits without mutating state.
+Only a matching token allows execution:
+
+```bash
+uv run update --full-refresh --confirm-full-refresh <token>
+```
+
+The same guardrail applies to `uv run ingest --full-refresh`.
+
+Why it is guarded:
+- it can prune canonical rows for committed source documents that are no longer
+  present in raw inputs
+- it can reclassify historical transactions under current category/project
+  config
+- it is the explicit way to resolve stale state caused by modified raw files,
+  missing raw files, or config drift
+
 ### Status snapshot
 
 To inspect the current raw/staged/transformed pipeline state:
@@ -135,8 +179,8 @@ uv run workflow-status
 
 This writes `${FINANCE_PROCESSED_PATH}/pipeline_state.json` and prints a compact
 health summary, including duplicate raw-source detection, staged-vs-transform
-timestamp drift, and whether the current raw corpus still matches the last
-ingested source inventory.
+timestamp drift, committed source-registry state, stale reasons, and
+full-refresh risk.
 
 ## Code Map
 

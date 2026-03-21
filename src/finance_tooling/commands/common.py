@@ -7,6 +7,7 @@ from pathlib import Path
 from finance_tooling.backup import BackupRunResult
 from finance_tooling.config import Settings, load_settings_from_env
 from finance_tooling.models import WorkflowResult
+from finance_tooling.workflow.incremental_state import FullRefreshPreflight
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 
 
@@ -135,9 +136,65 @@ def print_backup_run(result: BackupRunResult) -> None:
         print(f"Backup pruned runs: {', '.join(result.pruned_run_ids)}")
 
 
+def print_incremental_run_metadata(
+    *,
+    run_mode: str,
+    files_selected_for_processing: int,
+    files_skipped_already_committed: int,
+    files_skipped_modified_existing: int,
+    files_missing_since_last_commit: int,
+    dataset_stale: bool,
+    stale_reasons: tuple[str, ...] | list[str],
+) -> None:
+    """Print run-mode and stale-state metadata for pipeline stages."""
+    print(f"Run mode: {run_mode}")
+    print(f"Files selected for processing: {files_selected_for_processing}")
+    print(f"Files skipped already committed: {files_skipped_already_committed}")
+    print(f"Files skipped modified existing: {files_skipped_modified_existing}")
+    print(f"Files missing since last commit: {files_missing_since_last_commit}")
+    print(f"Dataset stale: {dataset_stale}")
+    if stale_reasons:
+        print(f"Stale reasons: {', '.join(stale_reasons)}")
+
+
+def print_full_refresh_preflight(preflight: FullRefreshPreflight) -> None:
+    """Print the destructive-impact summary for a guarded full refresh."""
+    print("FULL REFRESH WARNING")
+    print("This can remove canonical data for source files no longer present in raw inputs.")
+    print("This can reclassify historical transactions under current config.")
+    print("Use --dry-run first to inspect impact before executing.")
+    print("Automatic backups will still be created before any mutation.")
+    print(f"Full refresh risk: {preflight.full_refresh_risk}")
+    print(f"Committed source documents: {preflight.committed_source_count}")
+    print(f"Raw files discovered: {preflight.raw_file_count}")
+    print(f"Unique source documents: {preflight.unique_document_count}")
+    print(f"Modified committed files: {preflight.modified_committed_count}")
+    print(f"Missing committed files: {preflight.missing_committed_count}")
+    print(f"Config drift since last full refresh: {preflight.config_drift}")
+    print(f"Estimated reprocessed canonical rows: {preflight.estimated_reprocessed_row_count}")
+    print(f"Estimated pruned canonical rows: {preflight.estimated_pruned_row_count}")
+    if preflight.stale_reasons:
+        print(f"Risk reasons: {', '.join(preflight.stale_reasons)}")
+    print(f"Processed backup root: {preflight.processed_backup_root}")
+    print(f"Config backup root: {preflight.config_backup_root}")
+    print(
+        "To proceed, rerun with: "
+        f"--full-refresh --confirm-full-refresh {preflight.confirmation_token}"
+    )
+
+
 def print_workflow_result(result: WorkflowResult) -> int:
     """Print workflow result summary and return process exit code."""
     print(f"Scanned files: {result.files_scanned}")
+    print_incremental_run_metadata(
+        run_mode=result.run_mode,
+        files_selected_for_processing=result.files_selected_for_processing,
+        files_skipped_already_committed=result.files_skipped_already_committed,
+        files_skipped_modified_existing=result.files_skipped_modified_existing,
+        files_missing_since_last_commit=result.files_missing_since_last_commit,
+        dataset_stale=result.dataset_stale,
+        stale_reasons=result.stale_reasons,
+    )
     print(f"Failed files: {result.files_failed}")
     print(f"Parsed transactions: {result.transactions_parsed}")
     print(f"Inserted rows: {result.new_rows}")
@@ -212,6 +269,15 @@ def print_workflow_result(result: WorkflowResult) -> int:
 def print_ingest_result(result: IngestExecutionResult) -> int:
     """Print ingest stage summary and return process exit code."""
     print(f"Scanned files: {result.files_scanned}")
+    print_incremental_run_metadata(
+        run_mode=result.run_mode,
+        files_selected_for_processing=result.files_selected_for_processing,
+        files_skipped_already_committed=result.files_skipped_already_committed,
+        files_skipped_modified_existing=result.files_skipped_modified_existing,
+        files_missing_since_last_commit=result.files_missing_since_last_commit,
+        dataset_stale=result.dataset_stale,
+        stale_reasons=result.stale_reasons,
+    )
     print(f"Raw files discovered: {result.raw_files_discovered}")
     print(f"Ignored duplicate raw files: {result.duplicate_raw_file_count}")
     print(f"Failed files: {result.files_failed}")
@@ -219,6 +285,8 @@ def print_ingest_result(result: IngestExecutionResult) -> int:
     print(f"Staged parquet: {result.staged_path}")
     print(f"Ingest summary: {result.ingest_summary_path}")
     print(f"Source inventory: {result.source_inventory_path}")
+    if result.staged_batch_manifest_path is not None:
+        print(f"Staged batch manifest: {result.staged_batch_manifest_path}")
     print(f"HSBC CSV files scanned: {result.hsbc_csv_files_scanned}")
     print(f"Parser low-confidence files: {result.parser_low_confidence_file_count}")
     if result.backup_run is not None:

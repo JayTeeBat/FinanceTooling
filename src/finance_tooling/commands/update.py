@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import argparse
 
-from finance_tooling.commands.common import print_ingest_result, print_workflow_result
+from finance_tooling.commands.common import (
+    print_full_refresh_preflight,
+    print_ingest_result,
+    print_workflow_result,
+)
 from finance_tooling.config import load_settings_from_env
+from finance_tooling.workflow.incremental_state import build_full_refresh_preflight
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 from finance_tooling.workflow.update_stage import run_update
 
@@ -22,6 +27,21 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Run transform stage only from staged transactions.",
     )
+    parser.add_argument(
+        "--full-refresh",
+        action="store_true",
+        help="Reparse and rebuild the full representative source corpus.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show the full-refresh impact summary without mutating anything.",
+    )
+    parser.add_argument(
+        "--confirm-full-refresh",
+        default=None,
+        help="Confirmation token required to execute a full refresh.",
+    )
     parser.set_defaults(command="update", handler=handle)
 
 
@@ -33,12 +53,39 @@ def handle(args: argparse.Namespace) -> int:
         print(f"Configuration error: {exc}")
         return 1
 
+    if args.dry_run and not args.full_refresh:
+        print("Update error: --dry-run is only supported together with --full-refresh.")
+        return 1
+    if args.confirm_full_refresh is not None and not args.full_refresh:
+        print("Update error: --confirm-full-refresh requires --full-refresh.")
+        return 1
+    if args.full_refresh and args.transform_only:
+        print("Update error: --transform-only cannot be combined with --full-refresh.")
+        return 1
+
+    if args.full_refresh:
+        preflight = build_full_refresh_preflight(settings=settings, command="update")
+        if args.dry_run:
+            print_full_refresh_preflight(preflight)
+            return 0
+        if args.confirm_full_refresh != preflight.confirmation_token:
+            print_full_refresh_preflight(preflight)
+            return 1
+
     try:
-        result = run_update(
-            settings,
-            ingest_only=bool(args.ingest_only),
-            transform_only=bool(args.transform_only),
-        )
+        if args.full_refresh:
+            result = run_update(
+                settings,
+                ingest_only=bool(args.ingest_only),
+                transform_only=bool(args.transform_only),
+                full_refresh=True,
+            )
+        else:
+            result = run_update(
+                settings,
+                ingest_only=bool(args.ingest_only),
+                transform_only=bool(args.transform_only),
+            )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Update error: {exc}")
         return 1

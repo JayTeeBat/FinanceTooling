@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
@@ -139,6 +140,115 @@ def _read_existing(path: Path) -> pd.DataFrame:
         if column not in data.columns:
             data[column] = None
     return data[CANONICAL_TRANSACTION_COLUMNS]
+
+
+def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
+    """Reconstruct transaction models from canonical dataframe rows."""
+    if dataframe.empty:
+        return []
+    transactions: list[Transaction] = []
+    for row in dataframe.to_dict(orient="records"):
+        transactions.append(
+            Transaction(
+                booking_date=datetime.fromisoformat(str(row["booking_date"])).date(),
+                description=str(row["description"]),
+                source_record_index=(
+                    int(row["source_record_index"])
+                    if row.get("source_record_index") not in (None, "")
+                    and not pd.isna(row["source_record_index"])
+                    else None
+                ),
+                amount_native=Decimal(str(row["amount_native"])),
+                currency=str(row["currency"]),
+                source_file=Path(str(row["source_file"])),
+                bank=str(row["bank"]),
+                parser=str(row["parser"]),
+                category=str(row["category"])
+                if row.get("category") is not None
+                else "Uncategorized",
+                subcategory=(
+                    str(row["subcategory"])
+                    if row.get("subcategory") is not None and not pd.isna(row["subcategory"])
+                    else None
+                ),
+                category_confidence=(
+                    float(row["category_confidence"])
+                    if row.get("category_confidence") is not None
+                    and not pd.isna(row["category_confidence"])
+                    else None
+                ),
+                category_source=(
+                    str(row["category_source"])
+                    if row.get("category_source") is not None
+                    and not pd.isna(row["category_source"])
+                    else (
+                        "rule"
+                        if row.get("category") is not None
+                        and not pd.isna(row["category"])
+                        and str(row["category"]) != "Uncategorized"
+                        else None
+                    )
+                ),
+                category_rule_id=(
+                    str(row["category_rule_id"])
+                    if row.get("category_rule_id") is not None
+                    and not pd.isna(row["category_rule_id"])
+                    else None
+                ),
+                project=(
+                    str(row["project"])
+                    if row.get("project") is not None and not pd.isna(row["project"])
+                    else None
+                ),
+                project_tags=tuple(json.loads(row["project_tags"]))
+                if row.get("project_tags") is not None and not pd.isna(row["project_tags"])
+                else (),
+                project_source=(
+                    str(row["project_source"])
+                    if row.get("project_source") is not None and not pd.isna(row["project_source"])
+                    else None
+                ),
+                reviewed=bool(row["reviewed"]) if row.get("reviewed") is not None else False,
+                account_label=(
+                    str(row["account_label"])
+                    if row.get("account_label") is not None and not pd.isna(row["account_label"])
+                    else None
+                ),
+                source_document_id=(
+                    str(row["source_document_id"])
+                    if row.get("source_document_id") is not None
+                    and not pd.isna(row["source_document_id"])
+                    else None
+                ),
+                fx_rate_to_eur=(
+                    Decimal(str(row["fx_rate_to_eur"]))
+                    if row.get("fx_rate_to_eur") is not None and not pd.isna(row["fx_rate_to_eur"])
+                    else None
+                ),
+                fx_rate_date=(
+                    datetime.fromisoformat(str(row["fx_rate_date"])).date()
+                    if row.get("fx_rate_date") is not None and not pd.isna(row["fx_rate_date"])
+                    else None
+                ),
+                fx_source=(
+                    str(row["fx_source"])
+                    if row.get("fx_source") is not None and not pd.isna(row["fx_source"])
+                    else None
+                ),
+                amount_eur=(
+                    Decimal(str(row["amount_eur"]))
+                    if row.get("amount_eur") is not None and not pd.isna(row["amount_eur"])
+                    else None
+                ),
+                source_file_mtime=(
+                    datetime.fromisoformat(str(row["source_file_mtime"]))
+                    if row.get("source_file_mtime") is not None
+                    and not pd.isna(row["source_file_mtime"])
+                    else None
+                ),
+            )
+        )
+    return transactions
 
 
 def _atomic_write_parquet(dataframe: pd.DataFrame, destination: Path) -> None:

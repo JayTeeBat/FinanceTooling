@@ -18,6 +18,14 @@ from finance_tooling.source_inventory import (
     load_source_inventory,
     write_source_inventory,
 )
+from finance_tooling.workflow.incremental_state import (
+    build_incremental_selection_plan,
+    compute_config_fingerprint,
+    load_source_registry,
+    load_staged_batch_manifest,
+    source_registry_path,
+    staged_batch_manifest_path,
+)
 
 PIPELINE_STATE_FILENAME = "pipeline_state.json"
 SOURCE_INVENTORY_FILENAME = "source_inventory.json"
@@ -39,6 +47,8 @@ class RawSourceState(TypedDict):
     ignored_duplicate_file_count: int
     duplicate_groups: list[dict[str, object]]
     matches_last_ingest_inventory: bool
+    modified_committed_file_count: int
+    missing_committed_file_count: int
 
 
 class StagedState(TypedDict):
@@ -47,6 +57,29 @@ class StagedState(TypedDict):
     exists: bool
     path: str
     mtime: str | None
+    manifest_exists: bool
+    manifest_path: str
+    run_mode: str | None
+    files_selected_for_processing: int
+
+
+class CommittedState(TypedDict):
+    """Committed registry state section."""
+
+    exists: bool
+    path: str
+    committed_source_count: int
+    last_run_mode: str | None
+    last_full_refresh_at: str | None
+    config_drift_since_last_full_refresh: bool
+
+
+class DriftState(TypedDict):
+    """Current stale-state and full-refresh risk summary."""
+
+    dataset_stale: bool
+    stale_reasons: list[str]
+    full_refresh_risk: str
 
 
 class MasterState(TypedDict):
@@ -76,6 +109,8 @@ class PipelineStatePayload(TypedDict):
     processed_path: str
     raw_source_state: RawSourceState
     staged_state: StagedState
+    committed_state: CommittedState
+    drift_state: DriftState
     transformed_state: TransformedState
     findings: list[PipelineFinding]
 
@@ -132,6 +167,15 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
 
     current_inventory = build_source_inventory(discover_statement_pdfs(settings.input_path))
     previous_inventory = load_source_inventory(stored_inventory_path)
+    registry = load_source_registry(source_registry_path(settings))
+    manifest = load_staged_batch_manifest(staged_batch_manifest_path(settings))
+    selection_plan = build_incremental_selection_plan(
+        settings=settings,
+        run_mode="incremental",
+        current_inventory=current_inventory,
+        registry=registry,
+    )
+    config_fingerprint = compute_config_fingerprint(settings)
     current_representatives = _inventory_representatives(current_inventory)
     previous_representatives = (
         _inventory_representatives(previous_inventory) if previous_inventory is not None else {}
@@ -191,6 +235,44 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
                 }
             )
 
+    if selection_plan.modified_existing_entries:
+        findings.append(
+            {
+                "severity": "warning",
+                "code": "raw_source_modified_since_commit",
+                "message": (
+                    "Previously committed source files changed on disk; default incremental "
+                    "runs will skip them until a full refresh."
+                ),
+            }
+        )
+    if selection_plan.missing_committed_entries:
+        findings.append(
+            {
+                "severity": "warning",
+                "code": "raw_source_missing_since_commit",
+                "message": (
+                    "Previously committed source files are missing from the current raw corpus; "
+                    "canonical rows are retained until a full refresh."
+                ),
+            }
+        )
+    if (
+        registry is not None
+        and registry.last_full_refresh_config_fingerprint is not None
+        and registry.last_full_refresh_config_fingerprint != config_fingerprint
+    ):
+        findings.append(
+            {
+                "severity": "warning",
+                "code": "config_changed_since_last_full_refresh",
+                "message": (
+                    "Categorization or project config changed since the last full refresh; "
+                    "historical rows may be stale."
+                ),
+            }
+        )
+
     staged_exists = settings.staged_transactions_path.exists()
     summary_exists = settings.summary_json_path.exists()
     if staged_exists and (
@@ -226,6 +308,16 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
 
     summary_payload = _load_summary(settings.summary_json_path)
     master_state = _master_snapshot(settings.master_parquet_path)
+    if (
+        selection_plan.modified_existing_entries
+        or selection_plan.missing_committed_entries
+        or selection_plan.dataset_stale
+    ):
+        full_refresh_risk = "high"
+    elif current_inventory.ignored_duplicate_file_count > 0 or manifest is not None:
+        full_refresh_risk = "medium"
+    else:
+        full_refresh_risk = "low"
 
     payload: PipelineStatePayload = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -238,6 +330,8 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
             "duplicate_groups": duplicate_groups(current_inventory),
             "matches_last_ingest_inventory": previous_inventory is not None
             and set(current_representatives) == set(previous_representatives),
+            "modified_committed_file_count": len(selection_plan.modified_existing_entries),
+            "missing_committed_file_count": len(selection_plan.missing_committed_entries),
         },
         "staged_state": {
             "exists": staged_exists,
@@ -250,6 +344,31 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
                 if staged_exists
                 else None
             ),
+            "manifest_exists": manifest is not None,
+            "manifest_path": str(staged_batch_manifest_path(settings)),
+            "run_mode": manifest.run_mode if manifest is not None else None,
+            "files_selected_for_processing": (
+                manifest.files_selected_for_processing if manifest is not None else 0
+            ),
+        },
+        "committed_state": {
+            "exists": registry is not None,
+            "path": str(source_registry_path(settings)),
+            "committed_source_count": len(registry.entries) if registry is not None else 0,
+            "last_run_mode": registry.last_run_mode if registry is not None else None,
+            "last_full_refresh_at": (
+                registry.last_full_refresh_at if registry is not None else None
+            ),
+            "config_drift_since_last_full_refresh": (
+                registry is not None
+                and registry.last_full_refresh_config_fingerprint is not None
+                and registry.last_full_refresh_config_fingerprint != config_fingerprint
+            ),
+        },
+        "drift_state": {
+            "dataset_stale": selection_plan.dataset_stale,
+            "stale_reasons": list(selection_plan.stale_reasons),
+            "full_refresh_risk": full_refresh_risk,
         },
         "transformed_state": {
             "summary_exists": summary_exists,

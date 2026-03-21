@@ -40,6 +40,133 @@ def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> Non
     assert "mutually exclusive" in stdio.out
 
 
+def test_update_full_refresh_dry_run_prints_preflight(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("finance_tooling.commands.update.load_settings_from_env", lambda: object())
+    monkeypatch.setattr(
+        "finance_tooling.commands.update.build_full_refresh_preflight",
+        lambda **_: SimpleNamespace(
+            full_refresh_risk="high",
+            committed_source_count=10,
+            raw_file_count=12,
+            unique_document_count=11,
+            modified_committed_count=2,
+            missing_committed_count=1,
+            config_drift=True,
+            estimated_reprocessed_row_count=100,
+            estimated_pruned_row_count=7,
+            stale_reasons=("raw_source_missing_since_commit",),
+            processed_backup_root=Path("processed/backup"),
+            config_backup_root=Path("config/backup"),
+            confirmation_token="token-123",
+        ),
+    )
+
+    exit_code = main(["update", "--full-refresh", "--dry-run"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "FULL REFRESH WARNING" in stdio.out
+    assert "token-123" in stdio.out
+
+
+def test_ingest_full_refresh_requires_matching_confirmation(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("finance_tooling.commands.ingest.load_settings_from_env", lambda: object())
+    monkeypatch.setattr(
+        "finance_tooling.commands.ingest.build_full_refresh_preflight",
+        lambda **_: SimpleNamespace(
+            full_refresh_risk="medium",
+            committed_source_count=0,
+            raw_file_count=1,
+            unique_document_count=1,
+            modified_committed_count=0,
+            missing_committed_count=0,
+            config_drift=False,
+            estimated_reprocessed_row_count=0,
+            estimated_pruned_row_count=0,
+            stale_reasons=(),
+            processed_backup_root=Path("processed/backup"),
+            config_backup_root=Path("config/backup"),
+            confirmation_token="token-123",
+        ),
+    )
+
+    exit_code = main(["ingest", "--full-refresh", "--confirm-full-refresh", "wrong-token"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "FULL REFRESH WARNING" in stdio.out
+    assert "token-123" in stdio.out
+
+
+def test_ingest_full_refresh_runs_with_confirmation(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr("finance_tooling.commands.ingest.load_settings_from_env", lambda: object())
+    monkeypatch.setattr(
+        "finance_tooling.commands.ingest.build_full_refresh_preflight",
+        lambda **_: SimpleNamespace(
+            full_refresh_risk="medium",
+            committed_source_count=1,
+            raw_file_count=1,
+            unique_document_count=1,
+            modified_committed_count=0,
+            missing_committed_count=0,
+            config_drift=False,
+            estimated_reprocessed_row_count=1,
+            estimated_pruned_row_count=0,
+            stale_reasons=(),
+            processed_backup_root=Path("processed/backup"),
+            config_backup_root=Path("config/backup"),
+            confirmation_token="token-123",
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.ingest.run_ingest",
+        lambda _settings, run_mode="incremental": captured.setdefault(
+            "result",
+            IngestExecutionResult(
+                staged_path=processed_dir / "staged_transactions.parquet",
+                ingest_summary_path=processed_dir / "ingest_summary.json",
+                files_scanned=1,
+                raw_files_discovered=1,
+                duplicate_raw_file_count=0,
+                source_inventory_path=processed_dir / "source_inventory.json",
+                files_failed=0,
+                transactions_parsed=1,
+                hsbc_csv_files_scanned=0,
+                parser_low_confidence_file_count=0,
+                warnings=(),
+                source_files=(),
+                selected_source_files=(),
+                validations=(),
+                parser_selection_diagnostics=(),
+                hsbc_merge_metrics={},
+                hsbc_period_parse_variant_match_count=0,
+                hsbc_boundary_metrics={},
+                hsbc_boundary_diagnostics=(),
+                hsbc_sign_metrics={},
+                hsbc_sign_diagnostics=(),
+                hsbc_selection_diagnostics=(),
+                ingest_parser_duration_seconds_by_parser={},
+                ingest_duration_seconds_by_bank={},
+                ingest_text_cache_enabled=False,
+                ingest_text_cache_hits=0,
+                ingest_text_cache_misses=0,
+                ingest_text_cache_write_count=0,
+                run_mode=run_mode,
+            ),
+        ),
+    )
+
+    exit_code = main(["ingest", "--full-refresh", "--confirm-full-refresh", "token-123"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Run mode: full_refresh" in stdio.out
+
+
 def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
@@ -422,6 +549,7 @@ def test_ingest_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsy
             parser_low_confidence_file_count=0,
             warnings=(),
             source_files=(),
+            selected_source_files=(),
             validations=(),
             parser_selection_diagnostics=(),
             hsbc_merge_metrics={},
