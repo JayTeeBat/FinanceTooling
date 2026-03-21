@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date, datetime
 from pathlib import Path
 from typing import cast
 
@@ -161,3 +162,78 @@ def test_render_dashboard_html_includes_config_warnings_when_loading_fails(tmp_p
     warnings = payload["warnings"]
     assert isinstance(warnings, list)
     assert len(warnings) == 2
+
+
+def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path: Path) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "booking_date": datetime(2026, 1, 5, 10, 30),
+                "description": "Salary",
+                "amount_native": 1000.0,
+                "amount_eur": "1000.50",
+                "category": " Income ",
+                "project": "  ",
+                "bank": "HSBC",
+                "account_label": None,
+            },
+            {
+                "booking_date": pd.Timestamp("2026-01-03"),
+                "description": "Transfer",
+                "amount_native": -50.0,
+                "amount_eur": -50.0,
+                "category": "Transfers",
+                "project": "Savings",
+                "bank": "HSBC",
+                "account_label": None,
+            },
+            {
+                "booking_date": date(2026, 1, 4),
+                "description": "Unknown",
+                "amount_native": -5.0,
+                "amount_eur": None,
+                "category": "",
+                "project": None,
+                "bank": "HSBC",
+                "account_label": None,
+            },
+            {
+                "booking_date": "not-a-date",
+                "description": "Bad",
+                "amount_native": -1.0,
+                "amount_eur": -1.0,
+                "category": "Shopping",
+                "project": "Errand",
+                "bank": "HSBC",
+                "account_label": None,
+            },
+        ]
+    )
+
+    destination = tmp_path / "dashboard.html"
+    render_dashboard_html(
+        frame,
+        destination,
+        base_currency="EUR",
+        files_scanned=4,
+        files_failed=0,
+        new_rows=4,
+    )
+
+    payload = _extract_payload(destination.read_text(encoding="utf-8"))
+    transactions_raw = payload["transactions"]
+    assert isinstance(transactions_raw, list)
+    transactions = cast(list[dict[str, object]], transactions_raw)
+
+    assert [row["booking_date"] for row in transactions] == [
+        "2026-01-03",
+        "2026-01-04",
+        "2026-01-05",
+    ]
+    assert transactions[0]["is_transfer"] is True
+    assert transactions[1]["category"] == "Uncategorized"
+    assert transactions[1]["project"] == "Unassigned"
+    assert transactions[1]["amount_eur"] is None
+    assert transactions[2]["category"] == "Income"
+    assert transactions[2]["project"] == "Unassigned"
+    assert transactions[2]["amount_eur"] == 1000.5

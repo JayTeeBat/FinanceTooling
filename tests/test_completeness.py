@@ -3,7 +3,13 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
-from finance_tooling.completeness import build_completeness_report, classify_statement_type
+import pandas as pd
+
+from finance_tooling.completeness import (
+    build_completeness_report,
+    build_completeness_report_from_dataframe,
+    classify_statement_type,
+)
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import StatementValidation
 
@@ -71,6 +77,30 @@ def test_build_completeness_report_tracks_missing_files_and_groupings() -> None:
     assert missing["by_year"] == {"2017": 1}
     assert missing["by_bank_guess"] == {"HSBC": 1}
     assert missing["by_year_and_bank_guess"] == [{"year": "2017", "bank_guess": "HSBC", "count": 1}]
+
+
+def test_build_completeness_report_from_dataframe_matches_transaction_variant() -> None:
+    source_files = [
+        Path("/data/Boursobank_statement_2018.pdf"),
+        Path("/data/Revolut_account-statement_2021.pdf"),
+        Path("/data/HSBC_2017_statement.pdf"),
+    ]
+    parsed = [
+        _tx(source_files[0], "Boursobank"),
+        _tx(source_files[0], "Boursobank"),
+        _tx(source_files[1], "Revolut"),
+    ]
+    dataframe = pd.DataFrame(
+        [
+            {"source_file": str(tx.source_file), "bank": tx.bank}
+            for tx in parsed
+        ]
+    )
+
+    report = build_completeness_report(source_files, parsed)
+    dataframe_report = build_completeness_report_from_dataframe(source_files, dataframe)
+
+    assert dataframe_report == report
 
 
 def test_build_completeness_report_can_warn_between_thresholds() -> None:
