@@ -163,6 +163,13 @@ class SummaryPayload(TypedDict):
     review_state_path: str
     fx_cache_path: str
     source_inventory_path: str
+    backup_run_id: str | None
+    backup_processed_dir: str | None
+    backup_config_dir: str | None
+    backup_manifest_paths: list[str]
+    backup_copied_file_count: int
+    backup_missing_file_count: int
+    backup_pruned_run_ids: list[str]
     warnings: list[str]
 
 

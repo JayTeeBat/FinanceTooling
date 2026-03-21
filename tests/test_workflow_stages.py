@@ -3,10 +3,11 @@ from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pandas as pd
 
+from finance_tooling.backup import BackupRunResult
 from finance_tooling.classify import ClassificationDiagnostics
 from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText
@@ -22,7 +23,7 @@ from finance_tooling.workflow.ingest_stage import (
 )
 from finance_tooling.workflow.staging import write_staged_transactions
 from finance_tooling.workflow.transform_stage import run_transform
-from finance_tooling.workflow.types import EnrichmentResult
+from finance_tooling.workflow.types import EnrichmentResult, HsbcMergeResult, IngestResult
 from finance_tooling.workflow.update_stage import run_update, run_workflow
 
 
@@ -634,13 +635,28 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
 ) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
-    settings = replace(_settings(input_dir), category_rules_path=input_dir / "category_rules.yaml")
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    settings = replace(
+        _settings(input_dir),
+        category_rules_path=config_dir / "category_rules.yaml",
+        project_rules_path=config_dir / "project_rules.yaml",
+        project_overrides_path=config_dir / "project_overrides.yaml",
+        transaction_overrides_path=config_dir / "transaction_overrides.yaml",
+    )
     settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
-    backup_dir = settings.category_rules_path.parent / "backup"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    settings.project_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_overrides_path.write_text(
+        "version: 1\noverrides: []\nrules: []\n", encoding="utf-8"
+    )
+    settings.transaction_overrides_path.write_text("version: 1\noverrides: []\n", encoding="utf-8")
+    settings.master_parquet_path.write_text("existing-master", encoding="utf-8")
+    processed_backup_root = input_dir / "backup" / "transform"
+    config_backup_root = config_dir / "backup" / "transform"
     for index in range(10):
-        path = backup_dir / f"category_rules.yaml.20260310-00000{index}.bak"
-        path.write_text(f"backup-{index}", encoding="utf-8")
+        run_id = f"20260310T00000{index}000000Z"
+        (processed_backup_root / run_id).mkdir(parents=True, exist_ok=True)
+        (config_backup_root / run_id).mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(
         "finance_tooling.workflow.transform_stage.read_staged_transactions",
@@ -668,9 +684,11 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
         "finance_tooling.workflow.transform_stage.apply_review_state",
         lambda transactions, _review_state_path: transactions,
     )
+    captured: dict[str, Any] = {}
     monkeypatch.setattr(
         "finance_tooling.workflow.transform_stage.persist_and_report",
         lambda **_kwargs: (
+            captured.update(_kwargs),
             WorkflowResult(
                 dashboard_path=settings.output_path,
                 parquet_path=settings.master_parquet_path,
@@ -704,14 +722,77 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
                 "categorized_amount_eur_abs": 0.0,
                 "uncategorized_amount_eur_abs": 0.0,
             },
-        ),
+        )[1:],
     )
 
     run_transform(settings)
 
-    backups = sorted(backup_dir.glob("category_rules.yaml*.bak"))
-    assert len(backups) == 10
-    assert not (backup_dir / "category_rules.yaml.20260310-000000.bak").exists()
+    backup_run = cast(BackupRunResult, captured["backup_run"])
+    assert backup_run is not None
+    assert backup_run.processed_backup_dir is not None
+    assert backup_run.config_backup_dir is not None
+    assert (backup_run.processed_backup_dir / "transactions_master.parquet").exists()
+    assert (backup_run.config_backup_dir / "category_rules.yaml").exists()
+    assert (backup_run.config_backup_dir / "project_rules.yaml").exists()
+    assert (backup_run.config_backup_dir / "project_overrides.yaml").exists()
+    assert (backup_run.config_backup_dir / "transaction_overrides.yaml").exists()
+    assert len(list(processed_backup_root.iterdir())) == 10
+    assert len(list(config_backup_root.iterdir())) == 10
+    assert not (processed_backup_root / "20260310T000000000000Z").exists()
+    assert not (config_backup_root / "20260310T000000000000Z").exists()
+
+
+def test_run_ingest_creates_staged_backup_run(tmp_path: Path, monkeypatch) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    settings = _settings(input_dir)
+    settings.staged_transactions_path.write_text("old-staged-data", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.ingest_workflow_stage",
+        lambda *_args, **_kwargs: IngestResult(
+            source_files=[],
+            raw_file_count=0,
+            duplicate_raw_file_count=0,
+            source_inventory_path=input_dir / "source_inventory.json",
+            transactions=[],
+            validations=[],
+            warnings=[],
+            files_failed=0,
+            parser_selection_diagnostics=[],
+            parser_low_confidence_file_count=0,
+            hsbc_statement_periods_by_date={},
+            hsbc_period_parse_variant_match_count=0,
+            hsbc_boundary_metrics={},
+            hsbc_boundary_diagnostics=[],
+            hsbc_sign_metrics={},
+            hsbc_sign_diagnostics=[],
+            hsbc_csv_files_scanned=0,
+            parser_duration_seconds_by_parser={},
+            duration_seconds_by_bank={},
+            text_cache_enabled=False,
+            text_cache_hits=0,
+            text_cache_misses=0,
+            text_cache_write_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.merge_hsbc_sources",
+        lambda *_args, **_kwargs: HsbcMergeResult(
+            transactions=[],
+            validations=[],
+            warnings=[],
+            metrics={},
+            selection_diagnostics=[],
+        ),
+    )
+
+    result = run_ingest(settings)
+
+    assert result.backup_run is not None
+    assert result.backup_run.processed_backup_dir is not None
+    assert (result.backup_run.processed_backup_dir / "staged_transactions.parquet").exists()
+    assert result.backup_run.config_backup_dir is None
 
 
 def test_run_update_rejects_conflicting_stage_flags(tmp_path: Path) -> None:

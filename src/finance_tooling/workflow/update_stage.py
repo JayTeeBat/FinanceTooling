@@ -19,9 +19,9 @@ def run_update(
         raise ValueError("--ingest-only and --transform-only are mutually exclusive.")
 
     if transform_only:
-        return run_transform(settings)
+        return run_transform(settings, backup_command="update")
 
-    ingest_result = run_ingest(settings)
+    ingest_result = run_ingest(settings, backup_command="update")
     if ingest_only:
         return ingest_result
 
@@ -29,6 +29,7 @@ def run_update(
         settings,
         staged_path=ingest_result.staged_path,
         ingest_result=ingest_result,
+        backup_command="update",
     )
 
 

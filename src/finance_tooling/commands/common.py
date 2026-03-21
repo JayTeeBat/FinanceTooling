@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from finance_tooling.backup import BackupRunResult
 from finance_tooling.config import Settings, load_settings_from_env
 from finance_tooling.models import WorkflowResult
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
@@ -121,6 +122,19 @@ def resolve_review_import_paths(
     )
 
 
+def print_backup_run(result: BackupRunResult) -> None:
+    """Print a concise summary of an automatic backup run."""
+    print(f"Backup run: {result.run_id} ({result.stage} via {result.command})")
+    if result.processed_backup_dir is not None:
+        print(f"Backup processed dir: {result.processed_backup_dir}")
+    if result.config_backup_dir is not None:
+        print(f"Backup config dir: {result.config_backup_dir}")
+    print(f"Backup copied files: {len(result.copied_files)}")
+    print(f"Backup missing files skipped: {len(result.skipped_missing_files)}")
+    if result.pruned_run_ids:
+        print(f"Backup pruned runs: {', '.join(result.pruned_run_ids)}")
+
+
 def print_workflow_result(result: WorkflowResult) -> int:
     """Print workflow result summary and return process exit code."""
     print(f"Scanned files: {result.files_scanned}")
@@ -182,6 +196,8 @@ def print_workflow_result(result: WorkflowResult) -> int:
     print(f"JSON export: {result.json_path}")
     print(f"Summary: {result.summary_path}")
     print(f"Completeness report: {result.completeness_path}")
+    if result.backup_run is not None:
+        print_backup_run(result.backup_run)
 
     if result.warnings:
         print("Warnings:")
@@ -205,6 +221,8 @@ def print_ingest_result(result: IngestExecutionResult) -> int:
     print(f"Source inventory: {result.source_inventory_path}")
     print(f"HSBC CSV files scanned: {result.hsbc_csv_files_scanned}")
     print(f"Parser low-confidence files: {result.parser_low_confidence_file_count}")
+    if result.backup_run is not None:
+        print_backup_run(result.backup_run)
 
     if result.warnings:
         print("Warnings:")

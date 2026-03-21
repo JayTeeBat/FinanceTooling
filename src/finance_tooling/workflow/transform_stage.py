@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 
-from finance_tooling.backup import create_backup
+from finance_tooling.backup import create_stage_backup_run
 from finance_tooling.config import Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.models import WorkflowResult
@@ -103,15 +103,26 @@ def run_transform(
     *,
     staged_path: Path | None = None,
     ingest_result: IngestExecutionResult | None = None,
+    backup_command: str = "transform",
 ) -> WorkflowResult:
     """Execute transform stage from staged transaction artifact."""
     previous_summary = _load_previous_summary(settings.summary_json_path)
     try:
-        create_backup(settings.category_rules_path)
+        backup_run = create_stage_backup_run(
+            stage="transform",
+            command=backup_command,
+            processed_dir=settings.summary_json_path.parent,
+            processed_targets=(settings.master_parquet_path,),
+            config_dir=settings.category_rules_path.parent,
+            config_targets=(
+                settings.category_rules_path,
+                settings.project_rules_path,
+                settings.project_overrides_path,
+                settings.transaction_overrides_path,
+            ),
+        )
     except OSError as exc:
-        raise RuntimeError(
-            f"Failed to back up category rules before transform: {settings.category_rules_path}"
-        ) from exc
+        raise RuntimeError("Failed to back up transform inputs before transform.") from exc
     input_staged_path = staged_path or settings.staged_transactions_path
     staged_transactions = read_staged_transactions(input_staged_path)
     enrichment = enrich_transactions(staged_transactions, settings)
@@ -201,6 +212,7 @@ def run_transform(
         ),
         classification_diagnostics=enrichment.classification_diagnostics,
         warnings=warnings,
+        backup_run=backup_run,
         upsert_transactions_fn=upsert_transactions,
         render_dashboard_html_fn=render_dashboard_html,
     )
