@@ -71,3 +71,66 @@ def test_read_staged_transactions_validates_required_columns(tmp_path: Path) -> 
         assert "parser" in message
     else:
         raise AssertionError("Expected ValueError for missing staged columns.")
+
+
+def test_read_staged_transactions_backfills_legacy_identity_columns(tmp_path: Path) -> None:
+    staged_path = tmp_path / "staged_transactions.parquet"
+    source_file = tmp_path / "statement.pdf"
+    source_file.write_text("fake", encoding="utf-8")
+    dataframe = pd.DataFrame(
+        [
+            {
+                "booking_date": "2024-05-06",
+                "description": "Card payment",
+                "amount_native": "-10.25",
+                "currency": "EUR",
+                "source_file": str(source_file),
+                "bank": "DummyBank",
+                "parser": "dummy",
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_confidence": None,
+                "category_source": None,
+                "category_rule_id": None,
+                "project": None,
+                "project_tags": None,
+                "project_source": None,
+                "account_label": None,
+                "fx_rate_to_eur": None,
+                "fx_rate_date": None,
+                "fx_source": None,
+                "amount_eur": None,
+                "source_file_mtime": None,
+            },
+            {
+                "booking_date": "2024-05-07",
+                "description": "Card payment",
+                "amount_native": "-2.00",
+                "currency": "EUR",
+                "source_file": str(source_file),
+                "bank": "DummyBank",
+                "parser": "dummy",
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_confidence": None,
+                "category_source": None,
+                "category_rule_id": None,
+                "project": None,
+                "project_tags": None,
+                "project_source": None,
+                "account_label": None,
+                "fx_rate_to_eur": None,
+                "fx_rate_date": None,
+                "fx_source": None,
+                "amount_eur": None,
+                "source_file_mtime": None,
+            },
+        ]
+    )
+    dataframe.to_parquet(staged_path, index=False)
+
+    loaded = read_staged_transactions(staged_path)
+
+    assert [tx.source_record_index for tx in loaded] == [0, 1]
+    assert loaded[0].source_document_id is not None
+    assert loaded[0].source_document_id == loaded[1].source_document_id

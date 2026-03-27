@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from finance_tooling.models import Transaction
+from finance_tooling.source_inventory import compute_source_document_id
 from finance_tooling.workflow.types import StagingWriteResult
 
 _REQUIRED_STAGED_COLUMNS = (
@@ -37,6 +38,8 @@ _REQUIRED_STAGED_COLUMNS = (
     "amount_eur",
     "source_file_mtime",
 )
+
+_LEGACY_COMPATIBLE_COLUMNS = frozenset({"source_document_id", "source_record_index"})
 
 
 def _require_parquet_engine() -> None:
@@ -109,6 +112,32 @@ def _optional_datetime(value: object) -> datetime | None:
     return datetime.fromisoformat(str(value))
 
 
+def _backfill_legacy_staged_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
+    missing_columns = [column for column in _REQUIRED_STAGED_COLUMNS if column not in dataframe]
+    incompatible_columns = [
+        column for column in missing_columns if column not in _LEGACY_COMPATIBLE_COLUMNS
+    ]
+    if incompatible_columns:
+        missing = ", ".join(sorted(incompatible_columns))
+        raise ValueError(f"Invalid staged transaction schema; missing columns: {missing}")
+
+    migrated = dataframe.copy()
+    if "source_record_index" not in migrated.columns:
+        migrated["source_record_index"] = migrated.groupby("source_file", sort=False).cumcount()
+
+    if "source_document_id" not in migrated.columns:
+        source_document_ids: list[str | None] = []
+        for raw_path in migrated["source_file"].tolist():
+            path = Path(str(raw_path))
+            source_document_ids.append(compute_source_document_id(path) if path.exists() else None)
+        migrated["source_document_id"] = source_document_ids
+
+    for column in _REQUIRED_STAGED_COLUMNS:
+        if column not in migrated.columns:
+            migrated[column] = None
+    return migrated.loc[:, list(_REQUIRED_STAGED_COLUMNS)]
+
+
 def write_staged_transactions(path: Path, transactions: list[Transaction]) -> StagingWriteResult:
     """Persist staged transactions to parquet with canonical stage schema."""
     _require_parquet_engine()
@@ -164,11 +193,7 @@ def read_staged_transactions(path: Path) -> list[Transaction]:
         raise FileNotFoundError(f"Staged transactions file not found: {path}")
 
     _require_parquet_engine()
-    dataframe = pd.read_parquet(path)
-    missing_columns = [column for column in _REQUIRED_STAGED_COLUMNS if column not in dataframe]
-    if missing_columns:
-        missing = ", ".join(sorted(missing_columns))
-        raise ValueError(f"Invalid staged transaction schema; missing columns: {missing}")
+    dataframe = _backfill_legacy_staged_columns(pd.read_parquet(path))
 
     transactions: list[Transaction] = []
     for row in dataframe.to_dict(orient="records"):
