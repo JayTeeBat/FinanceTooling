@@ -559,3 +559,11 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
     assert exit_code == 0
     assert "Backup run: 20260321T101530000000Z" in stdio.out
     assert str(backup_run.config_backup_dir) in stdio.out
+    assert (
+        "Categorization coverage by transaction count: "
+        "100.00% categorized / 0.00% uncategorized"
+    ) in stdio.out
+    assert (
+        "Categorization coverage by absolute EUR amount: "
+        "100.00% categorized / 0.00% uncategorized"
+    ) in stdio.out

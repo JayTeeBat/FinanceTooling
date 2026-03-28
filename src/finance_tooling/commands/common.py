@@ -196,6 +196,16 @@ def print_full_refresh_preflight(preflight: FullRefreshPreflight) -> None:
 
 def print_workflow_result(result: WorkflowResult) -> int:
     """Print workflow result summary and return process exit code."""
+    total_categorization_count = result.categorized_count + result.uncategorized_count
+    categorized_count_ratio = (
+        result.categorized_count / total_categorization_count if total_categorization_count else 0.0
+    )
+    uncategorized_count_ratio = (
+        result.uncategorized_count / total_categorization_count
+        if total_categorization_count
+        else 0.0
+    )
+
     print(f"Scanned files: {result.files_scanned}")
     print_incremental_run_metadata(
         run_mode=result.run_mode,
@@ -234,6 +244,11 @@ def print_workflow_result(result: WorkflowResult) -> int:
         f"{result.uncategorized_count} uncategorized "
         f"(abs EUR categorized={result.categorized_amount_eur_abs:.2f}, "
         f"uncategorized={result.uncategorized_amount_eur_abs:.2f})"
+    )
+    print(
+        "Categorization coverage by transaction count: "
+        f"{categorized_count_ratio * 100.0:.2f}% categorized / "
+        f"{uncategorized_count_ratio * 100.0:.2f}% uncategorized"
     )
     print(
         "Categorization coverage by absolute EUR amount: "
