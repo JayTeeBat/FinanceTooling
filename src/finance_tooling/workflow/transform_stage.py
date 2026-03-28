@@ -24,6 +24,7 @@ from finance_tooling.workflow.enrichment import enrich_transactions
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
     committed_validations_for_current_inventory,
+    compute_config_fingerprint,
     load_source_registry,
     load_staged_batch_manifest,
     resolve_staged_batch_manifest_path,
@@ -82,6 +83,184 @@ def _summary_float(payload: Mapping[str, object], key: str) -> float:
         except ValueError:
             return 0.0
     return 0.0
+
+
+def _required_transform_outputs(settings: Settings) -> tuple[Path, ...]:
+    outputs = [
+        settings.master_parquet_path,
+        settings.export_csv_path,
+        settings.summary_json_path,
+        settings.output_path,
+        settings.completeness_json_path,
+    ]
+    if settings.export_json_enabled:
+        outputs.append(settings.export_json_path)
+    return tuple(outputs)
+
+
+def _is_transform_output_current(
+    settings: Settings,
+    *,
+    staged_path: Path,
+    manifest_path: Path,
+    manifest_config_fingerprint: str,
+) -> bool:
+    required_outputs = _required_transform_outputs(settings)
+    if any(not path.exists() for path in required_outputs):
+        return False
+    if manifest_config_fingerprint != compute_config_fingerprint(settings):
+        return False
+
+    inputs = (
+        staged_path,
+        manifest_path,
+        settings.category_rules_path,
+        settings.project_rules_path,
+        settings.project_overrides_path,
+        settings.transaction_overrides_path,
+        settings.review_state_path,
+    )
+    latest_input_mtime_ns = max(
+        (path.stat().st_mtime_ns for path in inputs if path.exists()),
+        default=-1,
+    )
+    earliest_output_mtime_ns = min(path.stat().st_mtime_ns for path in required_outputs)
+    return earliest_output_mtime_ns >= latest_input_mtime_ns
+
+
+def _workflow_result_from_summary(
+    settings: Settings,
+    summary_payload: Mapping[str, object],
+    *,
+    transactions_parsed: int,
+    new_rows: int,
+    warnings: tuple[str, ...],
+    run_mode: str,
+    files_selected_for_processing: int,
+    files_skipped_already_committed: int,
+    files_skipped_modified_existing: int,
+    files_missing_since_last_commit: int,
+    dataset_stale: bool,
+    stale_reasons: tuple[str, ...],
+) -> WorkflowResult:
+    return WorkflowResult(
+        dashboard_path=settings.output_path,
+        parquet_path=settings.master_parquet_path,
+        csv_path=settings.export_csv_path,
+        json_path=settings.export_json_path,
+        summary_path=settings.summary_json_path,
+        completeness_path=settings.completeness_json_path,
+        files_scanned=_summary_int(summary_payload, "files_scanned"),
+        files_failed=0,
+        transactions_parsed=transactions_parsed,
+        new_rows=new_rows,
+        total_rows=_summary_int(summary_payload, "total_rows"),
+        completeness_status=str(summary_payload.get("completeness_status", "pass")),
+        completeness_coverage_ratio=_summary_float(summary_payload, "file_coverage_ratio"),
+        missing_source_file_count=_summary_int(summary_payload, "missing_source_file_count"),
+        reconciliation_checkable_file_count=_summary_int(
+            summary_payload, "statement_reconciliation_checkable_file_count"
+        ),
+        reconciliation_fail_count=_summary_int(
+            summary_payload, "statement_reconciliation_fail_count"
+        ),
+        reconciliation_uncheckable_file_count=_summary_int(
+            summary_payload, "statement_reconciliation_uncheckable_file_count"
+        ),
+        reconciliation_pass_ratio=cast(
+            float | None, summary_payload.get("statement_reconciliation_pass_ratio")
+        ),
+        categorized_count=_summary_int(summary_payload, "categorized_count"),
+        uncategorized_count=_summary_int(summary_payload, "uncategorized_count"),
+        categorized_amount_eur_abs=_summary_float(summary_payload, "categorized_amount_eur_abs"),
+        uncategorized_amount_eur_abs=_summary_float(
+            summary_payload, "uncategorized_amount_eur_abs"
+        ),
+        categorized_amount_eur_abs_ratio=_summary_float(
+            summary_payload, "categorized_amount_eur_abs_ratio"
+        ),
+        uncategorized_amount_eur_abs_ratio=_summary_float(
+            summary_payload, "uncategorized_amount_eur_abs_ratio"
+        ),
+        warnings=warnings,
+        categorized_count_delta=0,
+        uncategorized_count_delta=0,
+        categorized_amount_eur_abs_delta=0.0,
+        uncategorized_amount_eur_abs_delta=0.0,
+        backup_run=None,
+        run_mode=run_mode,
+        files_selected_for_processing=files_selected_for_processing,
+        files_skipped_already_committed=files_skipped_already_committed,
+        files_skipped_modified_existing=files_skipped_modified_existing,
+        files_missing_since_last_commit=files_missing_since_last_commit,
+        dataset_stale=dataset_stale,
+        stale_reasons=stale_reasons,
+    )
+
+
+def load_cached_transform_result(
+    settings: Settings,
+    *,
+    staged_path: Path | None = None,
+    transactions_parsed: int = 0,
+    new_rows: int = 0,
+    warnings: tuple[str, ...] = (),
+    run_mode: str | None = None,
+    files_selected_for_processing: int | None = None,
+    files_skipped_already_committed: int | None = None,
+    files_skipped_modified_existing: int | None = None,
+    files_missing_since_last_commit: int | None = None,
+    dataset_stale: bool | None = None,
+    stale_reasons: tuple[str, ...] | None = None,
+) -> WorkflowResult | None:
+    """Return a cached workflow result when current outputs are already up to date."""
+    previous_summary = _load_previous_summary(settings.summary_json_path)
+    if previous_summary is None:
+        return None
+
+    input_staged_path = resolve_staged_transactions_path(settings, staged_path=staged_path)
+    manifest_path = resolve_staged_batch_manifest_path(settings)
+    manifest = load_staged_batch_manifest(manifest_path)
+    if manifest is None:
+        return None
+    if not _is_transform_output_current(
+        settings,
+        staged_path=input_staged_path,
+        manifest_path=manifest_path,
+        manifest_config_fingerprint=manifest.config_fingerprint,
+    ):
+        return None
+
+    return _workflow_result_from_summary(
+        settings,
+        previous_summary,
+        transactions_parsed=transactions_parsed,
+        new_rows=new_rows,
+        warnings=warnings,
+        run_mode=run_mode or manifest.run_mode,
+        files_selected_for_processing=(
+            manifest.files_selected_for_processing
+            if files_selected_for_processing is None
+            else files_selected_for_processing
+        ),
+        files_skipped_already_committed=(
+            manifest.files_skipped_already_committed
+            if files_skipped_already_committed is None
+            else files_skipped_already_committed
+        ),
+        files_skipped_modified_existing=(
+            manifest.files_skipped_modified_existing
+            if files_skipped_modified_existing is None
+            else files_skipped_modified_existing
+        ),
+        files_missing_since_last_commit=(
+            manifest.files_missing_since_last_commit
+            if files_missing_since_last_commit is None
+            else files_missing_since_last_commit
+        ),
+        dataset_stale=manifest.dataset_stale if dataset_stale is None else dataset_stale,
+        stale_reasons=manifest.stale_reasons if stale_reasons is None else stale_reasons,
+    )
 
 
 def _default_hsbc_merge_metrics() -> dict[str, int]:
@@ -231,7 +410,31 @@ def run_transform(
     backup_command: str = "transform",
 ) -> WorkflowResult:
     """Execute transform stage from staged transaction artifact."""
+    cached_result = None
+    if ingest_result is None:
+        cached_result = load_cached_transform_result(
+            settings,
+            staged_path=staged_path,
+            transactions_parsed=0,
+            new_rows=0,
+            warnings=(
+                "No-op transform: staged data, review state, and config are unchanged; "
+                "reused existing outputs.",
+            ),
+        )
+    if cached_result is not None:
+        return cached_result
+
     previous_summary = _load_previous_summary(settings.summary_json_path)
+    input_staged_path = resolve_staged_transactions_path(settings, staged_path=staged_path)
+    manifest_path = resolve_staged_batch_manifest_path(settings)
+    manifest = load_staged_batch_manifest(manifest_path)
+    if manifest is None:
+        raise RuntimeError(
+            "Missing staged batch manifest; run ingest before transform so the staged batch "
+            "is self-describing."
+        )
+
     progress = tqdm(
         total=5,
         desc="Transform",
@@ -259,14 +462,6 @@ def run_transform(
         raise RuntimeError("Failed to back up transform inputs before transform.") from exc
     progress.update()
     progress.set_postfix_str("load staged batch")
-    input_staged_path = resolve_staged_transactions_path(settings, staged_path=staged_path)
-    manifest = load_staged_batch_manifest(resolve_staged_batch_manifest_path(settings))
-    if manifest is None:
-        progress.close()
-        raise RuntimeError(
-            "Missing staged batch manifest; run ingest before transform so the staged batch "
-            "is self-describing."
-        )
     staged_transactions = read_staged_transactions(input_staged_path)
     progress.update()
     progress.set_postfix_str("enrich")

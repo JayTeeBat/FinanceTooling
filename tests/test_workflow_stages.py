@@ -24,8 +24,10 @@ from finance_tooling.store import (
     upsert_transactions,
 )
 from finance_tooling.workflow.incremental_state import (
+    IncrementalSelectionPlan,
     RunMode,
     StagedBatchManifest,
+    compute_config_fingerprint,
     staged_batch_manifest_path,
     write_staged_batch_manifest,
 )
@@ -663,6 +665,56 @@ def test_run_ingest_writes_staged_artifacts_only(monkeypatch, tmp_path: Path) ->
     assert not settings.completeness_json_path.exists()
 
 
+def test_run_ingest_skips_reingest_when_raw_files_unchanged(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    source_file = input_dir / "statement_2024.pdf"
+    source_file.write_text("fake", encoding="utf-8")
+    settings = _settings(input_dir)
+    settings.staged_transactions_path.write_text("placeholder", encoding="utf-8")
+    _write_transform_manifest(settings, [])
+
+    inventory = build_source_inventory([source_file])
+    selection_plan = IncrementalSelectionPlan(
+        run_mode="incremental",
+        current_inventory=inventory,
+        selected_entries=(),
+        files_skipped_already_committed=1,
+        modified_existing_entries=(),
+        missing_committed_entries=(),
+        dataset_stale=False,
+        stale_reasons=(),
+        config_fingerprint=compute_config_fingerprint(settings),
+    )
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.build_incremental_selection_plan",
+        lambda **_kwargs: selection_plan,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.load_source_registry",
+        lambda _path: object(),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.ingest_workflow_stage",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("ingest parsing should be skipped")
+        ),
+    )
+
+    result = run_ingest(settings)
+
+    assert result.transactions_parsed == 0
+    assert result.backup_run is None
+    assert result.files_selected_for_processing == 0
+    assert result.files_skipped_already_committed == 1
+    assert result.staged_path == settings.staged_transactions_path
+    assert any("No-op ingest" in warning for warning in result.warnings)
+
+
 def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
@@ -736,6 +788,82 @@ def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_
     assert not settings.export_json_path.exists()
 
 
+def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    source_file = input_dir / "statement_2024.pdf"
+    source_file.write_text("fake", encoding="utf-8")
+    settings = _settings(input_dir)
+    settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_overrides_path.write_text(
+        "version: 1\nrules: []\noverrides: []\n",
+        encoding="utf-8",
+    )
+    settings.transaction_overrides_path.write_text("version: 1\noverrides: []\n", encoding="utf-8")
+    settings.review_state_path.write_text("", encoding="utf-8")
+    settings.staged_transactions_path.write_text("placeholder", encoding="utf-8")
+
+    inventory = build_source_inventory([source_file])
+    manifest = StagedBatchManifest(
+        generated_at="2026-03-28T00:00:00+00:00",
+        run_mode="incremental",
+        source_inventory=inventory,
+        source_inventory_path=None,
+        selected_source_files=(str(source_file),),
+        selected_source_document_ids=tuple(
+            entry.source_document_id for entry in inventory.entries if entry.is_representative
+        ),
+        files_selected_for_processing=1,
+        files_skipped_already_committed=0,
+        files_skipped_modified_existing=0,
+        files_missing_since_last_commit=0,
+        dataset_stale=False,
+        stale_reasons=(),
+        config_fingerprint=compute_config_fingerprint(settings),
+        context={},
+    )
+    write_staged_batch_manifest(staged_batch_manifest_path(settings), manifest)
+
+    summary_payload = {
+        "files_scanned": 1,
+        "total_rows": 1,
+        "completeness_status": "pass",
+        "file_coverage_ratio": 1.0,
+        "missing_source_file_count": 0,
+        "statement_reconciliation_checkable_file_count": 0,
+        "statement_reconciliation_fail_count": 0,
+        "statement_reconciliation_uncheckable_file_count": 0,
+        "statement_reconciliation_pass_ratio": None,
+        "categorized_count": 1,
+        "uncategorized_count": 0,
+        "categorized_amount_eur_abs": 100.0,
+        "uncategorized_amount_eur_abs": 0.0,
+        "categorized_amount_eur_abs_ratio": 1.0,
+        "uncategorized_amount_eur_abs_ratio": 0.0,
+    }
+    settings.master_parquet_path.write_text("parquet", encoding="utf-8")
+    settings.export_csv_path.write_text("csv", encoding="utf-8")
+    settings.output_path.write_text("html", encoding="utf-8")
+    settings.completeness_json_path.write_text("{}", encoding="utf-8")
+    settings.summary_json_path.write_text(json.dumps(summary_payload), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.read_staged_transactions",
+        lambda _path: (_ for _ in ()).throw(
+            AssertionError("staged transactions should not be read for a no-op transform")
+        ),
+    )
+
+    result = run_transform(settings)
+
+    assert result.transactions_parsed == 0
+    assert result.new_rows == 0
+    assert result.backup_run is None
+    assert any("No-op transform" in warning for warning in result.warnings)
+
+
 def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
@@ -786,6 +914,81 @@ def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Pat
     assert row["category"] == "Work"
     assert row["subcategory"] == "Salary"
     assert row["category_source"] == "transaction_override"
+
+
+def test_run_update_skips_ingest_when_incremental_selection_is_empty(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    settings = _settings(input_dir)
+
+    selection_plan = IncrementalSelectionPlan(
+        run_mode="incremental",
+        current_inventory=build_source_inventory([]),
+        selected_entries=(),
+        files_skipped_already_committed=0,
+        modified_existing_entries=(),
+        missing_committed_entries=(),
+        dataset_stale=False,
+        stale_reasons=(),
+        config_fingerprint="config-fingerprint",
+    )
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.update_stage.discover_statement_pdfs",
+        lambda _path: [],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.update_stage.build_incremental_selection_plan",
+        lambda **_kwargs: selection_plan,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.update_stage.load_source_registry",
+        lambda _path: object(),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.update_stage.run_ingest",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("run_ingest should be skipped")
+        ),
+    )
+
+    expected = WorkflowResult(
+        dashboard_path=settings.output_path,
+        parquet_path=settings.master_parquet_path,
+        csv_path=settings.export_csv_path,
+        json_path=settings.export_json_path,
+        summary_path=settings.summary_json_path,
+        completeness_path=settings.completeness_json_path,
+        files_scanned=0,
+        files_failed=0,
+        transactions_parsed=0,
+        new_rows=0,
+        total_rows=0,
+        completeness_status="pass",
+        completeness_coverage_ratio=1.0,
+        missing_source_file_count=0,
+        reconciliation_checkable_file_count=0,
+        reconciliation_fail_count=0,
+        reconciliation_uncheckable_file_count=0,
+        reconciliation_pass_ratio=None,
+        categorized_count=0,
+        uncategorized_count=0,
+        categorized_amount_eur_abs=0.0,
+        uncategorized_amount_eur_abs=0.0,
+        categorized_amount_eur_abs_ratio=0.0,
+        uncategorized_amount_eur_abs_ratio=0.0,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.update_stage.run_transform",
+        lambda _settings, backup_command="transform": expected,
+    )
+
+    result = run_update(settings)
+
+    assert result == expected
 
 
 def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
