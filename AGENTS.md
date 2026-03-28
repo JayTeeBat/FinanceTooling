@@ -188,6 +188,22 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-28 - codex
+- Branch: `feature/progress-and-transform-performance`
+- Completed:
+  - Added stage-level `tqdm` progress bars for `ingest` and `transform`, while keeping the existing per-file ingest parsing progress bar intact.
+  - Landed the transform hot-path performance pass: FX lookups now use a prebuilt currency/date index, source-file mtimes are memoized per unique file, transaction overrides use indexed candidate matching, and staged legacy identity backfill avoids unnecessary work for modern files.
+  - Cleaned `pyproject.toml` so packaged script entrypoints match the current public CLI surface instead of publishing removed/internal commands.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/fx.py src/finance_tooling/workflow/enrichment.py src/finance_tooling/transaction_overrides.py src/finance_tooling/workflow/staging.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py tests/test_fx.py tests/test_enrichment.py tests/test_staging.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling/fx.py src/finance_tooling/workflow/enrichment.py src/finance_tooling/transaction_overrides.py src/finance_tooling/workflow/staging.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py tests/test_fx.py tests/test_enrichment.py tests/test_staging.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_fx.py tests/test_enrichment.py tests/test_staging.py tests/test_workflow_stages.py`: pass
+- Open items:
+  - No-op incremental runs still rebuild outputs and backups even when no staged data or config changes require work.
+  - `README.md` still mentions `uv run perf-check`; that utility remains internal and is no longer a packaged script entrypoint.
+- Next action:
+  - Implement a true no-op workflow fast path: skip ingest when no new files exist, skip transform when staged data and relevant config are unchanged, avoid unnecessary backups, and run only the minimal affected workflow slice for targeted changes such as small override updates.
+
+### 2026-03-28 - codex
 - Branch: `feature/api-surface-cleanup`
 - Completed:
   - Removed one-off migration and planning commands from the public top-level CLI so the operator-facing API is limited to ingest/transform/update/review/workflow-status.
@@ -216,18 +232,3 @@ Success target for the 2026 validation campaign:
   - `docs/categorization_review_workflow.md` and `docs/category_rules_review_workflow.md` still reference legacy processed-root filenames and should be updated in a follow-up docs pass.
 - Next action:
   - Open and merge the pipeline-output-layout PR, then land the isolated transform performance improvements on top of the stabilized output contract.
-
-### 2026-03-21 - codex
-- Branch: `main`
-- Completed:
-  - Implemented Phase 1 incremental pipeline state with a committed `source_registry.json`, a self-describing `staged_batch_manifest.json`, and default incremental selection for `ingest` and `update`.
-  - Made `transform` consume staged manifest metadata, regenerate reporting from the full merged canonical dataset after incremental runs, and update committed source state only after successful transforms.
-  - Added guarded `--full-refresh` preflight/confirmation flows to `ingest` and `update`, expanded `workflow-status` with committed/drift/full-refresh-risk reporting, and documented the new default behavior in `README.md`.
-- Checks:
-  - `uv run ruff check src/finance_tooling/commands/common.py src/finance_tooling/commands/ingest.py src/finance_tooling/commands/update.py src/finance_tooling/commands/workflow_status.py src/finance_tooling/models.py src/finance_tooling/store.py src/finance_tooling/perf_check.py src/finance_tooling/workflow/incremental_state.py src/finance_tooling/workflow/ingest.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/types.py src/finance_tooling/workflow/update_stage.py src/finance_tooling/workflow_status.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_perf_check.py`: pass
-  - `uv run pytest tests/test_cli_dispatch.py tests/test_command_entrypoints.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_ingest.py tests/test_perf_check.py`: pass
-  - `uv run ty check src/finance_tooling tests`: fail, but only on pre-existing diagnostics in `tests/test_planning_dashboard.py`
-- Open items:
-  - Phase 1 does not yet support targeted date-window reruns; modified/missing historical files and config drift are surfaced as stale conditions that still require a guarded full refresh.
-- Next action:
-  - Run `uv run workflow-status` and a real incremental `uv run update` on the live corpus, then validate that stale-state reporting and source-registry commits behave as expected before designing targeted reruns.

@@ -2,7 +2,13 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.fx import ensure_fx_cache, parse_ecb_csv, resolve_rate
+from finance_tooling.fx import (
+    build_fx_lookup_index,
+    ensure_fx_cache,
+    parse_ecb_csv,
+    resolve_rate,
+    resolve_rate_from_index,
+)
 from finance_tooling.models import Transaction
 
 _USD_CSV = (
@@ -71,3 +77,23 @@ def test_ensure_fx_cache_fetches_missing_ranges(tmp_path: Path, monkeypatch) -> 
     assert len(called) == 1
     assert len(cache) == 1
     assert cache_path.exists()
+
+
+def test_resolve_rate_from_index_matches_dataframe_resolution() -> None:
+    cache = parse_ecb_csv(_USD_CSV, "USD")
+    index = build_fx_lookup_index(cache)
+
+    direct = resolve_rate(
+        cache,
+        currency="USD",
+        booking_date=date(2026, 2, 21),
+        base_currency="EUR",
+    )
+    indexed = resolve_rate_from_index(
+        index,
+        currency="USD",
+        booking_date=date(2026, 2, 21),
+        base_currency="EUR",
+    )
+
+    assert indexed == direct

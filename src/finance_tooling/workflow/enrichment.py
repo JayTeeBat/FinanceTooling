@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from finance_tooling.classify import (
     build_classification_diagnostics,
@@ -12,7 +13,7 @@ from finance_tooling.classify import (
     load_classification_rules,
 )
 from finance_tooling.config import Settings
-from finance_tooling.fx import ensure_fx_cache, resolve_rate
+from finance_tooling.fx import build_fx_lookup_index, ensure_fx_cache, resolve_rate_from_index
 from finance_tooling.models import Transaction
 from finance_tooling.projecting import assign_projects_to_transactions, load_project_config
 from finance_tooling.transaction_overrides import (
@@ -37,6 +38,8 @@ def apply_fx_and_mtime(
         auto_fetch=settings.fx_auto_fetch,
     )
     warnings.extend(cache_warnings)
+    fx_lookup_index = build_fx_lookup_index(cache)
+    source_file_mtimes: dict[Path, datetime] = {}
 
     for tx in transactions:
         currency = tx.currency.upper()
@@ -45,8 +48,8 @@ def apply_fx_and_mtime(
         fx_rate_date = None
         fx_source = None
 
-        resolution = resolve_rate(
-            cache,
+        resolution = resolve_rate_from_index(
+            fx_lookup_index,
             currency=currency,
             booking_date=tx.booking_date,
             base_currency=settings.base_currency,
@@ -63,7 +66,10 @@ def apply_fx_and_mtime(
             fx_source = resolution.source
             amount_eur = tx.amount_native * resolution.rate_to_eur
 
-        mtime = datetime.fromtimestamp(tx.source_file.stat().st_mtime, tz=UTC)
+        mtime = source_file_mtimes.get(tx.source_file)
+        if mtime is None:
+            mtime = datetime.fromtimestamp(tx.source_file.stat().st_mtime, tz=UTC)
+            source_file_mtimes[tx.source_file] = mtime
         enriched.append(
             replace(
                 tx,

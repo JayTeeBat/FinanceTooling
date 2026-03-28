@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
+
+from tqdm import tqdm
 
 from finance_tooling.backup import create_stage_backup_run
 from finance_tooling.config import Settings
@@ -229,6 +232,14 @@ def run_transform(
 ) -> WorkflowResult:
     """Execute transform stage from staged transaction artifact."""
     previous_summary = _load_previous_summary(settings.summary_json_path)
+    progress = tqdm(
+        total=5,
+        desc="Transform",
+        unit="step",
+        disable=not sys.stderr.isatty(),
+        leave=False,
+    )
+    progress.set_postfix_str("backup")
     try:
         backup_run = create_stage_backup_run(
             stage="transform",
@@ -244,15 +255,21 @@ def run_transform(
             ),
         )
     except OSError as exc:
+        progress.close()
         raise RuntimeError("Failed to back up transform inputs before transform.") from exc
+    progress.update()
+    progress.set_postfix_str("load staged batch")
     input_staged_path = resolve_staged_transactions_path(settings, staged_path=staged_path)
     manifest = load_staged_batch_manifest(resolve_staged_batch_manifest_path(settings))
     if manifest is None:
+        progress.close()
         raise RuntimeError(
             "Missing staged batch manifest; run ingest before transform so the staged batch "
             "is self-describing."
         )
     staged_transactions = read_staged_transactions(input_staged_path)
+    progress.update()
+    progress.set_postfix_str("enrich")
     enrichment = enrich_transactions(staged_transactions, settings)
     reviewed_transactions = apply_review_state(
         enrichment.transactions,
@@ -264,6 +281,7 @@ def run_transform(
     if inventory is None and manifest.source_inventory_path is not None:
         inventory = load_source_inventory(Path(manifest.source_inventory_path))
     if inventory is None:
+        progress.close()
         raise RuntimeError(
             "Missing source inventory snapshot referenced by the staged batch manifest; "
             "rerun ingest before transform."
@@ -382,6 +400,8 @@ def run_transform(
             if validation.source_file not in selected_validation_paths
         ] + validations
 
+    progress.update()
+    progress.set_postfix_str("persist outputs")
     result, summary_payload = persist_and_report(
         settings=settings,
         source_files=source_files,
@@ -425,6 +445,8 @@ def run_transform(
         upsert_transactions_fn=upsert_transactions,
         render_dashboard_html_fn=render_dashboard_html,
     )
+    progress.update()
+    progress.set_postfix_str("update state")
     next_registry = update_source_registry(
         existing=registry,
         selection_plan=selection_plan,
@@ -433,6 +455,8 @@ def run_transform(
         transactions=reviewed_transactions,
     )
     write_source_registry(source_registry_path(settings), next_registry)
+    progress.update()
+    progress.close()
     if previous_summary is None:
         return result
 

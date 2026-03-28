@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
+
+from tqdm import tqdm
 
 from finance_tooling.backup import BackupRunResult, create_stage_backup_run
 from finance_tooling.config import INGEST_SUMMARY_FILENAME, Settings, ingest_state_path
@@ -89,12 +92,22 @@ def run_ingest(
     emit_ingest_summary: bool = False,
 ) -> IngestExecutionResult:
     """Execute ingest stage and write staged transaction artifacts."""
+    progress = tqdm(
+        total=5,
+        desc="Ingest",
+        unit="step",
+        disable=not sys.stderr.isatty(),
+        leave=False,
+    )
+    progress.set_postfix_str("backup")
     backup_run = create_stage_backup_run(
         stage="ingest",
         command=backup_command,
         processed_dir=settings.processed_path,
         processed_targets=(settings.staged_transactions_path,),
     )
+    progress.update()
+    progress.set_postfix_str("selection plan")
     registry = load_source_registry(source_registry_path(settings))
     selection_plan = build_incremental_selection_plan(
         settings=settings,
@@ -102,6 +115,8 @@ def run_ingest(
         current_inventory=build_source_inventory(discover_statement_pdfs(settings.input_path)),
         registry=registry,
     )
+    progress.update()
+    progress.set_postfix_str("parse statements")
     ingest = ingest_workflow_stage(
         settings,
         discover_statement_pdfs=discover_statement_pdfs,
@@ -116,7 +131,8 @@ def run_ingest(
         dataset_stale=selection_plan.dataset_stale,
         stale_reasons=list(selection_plan.stale_reasons),
     )
-
+    progress.update()
+    progress.set_postfix_str("merge and stage")
     hsbc_merge = merge_hsbc_sources(
         ingest.transactions,
         ingest.validations,
@@ -128,6 +144,8 @@ def run_ingest(
         *hsbc_merge.warnings,
     ]
     staging = write_staged_transactions(settings.staged_transactions_path, hsbc_merge.transactions)
+    progress.update()
+    progress.set_postfix_str("write manifest")
     staged_manifest = build_manifest_from_selection_plan(
         selection_plan=selection_plan,
         source_inventory=selection_plan.current_inventory,
@@ -242,6 +260,8 @@ def run_ingest(
             },
         }
         write_json(ingest_summary_path, ingest_summary_payload)
+    progress.update()
+    progress.close()
 
     return IngestExecutionResult(
         staged_path=staging.path,

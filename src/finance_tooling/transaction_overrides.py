@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -68,6 +68,38 @@ class TransactionOverrideStore:
     """Container for transaction-level override entries."""
 
     entries: tuple[TransactionOverrideEntry, ...]
+    entry_indexes_by_transaction_id: dict[str, tuple[int, ...]] = field(default_factory=dict)
+    entry_indexes_by_fingerprint: dict[str, tuple[int, ...]] = field(default_factory=dict)
+    fallback_entry_indexes: tuple[int, ...] = ()
+
+
+def _build_override_store(
+    entries: tuple[TransactionOverrideEntry, ...],
+) -> TransactionOverrideStore:
+    transaction_id_index: dict[str, list[int]] = {}
+    fingerprint_index: dict[str, list[int]] = {}
+    fallback_indexes: list[int] = []
+    for index, entry in enumerate(entries):
+        matched_index = False
+        if entry.transaction_id is not None:
+            transaction_id_index.setdefault(entry.transaction_id, []).append(index)
+            matched_index = True
+        if entry.fingerprint is not None:
+            fingerprint_index.setdefault(entry.fingerprint, []).append(index)
+            matched_index = True
+        if not matched_index:
+            fallback_indexes.append(index)
+
+    return TransactionOverrideStore(
+        entries=entries,
+        entry_indexes_by_transaction_id={
+            key: tuple(indexes) for key, indexes in transaction_id_index.items()
+        },
+        entry_indexes_by_fingerprint={
+            key: tuple(indexes) for key, indexes in fingerprint_index.items()
+        },
+        fallback_entry_indexes=tuple(fallback_indexes),
+    )
 
 
 def transaction_override_entry_key(entry: TransactionOverrideEntry) -> tuple[str, ...]:
@@ -223,7 +255,7 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
 def load_transaction_override_store(path: Path) -> tuple[TransactionOverrideStore, list[str]]:
     """Load transaction-level overrides from YAML/JSON configuration."""
     if not path.exists():
-        return TransactionOverrideStore(entries=()), []
+        return _build_override_store(()), []
 
     try:
         payload = _load_payload(path)
@@ -232,7 +264,7 @@ def load_transaction_override_store(path: Path) -> tuple[TransactionOverrideStor
         payload_object = cast(dict[str, object], payload)
         raw_overrides = payload_object.get("overrides")
         if raw_overrides is None:
-            return TransactionOverrideStore(entries=()), []
+            return _build_override_store(()), []
         if not isinstance(raw_overrides, list):
             raise ValueError("transaction override payload field 'overrides' must be a list")
 
@@ -244,9 +276,9 @@ def load_transaction_override_store(path: Path) -> tuple[TransactionOverrideStor
             if parsed is None:
                 continue
             entries.append(parsed)
-        return TransactionOverrideStore(entries=tuple(entries)), []
+        return _build_override_store(tuple(entries)), []
     except Exception as exc:
-        return TransactionOverrideStore(entries=()), [
+        return _build_override_store(()), [
             f"Failed to load transaction overrides from {path}: {exc}"
         ]
 
@@ -306,7 +338,7 @@ def upsert_transaction_override_entries(
     sorted_entries = tuple(
         entry for _, entry in sorted(merged_entries.items(), key=lambda item: item[0])
     )
-    return TransactionOverrideStore(entries=sorted_entries), updated, inserted
+    return _build_override_store(sorted_entries), updated, inserted
 
 
 def write_transaction_override_store(path: Path, store: TransactionOverrideStore) -> None:
@@ -374,7 +406,13 @@ def apply_transaction_overrides(
         tx_id = compute_transaction_id(tx)
         fingerprint = normalize_description(tx.description)
         current = tx
-        for entry in store.entries:
+        candidate_indexes = sorted(
+            set(store.entry_indexes_by_transaction_id.get(tx_id, ()))
+            | set(store.entry_indexes_by_fingerprint.get(fingerprint, ()))
+            | set(store.fallback_entry_indexes)
+        )
+        for entry_index in candidate_indexes:
+            entry = store.entries[entry_index]
             if not entry.matches(
                 transaction=current,
                 transaction_id=tx_id,
