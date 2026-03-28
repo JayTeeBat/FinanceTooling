@@ -4,9 +4,11 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pandas as pd
+
 from finance_tooling.config import Settings
 from finance_tooling.models import Transaction
-from finance_tooling.workflow.enrichment import enrich_transactions
+from finance_tooling.workflow.enrichment import apply_fx_and_mtime, enrich_transactions
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -91,3 +93,44 @@ def test_enrich_transactions_applies_transaction_overrides_and_project_tags(
     assert result.classification_diagnostics.categorized_count == 1
     assert result.classification_diagnostics.uncategorized_count == 0
     assert result.classification_diagnostics.category_source_counts == {"transaction_override": 1}
+
+
+def test_apply_fx_and_mtime_memoizes_source_file_mtime_stats(tmp_path: Path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    settings.input_path.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        "finance_tooling.workflow.enrichment.ensure_fx_cache",
+        lambda *_args, **_kwargs: (pd.DataFrame(), []),
+    )
+
+    source_file = settings.input_path / "statement_2026-02-01.pdf"
+    source_file.write_text("fake", encoding="utf-8")
+    stat_calls = 0
+    original_stat = Path.stat
+
+    def counting_stat(path: Path, *, follow_symlinks: bool = True):
+        nonlocal stat_calls
+        stat_calls += 1
+        return original_stat(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", counting_stat)
+
+    transactions = [
+        Transaction(
+            booking_date=date(2026, 2, 1),
+            description=f"Purchase {index}",
+            amount_native=Decimal("-12.34"),
+            currency="EUR",
+            source_file=source_file,
+            bank="REVOLUT",
+            parser="revolut",
+            account_label="Main",
+        )
+        for index in range(2)
+    ]
+
+    result, warnings = apply_fx_and_mtime(transactions, settings)
+
+    assert warnings == []
+    assert len(result) == 2
+    assert stat_calls == 1

@@ -144,6 +144,8 @@ def _backfill_legacy_staged_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
 
     required_columns = list(_REQUIRED_STAGED_COLUMNS)
     if not missing_columns:
+        if list(dataframe.columns) == required_columns:
+            return dataframe
         return dataframe.loc[:, required_columns]
 
     migrated = dataframe.copy()
@@ -151,10 +153,16 @@ def _backfill_legacy_staged_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
         migrated["source_record_index"] = migrated.groupby("source_file", sort=False).cumcount()
 
     if "source_document_id" not in migrated.columns:
+        source_document_id_by_path: dict[str, str | None] = {}
         source_document_ids: list[str | None] = []
         for raw_path in migrated["source_file"].tolist():
-            path = Path(str(raw_path))
-            source_document_ids.append(compute_source_document_id(path) if path.exists() else None)
+            path_text = str(raw_path)
+            if path_text not in source_document_id_by_path:
+                path = Path(path_text)
+                source_document_id_by_path[path_text] = (
+                    compute_source_document_id(path) if path.exists() else None
+                )
+            source_document_ids.append(source_document_id_by_path[path_text])
         migrated["source_document_id"] = source_document_ids
 
     for column in _REQUIRED_STAGED_COLUMNS:

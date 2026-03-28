@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from csv import DictReader
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -26,6 +27,9 @@ class FxResolution:
     rate_to_eur: Decimal
     rate_date: date
     source: str
+
+
+type FxLookupIndex = dict[str, tuple[list[date], list[FxResolution]]]
 
 
 def _empty_cache() -> pd.DataFrame:
@@ -210,3 +214,52 @@ def resolve_rate(
         rate_date=row["rate_date"],
         source=str(row["source"]),
     )
+
+
+def build_fx_lookup_index(cache: pd.DataFrame) -> FxLookupIndex:
+    """Build a per-currency index to speed up repeated booking-date lookups."""
+    if cache.empty:
+        return {}
+
+    index: FxLookupIndex = {}
+    for currency, subset in cache.groupby("currency", sort=False):
+        ordered = subset.sort_values(by="rate_date")
+        dates = [
+            cast_date
+            for cast_date in ordered["rate_date"].tolist()
+            if isinstance(cast_date, date)
+        ]
+        resolutions = [
+            FxResolution(
+                rate_to_eur=Decimal(str(row["rate_to_eur"])),
+                rate_date=row["rate_date"],
+                source=str(row["source"]),
+            )
+            for row in ordered.to_dict(orient="records")
+        ]
+        if dates and resolutions:
+            index[str(currency).upper()] = (dates, resolutions)
+    return index
+
+
+def resolve_rate_from_index(
+    index: FxLookupIndex,
+    *,
+    currency: str,
+    booking_date: date,
+    base_currency: str,
+) -> FxResolution | None:
+    """Resolve an FX rate using a precomputed index."""
+    code = currency.upper()
+    if code == base_currency:
+        return FxResolution(rate_to_eur=Decimal("1"), rate_date=booking_date, source="BASE")
+
+    currency_index = index.get(code)
+    if currency_index is None:
+        return None
+
+    dates, resolutions = currency_index
+    position = bisect_right(dates, booking_date) - 1
+    if position < 0:
+        return None
+    return resolutions[position]
