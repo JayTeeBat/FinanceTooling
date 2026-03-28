@@ -13,9 +13,11 @@ MASTER_PARQUET_ENV = "FINANCE_MASTER_PARQUET_PATH"
 BASE_CURRENCY_ENV = "FINANCE_BASE_CURRENCY"
 EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
+EXPORT_JSON_ENABLED_ENV = "FINANCE_EXPORT_JSON_ENABLED"
 STAGED_TRANSACTIONS_PATH_ENV = "FINANCE_STAGED_TRANSACTIONS_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
+TRANSFORM_DIAGNOSTICS_ENABLED_ENV = "FINANCE_TRANSFORM_DIAGNOSTICS_ENABLED"
 INGEST_WORKERS_ENV = "FINANCE_INGEST_WORKERS"
 INGEST_TEXT_CACHE_ENABLED_ENV = "FINANCE_INGEST_TEXT_CACHE_ENABLED"
 INGEST_TEXT_CACHE_PATH_ENV = "FINANCE_INGEST_TEXT_CACHE_PATH"
@@ -199,7 +201,14 @@ def load_settings_from_env() -> Settings:
     export_json_path = _resolve_path_from_env(EXPORT_JSON_PATH_ENV) or (
         outputs_dir / TRANSFORM_TRANSACTIONS_JSON_FILENAME
     )
-    export_json_enabled = _parse_bool(os.environ.get("FINANCE_EXPORT_JSON_ENABLED"), default=False)
+    export_json_enabled = _parse_bool(
+        os.environ.get(EXPORT_JSON_ENABLED_ENV),
+        default=False,
+    )
+    transform_diagnostics_enabled = _parse_bool(
+        os.environ.get(TRANSFORM_DIAGNOSTICS_ENABLED_ENV),
+        default=False,
+    )
     staged_transactions_path = _resolve_path_from_env(STAGED_TRANSACTIONS_PATH_ENV) or (
         state_dir / INGEST_STAGED_TRANSACTIONS_FILENAME
     )
@@ -267,5 +276,5 @@ def load_settings_from_env() -> Settings:
         transaction_overrides_path=transaction_overrides_path,
         review_state_path=review_state_path,
         review_export_dark_safe=review_export_dark_safe,
-        transform_diagnostics_enabled=False,
+        transform_diagnostics_enabled=transform_diagnostics_enabled,
     )

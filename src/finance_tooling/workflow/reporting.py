@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -38,79 +37,12 @@ def write_json(path: Path, payload: dict[str, object] | SummaryPayload) -> None:
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
-def _write_legacy_identity_collision_candidates(
-    dataframe: DataFrame,
-    output_path: Path,
-) -> tuple[int, int]:
-    if dataframe.empty:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        DataFrame().to_csv(output_path, index=False)
-        return 0, 0
-
-    working = dataframe.reindex(
-        columns=[
-            "booking_date",
-            "description",
-            "source_record_index",
-            "amount_native",
-            "currency",
-            "bank",
-            "account_label",
-            "source_file",
-            "parser",
-        ]
-    ).copy()
-    descriptions = working["description"].astype("string").fillna("")
-    working["legacy_transaction_id"] = (
-        working["booking_date"].astype("string").fillna("")
-        + "|"
-        + descriptions.map(lambda value: normalize_description(str(value)))
-        + "|"
-        + working["amount_native"].astype("string").fillna("")
-        + "|"
-        + working["currency"].astype("string").str.upper().fillna("")
-        + "|"
-        + working["bank"].astype("string").fillna("")
-        + "|"
-        + working["account_label"].astype("string").fillna("")
-        + "|"
-        + working["source_file"].astype("string").fillna("")
-    ).map(lambda payload: hashlib.sha256(payload.encode("utf-8")).hexdigest())
-
-    collision_sizes = (
-        working.groupby("legacy_transaction_id")["legacy_transaction_id"].transform("size")
-    )
-    collision_rows = working.loc[collision_sizes > 1].copy()
-    if collision_rows.empty:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        DataFrame().to_csv(output_path, index=False)
-        return 0, 0
-
-    collision_rows["collision_group_size"] = collision_sizes.loc[collision_rows.index]
-    collision_rows["group_row_number"] = (
-        collision_rows.groupby("legacy_transaction_id").cumcount() + 1
-    )
-    rows = collision_rows.loc[
-        :,
-        [
-            "legacy_transaction_id",
-            "collision_group_size",
-            "group_row_number",
-            "booking_date",
-            "description",
-            "source_record_index",
-            "amount_native",
-            "currency",
-            "bank",
-            "account_label",
-            "source_file",
-            "parser",
-        ],
-    ]
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    rows.to_csv(output_path, index=False)
-    return rows["legacy_transaction_id"].nunique(), len(rows)
+def _remove_if_exists(path: Path) -> None:
+    """Best-effort removal for optional artifacts disabled in the current run."""
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
 
 
 def _build_classification_diagnostics_from_dataframe(
@@ -398,9 +330,12 @@ def persist_and_report(
     write_json(settings.completeness_json_path, completeness_report)
 
     settings.export_csv_path.parent.mkdir(parents=True, exist_ok=True)
-    settings.export_json_path.parent.mkdir(parents=True, exist_ok=True)
     dataframe.to_csv(settings.export_csv_path, index=False)
-    dataframe.to_json(settings.export_json_path, orient="records", indent=2)
+    if settings.export_json_enabled:
+        settings.export_json_path.parent.mkdir(parents=True, exist_ok=True)
+        dataframe.to_json(settings.export_json_path, orient="records", indent=2)
+    else:
+        _remove_if_exists(settings.export_json_path)
 
     dashboard_path = render_dashboard_html_fn(
         dataframe,
@@ -412,12 +347,7 @@ def persist_and_report(
         project_rules_path=settings.project_rules_path,
         budget_targets_path=settings.budget_targets_path,
     )
-    collision_candidates_path = (
-        settings.summary_json_path.parent / "legacy_identity_collision_candidates.csv"
-    )
-    legacy_identity_collision_group_count, legacy_identity_collision_row_count = (
-        _write_legacy_identity_collision_candidates(dataframe, collision_candidates_path)
-    )
+    _remove_if_exists(settings.output_path.parent / "legacy_identity_collision_candidates.csv")
 
     (
         category_metrics_by_bank,
@@ -539,9 +469,6 @@ def persist_and_report(
         "manual_category_carry_forward_unmatched_count": (
             manual_category_carry_forward_unmatched_count
         ),
-        "legacy_identity_collision_group_count": legacy_identity_collision_group_count,
-        "legacy_identity_collision_row_count": legacy_identity_collision_row_count,
-        "legacy_identity_collision_candidates_path": str(collision_candidates_path),
         "category_source_counts": classification_diagnostics.category_source_counts,
         "category_metrics_by_bank": category_metrics_by_bank,
         "top_uncategorized_descriptions": (

@@ -115,9 +115,8 @@ What it does:
   `transform_transactions.parquet`, `transform_transactions.csv`,
   `transform_run_summary.json`, and `transform_dashboard.html`.
 - Optional transform diagnostics are written under `${FINANCE_PROCESSED_PATH}/state/`,
-  including `transform_transactions.json`,
-  `transform_completeness_report.json`, and
-  `legacy_identity_collision_candidates.csv` when enabled.
+  including `transform_transactions.json` and
+  `transform_completeness_report.json` when enabled.
 - In incremental mode, upserts only the staged source documents into the master
   parquet, then rebuilds summary/dashboard/export artifacts from the full merged
   canonical dataset.

@@ -733,7 +733,7 @@ def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_
     assert settings.summary_json_path.exists()
     assert settings.completeness_json_path.exists()
     assert settings.export_csv_path.exists()
-    assert settings.export_json_path.exists()
+    assert not settings.export_json_path.exists()
 
 
 def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Path) -> None:

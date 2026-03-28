@@ -148,9 +148,6 @@ class SummaryPayload(TypedDict):
     manual_category_carry_forward_applied_count: int
     manual_category_carry_forward_ambiguous_skipped_count: int
     manual_category_carry_forward_unmatched_count: int
-    legacy_identity_collision_group_count: int
-    legacy_identity_collision_row_count: int
-    legacy_identity_collision_candidates_path: str
     category_source_counts: dict[str, int]
     category_metrics_by_bank: list[dict[str, object]]
     top_uncategorized_descriptions: list[dict[str, object]]

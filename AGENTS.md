@@ -192,7 +192,7 @@ Success target for the 2026 validation campaign:
 - Completed:
   - Reconciled the ingest and transform output-layout work into a single flat processed contract with `outputs/` for user-facing transform artifacts and `state/` for pipeline state/monitoring artifacts.
   - Renamed default pipeline artifacts to stage-explicit names, including `ingest_staged_transactions.parquet`, `ingest_staged_batch_manifest.json`, `transform_transactions.parquet`, `transform_transactions.csv`, `transform_run_summary.json`, and `transform_source_registry.json`, while keeping legacy fallbacks where needed.
-  - Updated `README.md`, review-export path resolution, reporting metadata, and metrics logs to match the new output layout and defaults.
+  - Updated `README.md`, review-export path resolution, reporting metadata, and metrics logs to match the new output layout and defaults, then tightened transform defaults so JSON export is opt-in and the legacy identity collision CSV is no longer generated.
 - Checks:
   - `uv run ruff check tests/test_config.py tests/test_enrichment.py tests/test_ingest.py tests/test_perf_check.py tests/test_backup.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_workflow_status.py src/finance_tooling/commands/common.py src/finance_tooling/perf_check.py src/finance_tooling/workflow_status.py`: pass
   - `uv run pytest -q tests/test_config.py tests/test_ingest.py tests/test_enrichment.py tests/test_workflow_status.py tests/test_perf_check.py tests/test_backup.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_review_workflow.py`: pass
@@ -200,7 +200,6 @@ Success target for the 2026 validation campaign:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run metrics-log-update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`: pass
 - Open items:
   - `docs/categorization_review_workflow.md` and `docs/category_rules_review_workflow.md` still reference legacy processed-root filenames and should be updated in a follow-up docs pass.
-  - Live processed artifacts in the vault still use the old root-level filenames until the updated pipeline is run against them.
 - Next action:
   - Open and merge the pipeline-output-layout PR, then land the isolated transform performance improvements on top of the stabilized output contract.
 

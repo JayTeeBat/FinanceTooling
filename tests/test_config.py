@@ -68,6 +68,8 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.export_json_path == (
         processed_dir / "outputs" / "transform_transactions.json"
     ).resolve()
+    assert settings.export_json_enabled is False
+    assert settings.transform_diagnostics_enabled is False
     assert (
         settings.staged_transactions_path
         == (processed_dir / "state" / "ingest_staged_transactions.parquet").resolve()
@@ -218,6 +220,8 @@ def test_load_settings_reads_required_paths_from_dotenv(monkeypatch, tmp_path: P
     assert settings.fx_auto_fetch is False
     assert settings.ingest_workers == 2
     assert settings.ingest_text_cache_enabled is True
+    assert settings.export_json_enabled is False
+    assert settings.transform_diagnostics_enabled is False
 
 
 def test_load_settings_rejects_invalid_ingest_workers(monkeypatch, tmp_path: Path) -> None:

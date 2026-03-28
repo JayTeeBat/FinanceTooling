@@ -261,7 +261,8 @@ def print_workflow_result(result: WorkflowResult) -> int:
     print(f"Dashboard: {result.dashboard_path}")
     print(f"Parquet: {result.parquet_path}")
     print(f"CSV export: {result.csv_path}")
-    print(f"JSON export: {result.json_path}")
+    if result.json_path.exists():
+        print(f"JSON export: {result.json_path}")
     print(f"Summary: {result.summary_path}")
     print(f"Completeness report: {result.completeness_path}")
     if result.backup_run is not None:

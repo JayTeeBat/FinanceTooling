@@ -233,7 +233,7 @@ def run_transform(
         backup_run = create_stage_backup_run(
             stage="transform",
             command=backup_command,
-            processed_dir=settings.summary_json_path.parent,
+            processed_dir=settings.processed_path,
             processed_targets=(settings.master_parquet_path,),
             config_dir=settings.category_rules_path.parent,
             config_targets=(
