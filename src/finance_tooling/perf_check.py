@@ -15,6 +15,7 @@ from finance_tooling.config import (
     PROCESSED_PATH_ENV,
     Settings,
     load_settings_from_env,
+    state_root_path,
 )
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.extract import extract_text_from_pdf
@@ -27,7 +28,7 @@ from finance_tooling.workflow.hsbc_merge import merge_hsbc_sources
 from finance_tooling.workflow.ingest import ingest_statements
 from finance_tooling.workflow.reporting import persist_and_report
 
-PERFORMANCE_SUMMARY_FILENAME = "performance_summary.json"
+WORKFLOW_PERFORMANCE_SUMMARY_FILENAME = "workflow_performance_summary.json"
 PERF_ALLOW_IN_PLACE_ENV = "FINANCE_PERF_ALLOW_IN_PLACE"
 
 
@@ -123,7 +124,7 @@ def assert_isolated_processed_path(settings: Settings) -> None:
         return
 
     standard_path = Path(standard_raw).expanduser().resolve()
-    active_path = settings.summary_json_path.parent.resolve()
+    active_path = settings.processed_path.resolve()
     if active_path == standard_path:
         raise ValueError(
             "Performance check output path matches .env FINANCE_PROCESSED_PATH. "
@@ -224,7 +225,7 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
 
     payload: PerformanceSummaryPayload = {
         "generated_at": datetime.now(UTC).isoformat(),
-        "processed_path": str(settings.summary_json_path.parent),
+        "processed_path": str(settings.processed_path),
         "statements_path": str(settings.input_path),
         "fx_auto_fetch": settings.fx_auto_fetch,
         "total_duration_seconds": total_duration,
@@ -247,7 +248,9 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         "ingest_text_cache_misses": summary_payload["ingest_text_cache_misses"],
         "ingest_text_cache_write_count": summary_payload["ingest_text_cache_write_count"],
     }
-    performance_summary_path = settings.summary_json_path.parent / PERFORMANCE_SUMMARY_FILENAME
+    performance_summary_path = (
+        state_root_path(settings) / WORKFLOW_PERFORMANCE_SUMMARY_FILENAME
+    )
     _write_json(performance_summary_path, payload)
 
     return PerfCheckResult(

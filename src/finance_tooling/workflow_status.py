@@ -9,7 +9,7 @@ from typing import TypedDict
 
 import pandas as pd
 
-from finance_tooling.config import Settings
+from finance_tooling.config import Settings, state_root_path
 from finance_tooling.scanner import discover_statement_pdfs
 from finance_tooling.source_inventory import (
     SourceInventorySnapshot,
@@ -23,12 +23,13 @@ from finance_tooling.workflow.incremental_state import (
     compute_config_fingerprint,
     load_source_registry,
     load_staged_batch_manifest,
+    resolve_staged_batch_manifest_path,
     source_registry_path,
-    staged_batch_manifest_path,
 )
+from finance_tooling.workflow.staging import resolve_staged_transactions_path
 
-PIPELINE_STATE_FILENAME = "pipeline_state.json"
-SOURCE_INVENTORY_FILENAME = "source_inventory.json"
+PIPELINE_STATE_FILENAME = "workflow_pipeline_state.json"
+SOURCE_INVENTORY_FILENAME = "workflow_source_inventory.json"
 
 
 class PipelineFinding(TypedDict):
@@ -161,14 +162,21 @@ def _master_snapshot(path: Path) -> MasterState:
 
 def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path]:
     """Build and persist a machine-readable pipeline status snapshot."""
-    processed_dir = settings.summary_json_path.parent
-    pipeline_state_path = processed_dir / PIPELINE_STATE_FILENAME
-    stored_inventory_path = processed_dir / SOURCE_INVENTORY_FILENAME
+    processed_dir = settings.processed_path
+    pipeline_state_path = state_root_path(settings) / PIPELINE_STATE_FILENAME
+    stored_inventory_path = state_root_path(settings) / SOURCE_INVENTORY_FILENAME
 
     current_inventory = build_source_inventory(discover_statement_pdfs(settings.input_path))
-    previous_inventory = load_source_inventory(stored_inventory_path)
     registry = load_source_registry(source_registry_path(settings))
-    manifest = load_staged_batch_manifest(staged_batch_manifest_path(settings))
+    manifest = load_staged_batch_manifest(resolve_staged_batch_manifest_path(settings))
+    manifest_inventory = manifest.source_inventory if manifest is not None else None
+    if (
+        manifest_inventory is None
+        and manifest is not None
+        and manifest.source_inventory_path is not None
+    ):
+        manifest_inventory = load_source_inventory(Path(manifest.source_inventory_path))
+    previous_inventory = manifest_inventory or load_source_inventory(stored_inventory_path)
     selection_plan = build_incremental_selection_plan(
         settings=settings,
         run_mode="incremental",
@@ -273,11 +281,12 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
             }
         )
 
-    staged_exists = settings.staged_transactions_path.exists()
+    staged_transactions_path = resolve_staged_transactions_path(settings)
+    staged_exists = staged_transactions_path.exists()
     summary_exists = settings.summary_json_path.exists()
     if staged_exists and (
         not summary_exists
-        or settings.staged_transactions_path.stat().st_mtime
+        or staged_transactions_path.stat().st_mtime
         > settings.summary_json_path.stat().st_mtime
     ):
         findings.append(
@@ -335,17 +344,14 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
         },
         "staged_state": {
             "exists": staged_exists,
-            "path": str(settings.staged_transactions_path),
+            "path": str(staged_transactions_path),
             "mtime": (
-                datetime.fromtimestamp(
-                    settings.staged_transactions_path.stat().st_mtime,
-                    tz=UTC,
-                ).isoformat()
+                datetime.fromtimestamp(staged_transactions_path.stat().st_mtime, tz=UTC).isoformat()
                 if staged_exists
                 else None
             ),
             "manifest_exists": manifest is not None,
-            "manifest_path": str(staged_batch_manifest_path(settings)),
+            "manifest_path": str(resolve_staged_batch_manifest_path(settings)),
             "run_mode": manifest.run_mode if manifest is not None else None,
             "files_selected_for_processing": (
                 manifest.files_selected_for_processing if manifest is not None else 0

@@ -23,14 +23,17 @@ from finance_tooling.workflow.incremental_state import (
     committed_validations_for_current_inventory,
     load_source_registry,
     load_staged_batch_manifest,
+    resolve_staged_batch_manifest_path,
     source_registry_path,
-    staged_batch_manifest_path,
     update_source_registry,
     write_source_registry,
 )
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 from finance_tooling.workflow.reporting import persist_and_report
-from finance_tooling.workflow.staging import read_staged_transactions
+from finance_tooling.workflow.staging import (
+    read_staged_transactions,
+    resolve_staged_transactions_path,
+)
 from finance_tooling.workflow.types import (
     HsbcBoundaryDiagnostic,
     HsbcSelectionDiagnostic,
@@ -242,8 +245,8 @@ def run_transform(
         )
     except OSError as exc:
         raise RuntimeError("Failed to back up transform inputs before transform.") from exc
-    input_staged_path = staged_path or settings.staged_transactions_path
-    manifest = load_staged_batch_manifest(staged_batch_manifest_path(settings))
+    input_staged_path = resolve_staged_transactions_path(settings, staged_path=staged_path)
+    manifest = load_staged_batch_manifest(resolve_staged_batch_manifest_path(settings))
     if manifest is None:
         raise RuntimeError(
             "Missing staged batch manifest; run ingest before transform so the staged batch "
@@ -257,7 +260,9 @@ def run_transform(
     )
     manifest_context = manifest.context
     registry = load_source_registry(source_registry_path(settings))
-    inventory = load_source_inventory(Path(manifest.source_inventory_path))
+    inventory = manifest.source_inventory
+    if inventory is None and manifest.source_inventory_path is not None:
+        inventory = load_source_inventory(Path(manifest.source_inventory_path))
     if inventory is None:
         raise RuntimeError(
             "Missing source inventory snapshot referenced by the staged batch manifest; "

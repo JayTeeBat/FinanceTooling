@@ -15,7 +15,7 @@ from pandas import DataFrame
 from finance_tooling.backup import BackupRunResult
 from finance_tooling.classify import ClassificationDiagnostics, normalize_description
 from finance_tooling.completeness import build_completeness_report_from_dataframe
-from finance_tooling.config import Settings
+from finance_tooling.config import Settings, state_root_path
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
@@ -555,7 +555,7 @@ def persist_and_report(
         "transaction_overrides_path": str(settings.transaction_overrides_path),
         "review_state_path": str(settings.review_state_path),
         "fx_cache_path": str(settings.fx_cache_path),
-        "source_inventory_path": str(settings.summary_json_path.parent / "source_inventory.json"),
+        "source_inventory_path": str(state_root_path(settings) / "workflow_source_inventory.json"),
         "backup_run_id": backup_run.run_id if backup_run is not None else None,
         "backup_processed_dir": (
             str(backup_run.processed_backup_dir)

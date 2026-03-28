@@ -14,6 +14,7 @@ def run_update(
     ingest_only: bool = False,
     transform_only: bool = False,
     full_refresh: bool = False,
+    emit_ingest_summary: bool = False,
 ) -> WorkflowResult | IngestExecutionResult:
     """Run ingest+transform orchestration with optional stage-only execution."""
     if ingest_only and transform_only:
@@ -28,6 +29,7 @@ def run_update(
         settings,
         backup_command="update",
         run_mode="full_refresh" if full_refresh else "incremental",
+        emit_ingest_summary=emit_ingest_summary,
     )
     if ingest_only:
         return ingest_result

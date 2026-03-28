@@ -187,7 +187,7 @@ class IngestResult:
     source_files: list[Path]
     raw_file_count: int
     duplicate_raw_file_count: int
-    source_inventory_path: Path
+    source_inventory_path: Path | None
     all_source_files: list[Path]
     selected_source_files: list[Path]
     transactions: list[Transaction]

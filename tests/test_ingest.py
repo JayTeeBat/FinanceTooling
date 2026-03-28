@@ -45,27 +45,31 @@ class _DummyParser:
 def _settings(tmp_path: Path, *, ingest_workers: int) -> Settings:
     input_dir = tmp_path / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
+    processed_dir = tmp_path / "processed"
+    (processed_dir / "outputs").mkdir(parents=True, exist_ok=True)
+    (processed_dir / "state").mkdir(parents=True, exist_ok=True)
     return Settings(
         input_path=input_dir,
-        output_path=tmp_path / "dashboard.html",
-        master_parquet_path=tmp_path / "transactions_master.parquet",
-        export_csv_path=tmp_path / "transactions_normalized.csv",
-        export_json_path=tmp_path / "transactions_normalized.json",
-        staged_transactions_path=tmp_path / "staged_transactions.parquet",
-        summary_json_path=tmp_path / "run_summary.json",
-        completeness_json_path=tmp_path / "completeness_report.json",
+        processed_path=processed_dir,
+        output_path=processed_dir / "outputs" / "transform_dashboard.html",
+        master_parquet_path=processed_dir / "outputs" / "transform_transactions.parquet",
+        export_csv_path=processed_dir / "outputs" / "transform_transactions.csv",
+        export_json_path=processed_dir / "outputs" / "transform_transactions.json",
+        staged_transactions_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+        summary_json_path=processed_dir / "outputs" / "transform_run_summary.json",
+        completeness_json_path=processed_dir / "state" / "transform_completeness_report.json",
         base_currency="EUR",
-        fx_cache_path=tmp_path / "fx_rates_history.parquet",
+        fx_cache_path=processed_dir / "state" / "workflow_fx_rates_history.parquet",
         fx_auto_fetch=False,
         ingest_workers=ingest_workers,
         ingest_text_cache_enabled=False,
-        ingest_text_cache_path=tmp_path / "ingest_text_cache.parquet",
+        ingest_text_cache_path=processed_dir / "state" / "ingest_text_cache.parquet",
         category_rules_path=tmp_path / "category_rules.yaml",
         project_rules_path=tmp_path / "project_rules.yaml",
         budget_targets_path=tmp_path / "budget_targets.yaml",
         project_overrides_path=Path("config/project_overrides.yaml").resolve(),
         transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
-        review_state_path=tmp_path / "review_state.parquet",
+        review_state_path=processed_dir / "state" / "workflow_review_state.parquet",
         review_export_dark_safe=True,
     )
 
