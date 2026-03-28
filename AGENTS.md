@@ -188,6 +188,23 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-28 - codex
+- Branch: `feature/noop-workflow-fast-path`
+- Completed:
+  - Added a true no-op fast path for `update`, `ingest`, and `transform` so unchanged raw files and unchanged staged/config/review inputs reuse existing outputs instead of re-running the pipeline.
+  - Moved the no-op decision ahead of stage backups, so unchanged runs no longer create backup snapshots.
+  - Added workflow-stage coverage for no-op ingest, no-op transform, and no-op update orchestration, and verified the end-to-end no-op update path on an isolated processed copy (~1.66s wall time with truthful `0 selected / 204 already committed` reporting).
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py tests/test_workflow_stages.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py tests/test_workflow_stages.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_workflow_stages.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run python -m finance_tooling.commands.metrics_log_update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/outputs/transform_run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`: pass
+- Open items:
+  - Small targeted config/review changes still rerun the full transform stage when transform is required; only true no-op cases short-circuit today.
+  - The no-op change detection still scans the raw corpus to build source inventory, so hashing/discovery remains a noticeable floor for large corpora.
+- Next action:
+  - Add targeted transform scopes so review-state-only and small override/config edits can run the minimal valid transform slice instead of the full transform pipeline.
+
+### 2026-03-28 - codex
 - Branch: `feature/progress-and-transform-performance`
 - Completed:
   - Added stage-level `tqdm` progress bars for `ingest` and `transform`, while keeping the existing per-file ingest parsing progress bar intact.
@@ -216,19 +233,3 @@ Success target for the 2026 validation campaign:
   - `metrics_log_update.py`, `migrate_transaction_ids.py`, and the `plan_*` command modules still exist as internal entrypoints/modules even though they are no longer part of the public top-level CLI.
 - Next action:
   - Open and merge the API-surface cleanup PR, then decide whether the remaining internal maintenance/planning modules should stay as private utilities or move to a separate namespace/tool.
-
-### 2026-03-28 - codex
-- Branch: `feature/pipeline-output-layout`
-- Completed:
-  - Reconciled the ingest and transform output-layout work into a single flat processed contract with `outputs/` for user-facing transform artifacts and `state/` for pipeline state/monitoring artifacts.
-  - Renamed default pipeline artifacts to stage-explicit names, including `ingest_staged_transactions.parquet`, `ingest_staged_batch_manifest.json`, `transform_transactions.parquet`, `transform_transactions.csv`, `transform_run_summary.json`, and `transform_source_registry.json`, while keeping legacy fallbacks where needed.
-  - Updated `README.md`, review-export path resolution, reporting metadata, and metrics logs to match the new output layout and defaults, then tightened transform defaults so JSON export is opt-in and the legacy identity collision CSV is no longer generated.
-- Checks:
-  - `uv run ruff check tests/test_config.py tests/test_enrichment.py tests/test_ingest.py tests/test_perf_check.py tests/test_backup.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_workflow_status.py src/finance_tooling/commands/common.py src/finance_tooling/perf_check.py src/finance_tooling/workflow_status.py`: pass
-  - `uv run pytest -q tests/test_config.py tests/test_ingest.py tests/test_enrichment.py tests/test_workflow_status.py tests/test_perf_check.py tests/test_backup.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_review_workflow.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling tests`: fail, but only on the pre-existing diagnostics in `tests/test_planning_dashboard.py`
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run metrics-log-update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`: pass
-- Open items:
-  - `docs/categorization_review_workflow.md` and `docs/category_rules_review_workflow.md` still reference legacy processed-root filenames and should be updated in a follow-up docs pass.
-- Next action:
-  - Open and merge the pipeline-output-layout PR, then land the isolated transform performance improvements on top of the stabilized output contract.

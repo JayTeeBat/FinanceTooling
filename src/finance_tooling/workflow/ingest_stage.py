@@ -21,6 +21,7 @@ from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
     build_manifest_from_selection_plan,
     load_source_registry,
+    resolve_staged_batch_manifest_path,
     source_registry_path,
     staged_batch_manifest_path,
     write_staged_batch_manifest,
@@ -28,7 +29,10 @@ from finance_tooling.workflow.incremental_state import (
 from finance_tooling.workflow.ingest import ingest_statements as ingest_workflow_stage
 from finance_tooling.workflow.ingest import parse_hsbc_statement_period
 from finance_tooling.workflow.reporting import write_json
-from finance_tooling.workflow.staging import write_staged_transactions
+from finance_tooling.workflow.staging import (
+    resolve_staged_transactions_path,
+    write_staged_transactions,
+)
 from finance_tooling.workflow.types import (
     HsbcBoundaryDiagnostic,
     HsbcSelectionDiagnostic,
@@ -92,6 +96,110 @@ def run_ingest(
     emit_ingest_summary: bool = False,
 ) -> IngestExecutionResult:
     """Execute ingest stage and write staged transaction artifacts."""
+    registry = load_source_registry(source_registry_path(settings))
+    selection_plan = build_incremental_selection_plan(
+        settings=settings,
+        run_mode=run_mode,  # type: ignore[arg-type]
+        current_inventory=build_source_inventory(discover_statement_pdfs(settings.input_path)),
+        registry=registry,
+    )
+    existing_staged_path = resolve_staged_transactions_path(settings)
+    existing_manifest_path = resolve_staged_batch_manifest_path(settings)
+    if (
+        run_mode == "incremental"
+        and not selection_plan.selected_entries
+        and not selection_plan.dataset_stale
+        and existing_staged_path.exists()
+        and existing_manifest_path.exists()
+    ):
+        ingest_summary_path: Path | None = None
+        warnings = ("No-op ingest: raw files unchanged; reused existing staged batch.",)
+        if emit_ingest_summary:
+            ingest_summary_path = ingest_state_path(settings) / INGEST_SUMMARY_FILENAME
+            ingest_summary_payload: dict[str, object] = {
+                "generated_at": datetime.now(UTC).isoformat(),
+                "stage": "ingest",
+                "files_scanned": len(selection_plan.all_representative_source_files),
+                "run_mode": "incremental",
+                "files_selected_for_processing": 0,
+                "files_skipped_already_committed": selection_plan.files_skipped_already_committed,
+                "files_skipped_modified_existing": 0,
+                "files_missing_since_last_commit": 0,
+                "dataset_stale": False,
+                "stale_reasons": [],
+                "raw_files_discovered": selection_plan.current_inventory.raw_file_count,
+                "duplicate_raw_file_count": (
+                    selection_plan.current_inventory.ignored_duplicate_file_count
+                ),
+                "files_failed": 0,
+                "transactions_parsed": 0,
+                "staged_transactions_path": str(existing_staged_path),
+                "staged_batch_manifest_path": str(existing_manifest_path),
+                "hsbc_csv_files_scanned": 0,
+                "parser_low_confidence_file_count": 0,
+                "backup_run_id": None,
+                "backup_processed_dir": None,
+                "backup_config_dir": None,
+                "backup_manifest_paths": [],
+                "backup_copied_file_count": 0,
+                "backup_missing_file_count": 0,
+                "backup_pruned_run_ids": [],
+                "warnings": list(warnings),
+                "ingest_parser_duration_seconds_by_parser": {},
+                "ingest_duration_seconds_by_bank": {},
+                "ingest_text_cache_enabled": settings.ingest_text_cache_enabled,
+                "ingest_text_cache_hits": 0,
+                "ingest_text_cache_misses": 0,
+                "ingest_text_cache_write_count": 0,
+                "source_inventory": {
+                    "raw_file_count": selection_plan.current_inventory.raw_file_count,
+                    "unique_document_count": selection_plan.current_inventory.unique_document_count,
+                    "ignored_duplicate_file_count": (
+                        selection_plan.current_inventory.ignored_duplicate_file_count
+                    ),
+                },
+            }
+            write_json(ingest_summary_path, ingest_summary_payload)
+
+        return IngestExecutionResult(
+            staged_path=existing_staged_path,
+            files_scanned=len(selection_plan.all_representative_source_files),
+            raw_files_discovered=selection_plan.current_inventory.raw_file_count,
+            duplicate_raw_file_count=selection_plan.current_inventory.ignored_duplicate_file_count,
+            files_failed=0,
+            transactions_parsed=0,
+            hsbc_csv_files_scanned=0,
+            parser_low_confidence_file_count=0,
+            warnings=warnings,
+            source_files=tuple(selection_plan.all_representative_source_files),
+            selected_source_files=(),
+            validations=(),
+            parser_selection_diagnostics=(),
+            hsbc_merge_metrics={},
+            hsbc_period_parse_variant_match_count=0,
+            hsbc_boundary_metrics={},
+            hsbc_boundary_diagnostics=(),
+            hsbc_sign_metrics={},
+            hsbc_sign_diagnostics=(),
+            hsbc_selection_diagnostics=(),
+            ingest_parser_duration_seconds_by_parser={},
+            ingest_duration_seconds_by_bank={},
+            ingest_text_cache_enabled=settings.ingest_text_cache_enabled,
+            ingest_text_cache_hits=0,
+            ingest_text_cache_misses=0,
+            ingest_text_cache_write_count=0,
+            ingest_summary_path=ingest_summary_path,
+            run_mode="incremental",
+            files_selected_for_processing=0,
+            files_skipped_already_committed=selection_plan.files_skipped_already_committed,
+            files_skipped_modified_existing=0,
+            files_missing_since_last_commit=0,
+            dataset_stale=False,
+            stale_reasons=(),
+            staged_batch_manifest_path=existing_manifest_path,
+            backup_run=None,
+        )
+
     progress = tqdm(
         total=5,
         desc="Ingest",
@@ -108,13 +216,6 @@ def run_ingest(
     )
     progress.update()
     progress.set_postfix_str("selection plan")
-    registry = load_source_registry(source_registry_path(settings))
-    selection_plan = build_incremental_selection_plan(
-        settings=settings,
-        run_mode=run_mode,  # type: ignore[arg-type]
-        current_inventory=build_source_inventory(discover_statement_pdfs(settings.input_path)),
-        registry=registry,
-    )
     progress.update()
     progress.set_postfix_str("parse statements")
     ingest = ingest_workflow_stage(
