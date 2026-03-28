@@ -147,24 +147,10 @@ Use `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml` for direct
 one-off edits or bulk edits outside the review workbook.
 
 Use `${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml` for reusable
-categorization logic. Legacy fingerprint-level category overrides should be
-migrated into exact-match rules with:
-
-```bash
-uv run migrate-category-overrides-to-rules
-```
-
 If you are upgrading from a corpus generated before `source_record_index` was
-part of transaction identity:
-
-```bash
-uv run ingest
-uv run migrate-transaction-ids
-```
-
-Then do the first post-migration `transform` against a clean
-`transactions_master.parquet` backup/rename so manual carry-forward does not
-reuse old collapsed identities.
+part of transaction identity, rerun `ingest` against the raw source corpus
+first. Any migration of old ID-keyed manual state should be handled as a
+one-off recovery exercise rather than part of the normal public workflow.
 
 Use `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml` for reusable
 project-tag automation:

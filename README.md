@@ -277,33 +277,10 @@ Transaction-level corrections and project tags are configured in:
 - `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml`
 - `${FINANCE_STATEMENTS_PATH}/../config/project_overrides.yaml`
 
-Legacy fingerprint-level category overrides can be migrated into exact-match
-rules with:
-
-```bash
-uv run migrate-category-overrides-to-rules
-```
-
 If you are upgrading from an older processed corpus that used path-based
-transaction IDs, do a fresh rebuild from raw statements and then migrate
-ID-keyed manual state with:
-
-```bash
-uv run update
-uv run migrate-transaction-ids
-```
-
-That command rewrites uniquely mappable `transaction_overrides` and
-`review_state` entries to the current transaction IDs, and writes sidecar files
-for ambiguous or unmatched rows instead of guessing.
-
-If you are upgrading from a corpus built before `source_record_index` was added
-to transaction identity, the same command remains the right follow-up after
-rerunning ingest:
-
-```bash
-uv run migrate-transaction-ids
-```
+transaction IDs, do a fresh rebuild from raw statements first. Any recovery of
+old ID-keyed manual state should be handled as a one-off migration exercise,
+not as part of the normal public CLI workflow.
 
 Related docs and diagrams:
 
@@ -311,18 +288,6 @@ Related docs and diagrams:
 - `docs/categorization_review_workflow.md`
 - `docs/diagrams/categorization_review_hitl_flow.puml`
 - `docs/diagrams/categorization_review_import_guardrails.puml`
-
-Commit-to-commit metrics log update:
-
-```bash
-uv run metrics-log-update \
-  --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" \
-  --log-path "docs/metrics_commit_log.csv" \
-  --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"
-```
-
-This writes percentage-based parsing/categorization metrics keyed by commit hash
-for quick trend checks, plus a per-bank categorization percentage breakdown.
 
 ## Development Commands
 
