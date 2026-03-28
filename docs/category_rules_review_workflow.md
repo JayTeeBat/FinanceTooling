@@ -47,14 +47,15 @@ cp "${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml" \
 FINANCE_PROCESSED_PATH="${BASE_DIR}" \
 uv run ingest
 
-cp "${BASE_DIR}/staged_transactions.parquet" "${CAND_DIR}/staged_transactions.parquet"
+cp "${BASE_DIR}/state/ingest_staged_transactions.parquet" \
+  "${CAND_DIR}/state/ingest_staged_transactions.parquet"
 ```
 
 Baseline transform:
 
 ```bash
 FINANCE_PROCESSED_PATH="${BASE_DIR}" \
-FINANCE_STAGED_TRANSACTIONS_PATH="${BASE_DIR}/staged_transactions.parquet" \
+FINANCE_STAGED_TRANSACTIONS_PATH="${BASE_DIR}/state/ingest_staged_transactions.parquet" \
 FINANCE_CATEGORY_RULES_PATH="${RUN_ROOT}/category_rules.baseline.yaml" \
 uv run transform
 ```
@@ -86,7 +87,7 @@ Run candidate transform against the same staged data.
 
 ```bash
 FINANCE_PROCESSED_PATH="${CAND_DIR}" \
-FINANCE_STAGED_TRANSACTIONS_PATH="${CAND_DIR}/staged_transactions.parquet" \
+FINANCE_STAGED_TRANSACTIONS_PATH="${CAND_DIR}/state/ingest_staged_transactions.parquet" \
 FINANCE_CATEGORY_RULES_PATH="${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml" \
 uv run transform
 ```
@@ -95,14 +96,14 @@ Export comparable month-scoped review files (include categorized rows).
 
 ```bash
 uv run review-export \
-  --normalized-path "${BASE_DIR}/transactions_normalized.csv" \
+  --normalized-path "${BASE_DIR}/outputs/transform_transactions.csv" \
   --output-path "${RUN_ROOT}/baseline_review.xlsx" \
   --include-categorized \
   --start-date "${MONTH_START}" \
   --end-date "${MONTH_END}"
 
 uv run review-export \
-  --normalized-path "${CAND_DIR}/transactions_normalized.csv" \
+  --normalized-path "${CAND_DIR}/outputs/transform_transactions.csv" \
   --output-path "${RUN_ROOT}/candidate_review.xlsx" \
   --include-categorized \
   --start-date "${MONTH_START}" \
@@ -160,13 +161,13 @@ uv run update
 
 Minimum verification points:
 
-- `run_summary.json`:
+- `outputs/transform_run_summary.json`:
   - `categorized_count`
   - `uncategorized_count`
   - `uncategorized_ratio`
   - reconciliation counters
   - `top_uncategorized_descriptions`
-- `transactions_normalized.csv`:
+- `outputs/transform_transactions.csv`:
   - expected `category_source` distribution for `MONTH_START..MONTH_END`.
   - spot-check changed fingerprints/transactions.
 
