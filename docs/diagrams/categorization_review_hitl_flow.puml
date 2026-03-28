@@ -3,7 +3,7 @@ title Categorization Review Human-in-the-Loop Flow
 
 actor Analyst
 participant "finance_tooling CLI" as CLI
-database "transactions_normalized.csv" as NORMALIZED
+database "outputs/transform_transactions.csv" as NORMALIZED
 participant "transactions_review.xlsx" as REVIEW <<file>>
 database "transaction_overrides.yaml" as TX_OVERRIDES
 database "review_state.parquet" as REVIEW_STATE
@@ -60,7 +60,7 @@ group Apply New Overrides
 Analyst -> TRANSFORM: Run transform\nor review-import --run-transform
 TRANSFORM -> TX_OVERRIDES: Load updated overrides
 TRANSFORM -> REVIEW_STATE: Load review markers
-TRANSFORM --> Analyst: New categorized outputs\nwith reviewed projected into normalized output
+TRANSFORM --> Analyst: New categorized outputs\nwith reviewed projected into transform_transactions.csv
 end
 
 @enduml

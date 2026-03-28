@@ -301,8 +301,9 @@ uv run pre-commit run --all-files
 
 ## Performance Check
 
-For a safe full-corpus performance run, use an isolated processed directory so
-the standard destination is untouched.
+The packaged public CLI does not expose `perf-check`, but the internal command
+module is still available when you intentionally want an isolated full-corpus
+performance run.
 
 ```bash
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -312,7 +313,7 @@ FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
 FINANCE_FX_AUTO_FETCH=false \
 FINANCE_INGEST_WORKERS=4 \
 FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
-uv run perf-check
+uv run python -m finance_tooling.perf_check
 ```
 
 The run writes standard artifacts plus `performance_summary.json` under the
@@ -391,7 +392,7 @@ Project assignment precedence is:
 
 HSBC ingestion is PDF-only. For each HSBC statement month, opening/closing balances
 extracted from the PDF are used to validate parsed transaction totals. Balance
-mismatches are emitted as warnings and included in run-summary reconciliation metrics.
+mismatches are emitted as warnings and included in transform-summary reconciliation metrics.
 
 ## Outputs
 
@@ -434,4 +435,4 @@ Add new entries as parser behavior is expanded or when snapshot text extracted f
 real PDFs is available.
 
 Parser routing uses score-based selection (`match_score`) with diagnostics captured
-in `run_summary.json` under `parser_selection_diagnostics`.
+in `transform_run_summary.json` under `parser_selection_diagnostics`.

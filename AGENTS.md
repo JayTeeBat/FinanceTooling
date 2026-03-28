@@ -15,13 +15,14 @@ categorization, and reporting.
   categorization outcomes, and low-friction review/import operations.
 - Main workflow references:
   - `docs/categorization_review_workflow.md`
+  - `docs/category_rules_review_workflow.md`
   - `docs/diagrams/categorization_review_hitl_flow.puml`
   - `docs/diagrams/categorization_review_import_guardrails.puml`
 - Main troubleshooting checkpoints:
-  - `run_summary.json`:
+  - `outputs/transform_run_summary.json`:
     `categorized_count`, `uncategorized_count`, `uncategorized_ratio`,
     `top_uncategorized_descriptions`, reconciliation counts.
-  - `transactions_normalized.csv`:
+  - `outputs/transform_transactions.csv`:
     `category_source` distribution for targeted month windows.
   - review-import safety behavior:
     load-warning fail-safe, row-validation counters, backup creation.
@@ -68,8 +69,8 @@ categorization, and reporting.
 - Maintain `docs/metrics_commit_log_by_bank.csv` as a per-bank commit-to-commit
   percentage breakdown for categorization performance.
 - After any commit that changes pipeline behavior or categorization data, update
-  the metrics log using the latest `run_summary.json`:
-  - `uv run metrics-log-update --summary-path "$FINANCE_PROCESSED_PATH/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`
+  the metrics log using the latest `outputs/transform_run_summary.json`:
+  - `uv run python -m finance_tooling.commands.metrics_log_update --summary-path "$FINANCE_PROCESSED_PATH/outputs/transform_run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`
 - If the log update is done after committing code, include it in a follow-up
   commit (or amend before push).
 - Keep metrics high-level and stable across runs:
@@ -125,55 +126,43 @@ Use this template:
 
 Prioritized recommendations for the next worker:
 
-1. Completed: manual categorization review roundtrip (export -> review -> import)
-- Implemented review-export/review-import command pair with default path
-  resolution from `.env`/settings.
-- Added import safety controls and guardrails:
-  `--allow-load-warnings`, `--dry-run`, `--backup/--no-backup`, and
-  `--backup-path`.
-- Added documentation + diagrams for human-in-the-loop operations.
+1. Current public workflow surface
+- Operator-facing CLI remains:
+  `ingest`, `transform`, `update`, `review-export`, `review-import`,
+  `workflow-status`.
+- Canonical transform outputs live under `processed/outputs/` with current names:
+  `transform_transactions.csv`, `transform_transactions.parquet`,
+  `transform_run_summary.json`, and `transform_dashboard.html`.
+- Staged ingest state lives under `processed/state/`, especially
+  `ingest_staged_transactions.parquet` and
+  `ingest_staged_batch_manifest.json`.
 
-2. Completed: transaction-level overrides + project tags pipeline support
-- Added config-backed transaction overrides:
-  `config/transaction_overrides.yaml` (or
-  `FINANCE_TRANSACTION_OVERRIDES_PATH`).
-- Added config-backed project tagging rules/overrides:
-  `config/project_overrides.yaml` (or `FINANCE_PROJECT_OVERRIDES_PATH`).
-- Enrichment now applies precedence:
-  category rule -> project rule/override -> transaction override.
-- Transaction overrides can set `category`, `subcategory`, `project`,
-  `project_tags` with `category_source`/`project_source=transaction_override`.
-
-3. Next focus: categorize all 2026 statements to validate workflow end-to-end
+2. Next focus: validate the 2026 categorization workflow end-to-end
 - Run monthly or quarterly review cycles for Jan-Dec 2026 using:
   `review-export` -> manual review -> `review-import` -> `transform`.
 - Track before/after month-scoped `uncategorized_count` and
-  `uncategorized_ratio` from normalized outputs and `run_summary.json`.
+  `uncategorized_ratio` from `outputs/transform_transactions.csv` and
+  `outputs/transform_run_summary.json`.
 - Keep reusable categorization logic centralized in `config/category_rules.yaml`
   and use `transaction_overrides.yaml` only for true transaction-level manual
   corrections.
 - Capture high-frequency residual fingerprints discovered during 2026 review
   and feed them into rule updates.
 
-4. Apply second-pass residual rule/override batch for current uncategorized leaders
-- Target the latest high-frequency residual fingerprints:
-  - `visa rate`
-  - `cr marschocolateuk cr marker`
-  - `virement de mars wrigley confection ery france notprovided`
-  - `exchanged to eur`
-  - `ealing broadway`
-  - `bp hmrc tfc`
-  - `sncf`
-  - `top up by`
-  - `vis revolut revolut com`
-  - `so curt park 29heronsforde`
+3. Improve transform iteration speed for targeted review/config changes
+- True no-op fast paths already exist for unchanged runs.
+- Remaining gap: small review-state or config edits still require a full
+  transform when any transform work is needed.
+- Prefer targeted transform scopes or similarly minimal recomputation before
+  introducing more workflow surface area.
 
-5. Add run-to-run categorization delta reporting
-- Compare current vs prior run counters (`categorized_count`,
-  `uncategorized_count`, `uncategorized_ratio`) in a compact summary for faster
-  iteration decisions.
+4. Expand the planning/reporting surface only when it serves the core pipeline
+- The repo now also includes planning/budgeting/reporting modules and a
+  `planning/household_finance_360/` workspace.
+- Keep additions to that surface intentional and secondary to the ingestion +
+  categorization workflow unless the task explicitly targets planning features.
 
-6. Keep quality gates mandatory
+5. Keep quality gates mandatory
 - Continue enforcing:
   - `uv run ruff check .`
   - `uv run ruff format .`
@@ -186,6 +175,18 @@ Success target for the 2026 validation campaign:
 
 
 ## Hand-Off Log
+
+### 2026-03-28 - codex
+- Branch: `main`
+- Completed:
+  - Cleaned stale repo-instruction and workflow-doc references to legacy output names such as `transactions_normalized.csv` and generic `run_summary.json`.
+  - Updated next-agent guidance to reflect the current CLI surface, current output/state artifact names, and the presence of planning/reporting workspace material in the repo.
+- Checks:
+  - documentation/instruction cleanup only: not run
+- Open items:
+  - `README.md` and category-rule workflow docs still need periodic drift checks as internal helper commands and optional planning features evolve.
+- Next action:
+  - Continue the 2026 review cycle using `transform_transactions.csv` and `transform_run_summary.json` as the live checkpoints.
 
 ### 2026-03-28 - codex
 - Branch: `feature/noop-workflow-fast-path`
@@ -215,21 +216,7 @@ Success target for the 2026 validation campaign:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling/fx.py src/finance_tooling/workflow/enrichment.py src/finance_tooling/transaction_overrides.py src/finance_tooling/workflow/staging.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py tests/test_fx.py tests/test_enrichment.py tests/test_staging.py`: pass
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_fx.py tests/test_enrichment.py tests/test_staging.py tests/test_workflow_stages.py`: pass
 - Open items:
-  - No-op incremental runs still rebuild outputs and backups even when no staged data or config changes require work.
-  - `README.md` still mentions `uv run perf-check`; that utility remains internal and is no longer a packaged script entrypoint.
+  - Small targeted config/review changes still rerun the full transform stage when transform is required; only true no-op cases short-circuit today.
+  - Performance-check execution still lives behind an internal module path rather than the packaged public CLI surface.
 - Next action:
-  - Implement a true no-op workflow fast path: skip ingest when no new files exist, skip transform when staged data and relevant config are unchanged, avoid unnecessary backups, and run only the minimal affected workflow slice for targeted changes such as small override updates.
-
-### 2026-03-28 - codex
-- Branch: `feature/api-surface-cleanup`
-- Completed:
-  - Removed one-off migration and planning commands from the public top-level CLI so the operator-facing API is limited to ingest/transform/update/review/workflow-status.
-  - Deleted the category-override migration feature entirely, including its command wrapper, internal implementation, and direct tests.
-  - Removed public README and workflow-doc references for `migrate-transaction-ids`, `migrate-category-overrides-to-rules`, `metrics-log-update`, and the `plan-*` commands while leaving the remaining internal maintenance modules available where intentionally retained.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_command_entrypoints.py tests/test_cli_dispatch.py tests/test_review_workflow.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/__main__.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py tests/test_review_workflow.py README.md docs/categorization_review_workflow.md`: pass
-- Open items:
-  - `metrics_log_update.py`, `migrate_transaction_ids.py`, and the `plan_*` command modules still exist as internal entrypoints/modules even though they are no longer part of the public top-level CLI.
-- Next action:
-  - Open and merge the API-surface cleanup PR, then decide whether the remaining internal maintenance/planning modules should stay as private utilities or move to a separate namespace/tool.
+  - Add targeted transform scopes so small review/config changes can avoid a full transform rebuild when correctness allows.
