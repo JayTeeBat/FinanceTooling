@@ -26,27 +26,30 @@ def _settings(tmp_path: Path) -> Settings:
     processed_dir = tmp_path / "processed"
     input_dir.mkdir()
     processed_dir.mkdir()
+    (processed_dir / "outputs").mkdir(parents=True, exist_ok=True)
+    (processed_dir / "state").mkdir(parents=True, exist_ok=True)
     return Settings(
         input_path=input_dir,
-        output_path=processed_dir / "finance_dashboard.html",
-        master_parquet_path=processed_dir / "transactions_master.parquet",
-        export_csv_path=processed_dir / "transactions_normalized.csv",
-        export_json_path=processed_dir / "transactions_normalized.json",
-        staged_transactions_path=processed_dir / "staged_transactions.parquet",
-        summary_json_path=processed_dir / "run_summary.json",
-        completeness_json_path=processed_dir / "completeness_report.json",
+        processed_path=processed_dir,
+        output_path=processed_dir / "outputs" / "transform_dashboard.html",
+        master_parquet_path=processed_dir / "outputs" / "transform_transactions.parquet",
+        export_csv_path=processed_dir / "outputs" / "transform_transactions.csv",
+        export_json_path=processed_dir / "outputs" / "transform_transactions.json",
+        staged_transactions_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+        summary_json_path=processed_dir / "outputs" / "transform_run_summary.json",
+        completeness_json_path=processed_dir / "state" / "transform_completeness_report.json",
         base_currency="EUR",
-        fx_cache_path=processed_dir / "fx_rates_history.parquet",
+        fx_cache_path=processed_dir / "state" / "workflow_fx_rates_history.parquet",
         fx_auto_fetch=False,
         ingest_workers=1,
         ingest_text_cache_enabled=False,
-        ingest_text_cache_path=processed_dir / "ingest_text_cache.parquet",
+        ingest_text_cache_path=processed_dir / "state" / "ingest_text_cache.parquet",
         category_rules_path=processed_dir / "category_rules.yaml",
         project_rules_path=processed_dir / "project_rules.yaml",
         budget_targets_path=processed_dir / "budget_targets.yaml",
         project_overrides_path=processed_dir / "project_overrides.yaml",
         transaction_overrides_path=processed_dir / "transaction_overrides.yaml",
-        review_state_path=processed_dir / "review_state.parquet",
+        review_state_path=processed_dir / "state" / "workflow_review_state.parquet",
         review_export_dark_safe=True,
     )
 
@@ -87,6 +90,7 @@ def test_build_pipeline_state_reports_staged_newer_than_transform(tmp_path: Path
         encoding="utf-8",
     )
     settings.completeness_json_path.write_text("{}", encoding="utf-8")
+    settings.staged_transactions_path.parent.mkdir(parents=True, exist_ok=True)
     settings.staged_transactions_path.write_text("pending", encoding="utf-8")
 
     payload, _ = build_pipeline_state(settings)

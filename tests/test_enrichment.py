@@ -10,27 +10,30 @@ from finance_tooling.workflow.enrichment import enrich_transactions
 
 
 def _settings(tmp_path: Path) -> Settings:
+    (tmp_path / "outputs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
     return Settings(
         input_path=tmp_path / "input",
-        output_path=tmp_path / "finance_dashboard.html",
-        master_parquet_path=tmp_path / "transactions_master.parquet",
-        export_csv_path=tmp_path / "transactions_normalized.csv",
-        export_json_path=tmp_path / "transactions_normalized.json",
-        staged_transactions_path=tmp_path / "staged_transactions.parquet",
-        summary_json_path=tmp_path / "run_summary.json",
-        completeness_json_path=tmp_path / "completeness_report.json",
+        processed_path=tmp_path,
+        output_path=tmp_path / "outputs" / "transform_dashboard.html",
+        master_parquet_path=tmp_path / "outputs" / "transform_transactions.parquet",
+        export_csv_path=tmp_path / "outputs" / "transform_transactions.csv",
+        export_json_path=tmp_path / "outputs" / "transform_transactions.json",
+        staged_transactions_path=tmp_path / "state" / "ingest_staged_transactions.parquet",
+        summary_json_path=tmp_path / "outputs" / "transform_run_summary.json",
+        completeness_json_path=tmp_path / "state" / "transform_completeness_report.json",
         base_currency="EUR",
-        fx_cache_path=tmp_path / "fx_rates_history.parquet",
+        fx_cache_path=tmp_path / "state" / "workflow_fx_rates_history.parquet",
         fx_auto_fetch=False,
         ingest_workers=1,
         ingest_text_cache_enabled=False,
-        ingest_text_cache_path=tmp_path / "ingest_text_cache.parquet",
+        ingest_text_cache_path=tmp_path / "state" / "ingest_text_cache.parquet",
         category_rules_path=tmp_path / "category_rules.yaml",
         project_rules_path=tmp_path / "project_rules.yaml",
         budget_targets_path=tmp_path / "budget_targets.yaml",
         project_overrides_path=tmp_path / "project_overrides.yaml",
         transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
-        review_state_path=tmp_path / "review_state.parquet",
+        review_state_path=tmp_path / "state" / "workflow_review_state.parquet",
         review_export_dark_safe=True,
     )
 

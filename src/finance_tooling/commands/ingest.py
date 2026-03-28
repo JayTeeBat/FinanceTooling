@@ -27,6 +27,11 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Confirmation token required to execute a full refresh.",
     )
+    parser.add_argument(
+        "--emit-ingest-summary",
+        action="store_true",
+        help="Write state/ingest_summary.json as an optional diagnostics artifact.",
+    )
     parser.set_defaults(command="ingest", handler=handle)
 
 
@@ -57,9 +62,13 @@ def handle(args: argparse.Namespace) -> int:
 
     try:
         if args.full_refresh:
-            result = run_ingest(settings, run_mode="full_refresh")
+            result = run_ingest(
+                settings,
+                run_mode="full_refresh",
+                emit_ingest_summary=bool(args.emit_ingest_summary),
+            )
         else:
-            result = run_ingest(settings)
+            result = run_ingest(settings, emit_ingest_summary=bool(args.emit_ingest_summary))
     except (RuntimeError, ValueError) as exc:
         print(f"Ingest error: {exc}")
         return 1

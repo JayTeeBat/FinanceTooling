@@ -148,9 +148,6 @@ class SummaryPayload(TypedDict):
     manual_category_carry_forward_applied_count: int
     manual_category_carry_forward_ambiguous_skipped_count: int
     manual_category_carry_forward_unmatched_count: int
-    legacy_identity_collision_group_count: int
-    legacy_identity_collision_row_count: int
-    legacy_identity_collision_candidates_path: str
     category_source_counts: dict[str, int]
     category_metrics_by_bank: list[dict[str, object]]
     top_uncategorized_descriptions: list[dict[str, object]]
@@ -187,7 +184,7 @@ class IngestResult:
     source_files: list[Path]
     raw_file_count: int
     duplicate_raw_file_count: int
-    source_inventory_path: Path
+    source_inventory_path: Path | None
     all_source_files: list[Path]
     selected_source_files: list[Path]
     transactions: list[Transaction]

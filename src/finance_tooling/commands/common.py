@@ -21,7 +21,13 @@ def try_load_settings_for_defaults() -> Settings | None:
 
 def processed_dir_from_settings(settings: Settings) -> Path:
     """Return the processed directory derived from settings."""
-    return settings.summary_json_path.parent
+    processed_path = getattr(settings, "processed_path", None)
+    if processed_path is not None:
+        return Path(processed_path)
+    summary_json_path = getattr(settings, "summary_json_path", None)
+    if summary_json_path is not None:
+        return Path(summary_json_path).parent
+    raise AttributeError("settings must define processed_path or summary_json_path")
 
 
 def infer_data_adjacent_config_dir(review_path: Path) -> Path:
@@ -58,8 +64,13 @@ def resolve_review_export_paths(
         )
 
     processed_dir = processed_dir_from_settings(settings)
+    default_normalized_path = getattr(
+        settings,
+        "export_csv_path",
+        processed_dir / "outputs" / "transform_transactions.csv",
+    )
     return (
-        normalized_path or (processed_dir / "transactions_normalized.csv"),
+        normalized_path or default_normalized_path,
         output_path or (processed_dir / "transactions_review.xlsx"),
         getattr(settings, "review_state_path", None),
         getattr(settings, "review_export_dark_safe", True),
@@ -250,7 +261,8 @@ def print_workflow_result(result: WorkflowResult) -> int:
     print(f"Dashboard: {result.dashboard_path}")
     print(f"Parquet: {result.parquet_path}")
     print(f"CSV export: {result.csv_path}")
-    print(f"JSON export: {result.json_path}")
+    if result.json_path.exists():
+        print(f"JSON export: {result.json_path}")
     print(f"Summary: {result.summary_path}")
     print(f"Completeness report: {result.completeness_path}")
     if result.backup_run is not None:
@@ -283,10 +295,10 @@ def print_ingest_result(result: IngestExecutionResult) -> int:
     print(f"Failed files: {result.files_failed}")
     print(f"Staged transactions: {result.transactions_parsed}")
     print(f"Staged parquet: {result.staged_path}")
-    print(f"Ingest summary: {result.ingest_summary_path}")
-    print(f"Source inventory: {result.source_inventory_path}")
     if result.staged_batch_manifest_path is not None:
         print(f"Staged batch manifest: {result.staged_batch_manifest_path}")
+    if result.ingest_summary_path is not None:
+        print(f"Ingest summary: {result.ingest_summary_path}")
     print(f"HSBC CSV files scanned: {result.hsbc_csv_files_scanned}")
     print(f"Parser low-confidence files: {result.parser_low_confidence_file_count}")
     if result.backup_run is not None:

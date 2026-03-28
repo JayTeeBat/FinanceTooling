@@ -56,17 +56,33 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     settings = load_settings_from_env()
 
     assert settings.input_path == raw_dir.resolve()
-    assert settings.output_path == (processed_dir / "finance_dashboard.html").resolve()
-    assert settings.master_parquet_path == (processed_dir / "transactions_master.parquet").resolve()
-    assert settings.export_csv_path == (processed_dir / "transactions_normalized.csv").resolve()
-    assert settings.export_json_path == (processed_dir / "transactions_normalized.json").resolve()
+    assert settings.output_path == (
+        processed_dir / "outputs" / "transform_dashboard.html"
+    ).resolve()
+    assert settings.master_parquet_path == (
+        processed_dir / "outputs" / "transform_transactions.parquet"
+    ).resolve()
+    assert settings.export_csv_path == (
+        processed_dir / "outputs" / "transform_transactions.csv"
+    ).resolve()
+    assert settings.export_json_path == (
+        processed_dir / "outputs" / "transform_transactions.json"
+    ).resolve()
+    assert settings.export_json_enabled is False
+    assert settings.transform_diagnostics_enabled is False
     assert (
         settings.staged_transactions_path
-        == (processed_dir / "staged_transactions.parquet").resolve()
+        == (processed_dir / "state" / "ingest_staged_transactions.parquet").resolve()
     )
-    assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
-    assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
-    assert settings.fx_cache_path == (processed_dir / "fx_rates_history.parquet").resolve()
+    assert settings.summary_json_path == (
+        processed_dir / "outputs" / "transform_run_summary.json"
+    ).resolve()
+    assert settings.completeness_json_path == (
+        processed_dir / "state" / "transform_completeness_report.json"
+    ).resolve()
+    assert settings.fx_cache_path == (
+        processed_dir / "state" / "workflow_fx_rates_history.parquet"
+    ).resolve()
     config_dir = raw_dir.parent / "config"
     assert settings.category_rules_path == (config_dir / "category_rules.yaml").resolve()
     assert settings.project_rules_path == (config_dir / "project_rules.yaml").resolve()
@@ -75,7 +91,9 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert (
         settings.transaction_overrides_path == (config_dir / "transaction_overrides.yaml").resolve()
     )
-    assert settings.review_state_path == (processed_dir / "review_state.parquet").resolve()
+    assert settings.review_state_path == (
+        processed_dir / "state" / "workflow_review_state.parquet"
+    ).resolve()
     assert settings.review_export_dark_safe is True
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True
@@ -83,7 +101,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.ingest_text_cache_enabled is False
     assert (
         settings.ingest_text_cache_path
-        == (raw_dir.parent / "cache" / "ingest_text_cache.parquet").resolve()
+        == (processed_dir / "state" / "ingest_text_cache.parquet").resolve()
     )
 
 
@@ -137,8 +155,12 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     )
     assert settings.review_state_path == (custom_dir / "review_state.parquet").resolve()
     assert settings.review_export_dark_safe is False
-    assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
-    assert settings.completeness_json_path == (processed_dir / "completeness_report.json").resolve()
+    assert settings.summary_json_path == (
+        processed_dir / "outputs" / "transform_run_summary.json"
+    ).resolve()
+    assert settings.completeness_json_path == (
+        processed_dir / "state" / "transform_completeness_report.json"
+    ).resolve()
     assert settings.base_currency == "GBP"
     assert settings.fx_auto_fetch is False
     assert settings.ingest_workers == 4
@@ -191,11 +213,15 @@ def test_load_settings_reads_required_paths_from_dotenv(monkeypatch, tmp_path: P
     settings = load_settings_from_env()
 
     assert settings.input_path == raw_dir.resolve()
-    assert settings.summary_json_path == (processed_dir / "run_summary.json").resolve()
+    assert settings.summary_json_path == (
+        processed_dir / "outputs" / "transform_run_summary.json"
+    ).resolve()
     assert settings.base_currency == "USD"
     assert settings.fx_auto_fetch is False
     assert settings.ingest_workers == 2
     assert settings.ingest_text_cache_enabled is True
+    assert settings.export_json_enabled is False
+    assert settings.transform_diagnostics_enabled is False
 
 
 def test_load_settings_rejects_invalid_ingest_workers(monkeypatch, tmp_path: Path) -> None:

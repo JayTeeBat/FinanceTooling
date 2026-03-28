@@ -16,7 +16,7 @@ from finance_tooling.parsers.base import ParserOutput, StatementParser, Statemen
 from finance_tooling.parsers.registry import ParserScoreItem, ParserSelection
 from finance_tooling.review_import import import_review_into_overrides
 from finance_tooling.review_state import upsert_review_state
-from finance_tooling.source_inventory import build_source_inventory, write_source_inventory
+from finance_tooling.source_inventory import build_source_inventory
 from finance_tooling.store import (
     UpsertResult,
     compute_path_based_transaction_id,
@@ -68,27 +68,31 @@ class _DummyParser:
 
 
 def _settings(input_dir: Path, *, base_currency: str = "EUR") -> Settings:
+    processed_dir = input_dir / "processed"
+    (processed_dir / "outputs").mkdir(parents=True, exist_ok=True)
+    (processed_dir / "state").mkdir(parents=True, exist_ok=True)
     return Settings(
         input_path=input_dir,
-        output_path=input_dir / "dashboard.html",
-        master_parquet_path=input_dir / "transactions_master.parquet",
-        export_csv_path=input_dir / "transactions_normalized.csv",
-        export_json_path=input_dir / "transactions_normalized.json",
-        staged_transactions_path=input_dir / "staged_transactions.parquet",
-        summary_json_path=input_dir / "run_summary.json",
-        completeness_json_path=input_dir / "completeness_report.json",
+        processed_path=processed_dir,
+        output_path=processed_dir / "outputs" / "transform_dashboard.html",
+        master_parquet_path=processed_dir / "outputs" / "transform_transactions.parquet",
+        export_csv_path=processed_dir / "outputs" / "transform_transactions.csv",
+        export_json_path=processed_dir / "outputs" / "transform_transactions.json",
+        staged_transactions_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+        summary_json_path=processed_dir / "outputs" / "transform_run_summary.json",
+        completeness_json_path=processed_dir / "state" / "transform_completeness_report.json",
         base_currency=base_currency,
-        fx_cache_path=input_dir / "fx.parquet",
+        fx_cache_path=processed_dir / "state" / "workflow_fx_rates_history.parquet",
         fx_auto_fetch=False,
         ingest_workers=1,
         ingest_text_cache_enabled=False,
-        ingest_text_cache_path=input_dir / "ingest_text_cache.parquet",
+        ingest_text_cache_path=processed_dir / "state" / "ingest_text_cache.parquet",
         category_rules_path=input_dir / "category_rules.json",
         project_rules_path=input_dir / "project_rules.yaml",
         budget_targets_path=input_dir / "budget_targets.yaml",
         project_overrides_path=Path("config/project_overrides.yaml").resolve(),
         transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
-        review_state_path=input_dir / "review_state.parquet",
+        review_state_path=processed_dir / "state" / "workflow_review_state.parquet",
         review_export_dark_safe=True,
     )
 
@@ -100,12 +104,11 @@ def _write_transform_manifest(
     run_mode: str = "incremental",
 ) -> None:
     inventory = build_source_inventory(source_files)
-    inventory_path = settings.summary_json_path.parent / "source_inventory.json"
-    write_source_inventory(inventory_path, inventory)
     manifest = StagedBatchManifest(
         generated_at="2026-03-21T00:00:00+00:00",
         run_mode=cast(RunMode, run_mode),
-        source_inventory_path=str(inventory_path),
+        source_inventory=inventory,
+        source_inventory_path=None,
         selected_source_files=tuple(str(path) for path in source_files),
         selected_source_document_ids=tuple(
             entry.source_document_id for entry in inventory.entries if entry.is_representative
@@ -651,10 +654,8 @@ def test_run_ingest_writes_staged_artifacts_only(monkeypatch, tmp_path: Path) ->
     assert result.transactions_parsed == 1
     assert result.staged_path == settings.staged_transactions_path
     assert settings.staged_transactions_path.exists()
-    assert result.ingest_summary_path.exists()
-    ingest_summary = json.loads(result.ingest_summary_path.read_text(encoding="utf-8"))
-    assert ingest_summary["transactions_parsed"] == 1
-    assert ingest_summary["staged_transactions_path"] == str(settings.staged_transactions_path)
+    assert result.ingest_summary_path is None
+    assert not (settings.staged_transactions_path.parent / "ingest_summary.json").exists()
     assert not settings.master_parquet_path.exists()
     assert not settings.export_csv_path.exists()
     assert not settings.export_json_path.exists()
@@ -732,7 +733,7 @@ def test_run_transform_reads_staged_and_writes_final_artifacts(monkeypatch, tmp_
     assert settings.summary_json_path.exists()
     assert settings.completeness_json_path.exists()
     assert settings.export_csv_path.exists()
-    assert settings.export_json_path.exists()
+    assert not settings.export_json_path.exists()
 
 
 def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Path) -> None:
@@ -889,21 +890,20 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
     assert backup_run is not None
     assert backup_run.processed_backup_dir is not None
     assert backup_run.config_backup_dir is not None
-    assert (backup_run.processed_backup_dir / "transactions_master.parquet").exists()
+    assert (backup_run.processed_backup_dir / "transform_transactions.parquet").exists()
     assert (backup_run.config_backup_dir / "category_rules.yaml").exists()
     assert (backup_run.config_backup_dir / "project_rules.yaml").exists()
     assert (backup_run.config_backup_dir / "project_overrides.yaml").exists()
     assert (backup_run.config_backup_dir / "transaction_overrides.yaml").exists()
     assert len(list(processed_backup_root.iterdir())) == 10
     assert len(list(config_backup_root.iterdir())) == 10
-    assert not (processed_backup_root / "20260310T000000000000Z").exists()
-    assert not (config_backup_root / "20260310T000000000000Z").exists()
 
 
 def test_run_ingest_creates_staged_backup_run(tmp_path: Path, monkeypatch) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
     settings = _settings(input_dir)
+    settings.staged_transactions_path.parent.mkdir(parents=True, exist_ok=True)
     settings.staged_transactions_path.write_text("old-staged-data", encoding="utf-8")
 
     monkeypatch.setattr(
@@ -952,7 +952,9 @@ def test_run_ingest_creates_staged_backup_run(tmp_path: Path, monkeypatch) -> No
 
     assert result.backup_run is not None
     assert result.backup_run.processed_backup_dir is not None
-    assert (result.backup_run.processed_backup_dir / "staged_transactions.parquet").exists()
+    assert (
+        result.backup_run.processed_backup_dir / "ingest_staged_transactions.parquet"
+    ).exists()
     assert result.backup_run.config_backup_dir is None
 
 

@@ -7,6 +7,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,59 @@ class SourceInventorySnapshot:
     unique_document_count: int
     ignored_duplicate_file_count: int
     entries: tuple[SourceInventoryEntry, ...]
+
+
+def source_inventory_payload(snapshot: SourceInventorySnapshot) -> dict[str, object]:
+    """Return the JSON payload used for persisted source-inventory snapshots."""
+    return {
+        "generated_at": snapshot.generated_at,
+        "raw_file_count": snapshot.raw_file_count,
+        "unique_document_count": snapshot.unique_document_count,
+        "ignored_duplicate_file_count": snapshot.ignored_duplicate_file_count,
+        "duplicate_groups": duplicate_groups(snapshot),
+        "entries": [asdict(entry) for entry in snapshot.entries],
+    }
+
+
+def _payload_int(payload: dict[str, object], key: str, default: int) -> int:
+    value = payload.get(key, default)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return default
+    return default
+
+
+def load_source_inventory_payload(payload: dict[str, object]) -> SourceInventorySnapshot:
+    """Load a source-inventory snapshot from a JSON-like payload."""
+    raw_entries = payload.get("entries", [])
+    if not isinstance(raw_entries, list):
+        raise ValueError("Invalid source inventory entries in payload")
+    typed_entries = cast(list[dict[str, object]], raw_entries)
+    entries = tuple(
+        SourceInventoryEntry(
+            source_file=str(entry["source_file"]),
+            source_document_id=str(entry["source_document_id"]),
+            file_size=int(cast(int, entry["file_size"])),
+            mtime_ns=int(cast(int, entry["mtime_ns"])),
+            is_representative=bool(entry["is_representative"]),
+            representative_source_file=str(entry["representative_source_file"]),
+            duplicate_group_size=int(cast(int, entry["duplicate_group_size"])),
+        )
+        for entry in typed_entries
+    )
+    return SourceInventorySnapshot(
+        generated_at=str(payload.get("generated_at", "")),
+        raw_file_count=_payload_int(payload, "raw_file_count", len(entries)),
+        unique_document_count=_payload_int(payload, "unique_document_count", len(entries)),
+        ignored_duplicate_file_count=_payload_int(payload, "ignored_duplicate_file_count", 0),
+        entries=entries,
+    )
 
 
 def compute_source_document_id(path: Path) -> str:
@@ -83,11 +137,7 @@ def build_source_inventory(files: list[Path]) -> SourceInventorySnapshot:
 
 def representative_source_files(snapshot: SourceInventorySnapshot) -> list[Path]:
     """Return the canonical representative source files for processing."""
-    return [
-        Path(entry.source_file)
-        for entry in snapshot.entries
-        if entry.is_representative
-    ]
+    return [Path(entry.source_file) for entry in snapshot.entries if entry.is_representative]
 
 
 def duplicate_groups(snapshot: SourceInventorySnapshot) -> list[dict[str, object]]:
@@ -114,14 +164,7 @@ def duplicate_groups(snapshot: SourceInventorySnapshot) -> list[dict[str, object
 
 def write_source_inventory(path: Path, snapshot: SourceInventorySnapshot) -> Path:
     """Persist a raw-source inventory snapshot to JSON."""
-    payload = {
-        "generated_at": snapshot.generated_at,
-        "raw_file_count": snapshot.raw_file_count,
-        "unique_document_count": snapshot.unique_document_count,
-        "ignored_duplicate_file_count": snapshot.ignored_duplicate_file_count,
-        "duplicate_groups": duplicate_groups(snapshot),
-        "entries": [asdict(entry) for entry in snapshot.entries],
-    }
+    payload = source_inventory_payload(snapshot)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path
@@ -132,25 +175,6 @@ def load_source_inventory(path: Path) -> SourceInventorySnapshot | None:
     if not path.exists():
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
-    raw_entries = payload.get("entries", [])
-    if not isinstance(raw_entries, list):
-        raise ValueError(f"Invalid source inventory entries in {path}")
-    entries = tuple(
-        SourceInventoryEntry(
-            source_file=str(entry["source_file"]),
-            source_document_id=str(entry["source_document_id"]),
-            file_size=int(entry["file_size"]),
-            mtime_ns=int(entry["mtime_ns"]),
-            is_representative=bool(entry["is_representative"]),
-            representative_source_file=str(entry["representative_source_file"]),
-            duplicate_group_size=int(entry["duplicate_group_size"]),
-        )
-        for entry in raw_entries
-    )
-    return SourceInventorySnapshot(
-        generated_at=str(payload.get("generated_at", "")),
-        raw_file_count=int(payload.get("raw_file_count", len(entries))),
-        unique_document_count=int(payload.get("unique_document_count", len(entries))),
-        ignored_duplicate_file_count=int(payload.get("ignored_duplicate_file_count", 0)),
-        entries=entries,
-    )
+    if not isinstance(payload, dict):
+        raise ValueError(f"Invalid source inventory payload in {path}")
+    return load_source_inventory_payload(payload)

@@ -37,8 +37,8 @@ What it does:
 - Builds a content-based source inventory so raw-file renames do not change
   document identity.
 - Ignores duplicate raw files with identical content and records them in
-  `${FINANCE_PROCESSED_PATH}/source_inventory.json`.
-- Loads `${FINANCE_PROCESSED_PATH}/source_registry.json` to decide which
+  `${FINANCE_PROCESSED_PATH}/state/workflow_source_inventory.json`.
+- Loads `${FINANCE_PROCESSED_PATH}/state/transform_source_registry.json` to decide which
   representative source documents are already committed.
 - In the default incremental path, parses only never-committed representative
   source documents. Modified or missing previously committed files are reported
@@ -47,10 +47,12 @@ What it does:
 - Creates a pre-run backup snapshot of the current staged parquet under
   `${FINANCE_PROCESSED_PATH}/backup/ingest/<run_id>/` and keeps the latest 10
   ingest runs.
-- Writes staged data to `${FINANCE_PROCESSED_PATH}/staged_transactions.parquet`.
+- Writes staged data to `${FINANCE_PROCESSED_PATH}/state/ingest_staged_transactions.parquet`.
 - Writes a self-describing staged batch manifest to
-  `${FINANCE_PROCESSED_PATH}/staged_batch_manifest.json`.
-- Writes ingest diagnostics to `${FINANCE_PROCESSED_PATH}/ingest_summary.json`.
+  `${FINANCE_PROCESSED_PATH}/state/ingest_staged_batch_manifest.json`.
+- Optionally writes ingest diagnostics to
+  `${FINANCE_PROCESSED_PATH}/state/ingest_summary.json` with
+  `--emit-ingest-summary`.
 
 ```bash
 uv run ingest
@@ -109,15 +111,19 @@ What it does:
   `${FINANCE_PROCESSED_PATH}/backup/transform/<run_id>/` and the current
   categorization/project configs under `${FINANCE_STATEMENTS_PATH}/../config/backup/transform/<run_id>/`.
   The latest 10 transform runs are retained.
-- Writes canonical outputs (`transactions_master.parquet`,
-  `transactions_normalized.csv/json`, `run_summary.json`, dashboard).
+- Writes canonical outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
+  `transform_transactions.parquet`, `transform_transactions.csv`,
+  `transform_run_summary.json`, and `transform_dashboard.html`.
+- Optional transform diagnostics are written under `${FINANCE_PROCESSED_PATH}/state/`,
+  including `transform_transactions.json` and
+  `transform_completeness_report.json` when enabled.
 - In incremental mode, upserts only the staged source documents into the master
   parquet, then rebuilds summary/dashboard/export artifacts from the full merged
   canonical dataset.
 - Projects persisted `reviewed` state into canonical outputs so review progress
-  survives across sessions and appears in `transactions_normalized.csv`.
+  survives across sessions and appears in `transform_transactions.csv`.
 
-`run_summary.json` also includes carry-forward diagnostics:
+`transform_run_summary.json` also includes carry-forward diagnostics:
 - `manual_category_carry_forward_applied_count`
 - `manual_category_carry_forward_ambiguous_skipped_count`
 - `manual_category_carry_forward_unmatched_count`
@@ -125,7 +131,7 @@ What it does:
 ### 4) Dashboard
 
 Dashboard output:
-- `${FINANCE_PROCESSED_PATH}/finance_dashboard.html`
+- `${FINANCE_PROCESSED_PATH}/outputs/transform_dashboard.html`
 - Open it in a browser after `transform` or `update`.
 
 ### Single-command path
@@ -208,7 +214,7 @@ uv run review-export \
 
 # explicit paths
 uv run review-export \
-  --normalized-path "$FINANCE_PROCESSED_PATH/transactions_normalized.csv" \
+  --normalized-path "$FINANCE_PROCESSED_PATH/outputs/transform_transactions.csv" \
   --output-path "$FINANCE_PROCESSED_PATH/transactions_review.xlsx"
 
 # edit transactions_review.xlsx (set category/subcategory, reviewed, notes)
@@ -253,8 +259,8 @@ LibreOffice/Excel setups without manual theme tweaks. Override via
 `--no-dark-safe` or `FINANCE_REVIEW_EXPORT_DARK_SAFE=false`.
 
 Review progress is stored separately in
-`${FINANCE_PROCESSED_PATH}/review_state.parquet` by default and projected into
-`transactions_normalized.csv` as the `reviewed` column after `transform`.
+`${FINANCE_PROCESSED_PATH}/state/workflow_review_state.parquet` by default and projected into
+`transform_transactions.csv` as the `reviewed` column after `transform`.
 
 Transaction identity now includes a parser-assigned `source_record_index` so
 repeated same-day same-amount statement rows do not collapse into a single
@@ -369,22 +375,22 @@ Optional overrides:
 
 ```bash
 export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
-export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transactions_master.parquet"
-export FINANCE_EXPORT_CSV_PATH="/path/to/output/transactions_normalized.csv"
-export FINANCE_EXPORT_JSON_PATH="/path/to/output/transactions_normalized.json"
-export FINANCE_STAGED_TRANSACTIONS_PATH="/path/to/output/staged_transactions.parquet"
+export FINANCE_MASTER_PARQUET_PATH="/path/to/output/outputs/transform_transactions.parquet"
+export FINANCE_EXPORT_CSV_PATH="/path/to/output/outputs/transform_transactions.csv"
+export FINANCE_EXPORT_JSON_PATH="/path/to/output/outputs/transform_transactions.json"
+export FINANCE_STAGED_TRANSACTIONS_PATH="/path/to/output/state/ingest_staged_transactions.parquet"
 export FINANCE_BASE_CURRENCY="EUR"
-export FINANCE_FX_CACHE_PATH="/path/to/output/fx_rates_history.parquet"
+export FINANCE_FX_CACHE_PATH="/path/to/output/state/workflow_fx_rates_history.parquet"
 export FINANCE_FX_AUTO_FETCH="true"
 export FINANCE_INGEST_WORKERS="1"
 export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
-export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/ingest_text_cache.parquet"
+export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/state/ingest_text_cache.parquet"
 export FINANCE_CATEGORY_RULES_PATH="/path/to/data/config/category_rules.yaml"
 export FINANCE_PROJECT_RULES_PATH="/path/to/data/config/project_rules.yaml"
 export FINANCE_BUDGET_TARGETS_PATH="/path/to/data/config/budget_targets.yaml"
 export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/data/config/project_overrides.yaml"
 export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/data/config/transaction_overrides.yaml"
-export FINANCE_REVIEW_STATE_PATH="/path/to/output/review_state.parquet"
+export FINANCE_REVIEW_STATE_PATH="/path/to/output/state/workflow_review_state.parquet"
 export FINANCE_REVIEW_EXPORT_DARK_SAFE="true"
 
 uv run update
@@ -424,13 +430,22 @@ mismatches are emitted as warnings and included in run-summary reconciliation me
 
 ## Outputs
 
-- Self-contained interactive HTML dashboard (offline, single-file)
-- Canonical parquet master store (`transactions_master.parquet`)
-- FX history cache (`fx_rates_history.parquet`)
-- Normalized CSV + JSON exports
-- Run summary JSON
-- Source inventory JSON (`source_inventory.json`)
-- Pipeline state JSON (`pipeline_state.json`)
+- `processed/outputs/`
+  - `transform_dashboard.html`
+  - `transform_transactions.parquet`
+  - `transform_transactions.csv`
+  - `transform_run_summary.json`
+- `processed/state/`
+  - `ingest_staged_transactions.parquet`
+  - `ingest_staged_batch_manifest.json`
+  - `transform_source_registry.json`
+  - `workflow_source_inventory.json`
+  - `workflow_pipeline_state.json`
+  - `workflow_review_state.parquet`
+  - `workflow_fx_rates_history.parquet`
+  - `transform_completeness_report.json` when diagnostics are enabled
+  - `transform_transactions.json` when JSON export is enabled
+  - `ingest_summary.json` when `--emit-ingest-summary` is used
 - Automatic backup run folders under `processed/backup/ingest`,
   `processed/backup/transform`, and `config/backup/transform`
 

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from finance_tooling.backup import BackupRunResult, create_stage_backup_run
-from finance_tooling.config import Settings
+from finance_tooling.config import INGEST_SUMMARY_FILENAME, Settings, ingest_state_path
 from finance_tooling.extract import extract_text_from_pdf
 from finance_tooling.parsers import select_parser_with_diagnostics
 from finance_tooling.parsers.base import StatementValidation
@@ -39,11 +39,9 @@ class IngestExecutionResult:
     """Outputs of ingest stage execution and staged handoff metadata."""
 
     staged_path: Path
-    ingest_summary_path: Path
     files_scanned: int
     raw_files_discovered: int
     duplicate_raw_file_count: int
-    source_inventory_path: Path
     files_failed: int
     transactions_parsed: int
     hsbc_csv_files_scanned: int
@@ -66,6 +64,7 @@ class IngestExecutionResult:
     ingest_text_cache_hits: int
     ingest_text_cache_misses: int
     ingest_text_cache_write_count: int
+    ingest_summary_path: Path | None = None
     run_mode: str = "incremental"
     files_selected_for_processing: int = 0
     files_skipped_already_committed: int = 0
@@ -87,16 +86,16 @@ def run_ingest(
     *,
     backup_command: str = "ingest",
     run_mode: str = "incremental",
+    emit_ingest_summary: bool = False,
 ) -> IngestExecutionResult:
     """Execute ingest stage and write staged transaction artifacts."""
     backup_run = create_stage_backup_run(
         stage="ingest",
         command=backup_command,
-        processed_dir=settings.summary_json_path.parent,
+        processed_dir=settings.processed_path,
         processed_targets=(settings.staged_transactions_path,),
     )
     registry = load_source_registry(source_registry_path(settings))
-    source_inventory_path = settings.summary_json_path.parent / "source_inventory.json"
     selection_plan = build_incremental_selection_plan(
         settings=settings,
         run_mode=run_mode,  # type: ignore[arg-type]
@@ -131,7 +130,7 @@ def run_ingest(
     staging = write_staged_transactions(settings.staged_transactions_path, hsbc_merge.transactions)
     staged_manifest = build_manifest_from_selection_plan(
         selection_plan=selection_plan,
-        source_inventory_path=source_inventory_path,
+        source_inventory=selection_plan.current_inventory,
     )
     staged_manifest = replace(
         staged_manifest,
@@ -194,54 +193,61 @@ def run_ingest(
     )
     staged_manifest_path = staged_batch_manifest_path(settings)
     write_staged_batch_manifest(staged_manifest_path, staged_manifest)
-    ingest_summary_path = settings.summary_json_path.parent / "ingest_summary.json"
-    ingest_summary_payload: dict[str, object] = {
-        "generated_at": date.today().isoformat(),
-        "files_scanned": len(ingest.all_source_files),
-        "run_mode": ingest.run_mode,
-        "files_selected_for_processing": ingest.files_selected_for_processing,
-        "files_skipped_already_committed": ingest.files_skipped_already_committed,
-        "files_skipped_modified_existing": ingest.files_skipped_modified_existing,
-        "files_missing_since_last_commit": ingest.files_missing_since_last_commit,
-        "dataset_stale": ingest.dataset_stale,
-        "stale_reasons": list(ingest.stale_reasons),
-        "raw_files_discovered": ingest.raw_file_count,
-        "duplicate_raw_file_count": ingest.duplicate_raw_file_count,
-        "files_failed": ingest.files_failed,
-        "transactions_parsed": len(hsbc_merge.transactions),
-        "staged_transactions_path": str(staging.path),
-        "source_inventory_path": str(ingest.source_inventory_path),
-        "staged_batch_manifest_path": str(staged_manifest_path),
-        "hsbc_csv_files_scanned": ingest.hsbc_csv_files_scanned,
-        "parser_low_confidence_file_count": ingest.parser_low_confidence_file_count,
-        "backup_run_id": backup_run.run_id,
-        "backup_processed_dir": (
-            str(backup_run.processed_backup_dir) if backup_run.processed_backup_dir else None
-        ),
-        "backup_config_dir": str(backup_run.config_backup_dir)
-        if backup_run.config_backup_dir
-        else None,
-        "backup_manifest_paths": [str(path) for path in backup_run.manifest_paths],
-        "backup_copied_file_count": len(backup_run.copied_files),
-        "backup_missing_file_count": len(backup_run.skipped_missing_files),
-        "backup_pruned_run_ids": list(backup_run.pruned_run_ids),
-        "warnings": warnings,
-        "ingest_parser_duration_seconds_by_parser": ingest.parser_duration_seconds_by_parser,
-        "ingest_duration_seconds_by_bank": ingest.duration_seconds_by_bank,
-        "ingest_text_cache_enabled": ingest.text_cache_enabled,
-        "ingest_text_cache_hits": ingest.text_cache_hits,
-        "ingest_text_cache_misses": ingest.text_cache_misses,
-        "ingest_text_cache_write_count": ingest.text_cache_write_count,
-    }
-    write_json(ingest_summary_path, ingest_summary_payload)
+    ingest_summary_path: Path | None = None
+    if emit_ingest_summary:
+        ingest_summary_path = ingest_state_path(settings) / INGEST_SUMMARY_FILENAME
+        ingest_summary_payload: dict[str, object] = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "stage": "ingest",
+            "files_scanned": len(ingest.all_source_files),
+            "run_mode": ingest.run_mode,
+            "files_selected_for_processing": ingest.files_selected_for_processing,
+            "files_skipped_already_committed": ingest.files_skipped_already_committed,
+            "files_skipped_modified_existing": ingest.files_skipped_modified_existing,
+            "files_missing_since_last_commit": ingest.files_missing_since_last_commit,
+            "dataset_stale": ingest.dataset_stale,
+            "stale_reasons": list(ingest.stale_reasons),
+            "raw_files_discovered": ingest.raw_file_count,
+            "duplicate_raw_file_count": ingest.duplicate_raw_file_count,
+            "files_failed": ingest.files_failed,
+            "transactions_parsed": len(hsbc_merge.transactions),
+            "staged_transactions_path": str(staging.path),
+            "staged_batch_manifest_path": str(staged_manifest_path),
+            "hsbc_csv_files_scanned": ingest.hsbc_csv_files_scanned,
+            "parser_low_confidence_file_count": ingest.parser_low_confidence_file_count,
+            "backup_run_id": backup_run.run_id,
+            "backup_processed_dir": (
+                str(backup_run.processed_backup_dir) if backup_run.processed_backup_dir else None
+            ),
+            "backup_config_dir": str(backup_run.config_backup_dir)
+            if backup_run.config_backup_dir
+            else None,
+            "backup_manifest_paths": [str(path) for path in backup_run.manifest_paths],
+            "backup_copied_file_count": len(backup_run.copied_files),
+            "backup_missing_file_count": len(backup_run.skipped_missing_files),
+            "backup_pruned_run_ids": list(backup_run.pruned_run_ids),
+            "warnings": warnings,
+            "ingest_parser_duration_seconds_by_parser": ingest.parser_duration_seconds_by_parser,
+            "ingest_duration_seconds_by_bank": ingest.duration_seconds_by_bank,
+            "ingest_text_cache_enabled": ingest.text_cache_enabled,
+            "ingest_text_cache_hits": ingest.text_cache_hits,
+            "ingest_text_cache_misses": ingest.text_cache_misses,
+            "ingest_text_cache_write_count": ingest.text_cache_write_count,
+            "source_inventory": {
+                "raw_file_count": selection_plan.current_inventory.raw_file_count,
+                "unique_document_count": selection_plan.current_inventory.unique_document_count,
+                "ignored_duplicate_file_count": (
+                    selection_plan.current_inventory.ignored_duplicate_file_count
+                ),
+            },
+        }
+        write_json(ingest_summary_path, ingest_summary_payload)
 
     return IngestExecutionResult(
         staged_path=staging.path,
-        ingest_summary_path=ingest_summary_path,
         files_scanned=len(ingest.all_source_files),
         raw_files_discovered=ingest.raw_file_count,
         duplicate_raw_file_count=ingest.duplicate_raw_file_count,
-        source_inventory_path=ingest.source_inventory_path,
         files_failed=ingest.files_failed,
         transactions_parsed=len(hsbc_merge.transactions),
         hsbc_csv_files_scanned=ingest.hsbc_csv_files_scanned,
@@ -264,6 +270,7 @@ def run_ingest(
         ingest_text_cache_hits=ingest.text_cache_hits,
         ingest_text_cache_misses=ingest.text_cache_misses,
         ingest_text_cache_write_count=ingest.text_cache_write_count,
+        ingest_summary_path=ingest_summary_path,
         run_mode=ingest.run_mode,
         files_selected_for_processing=ingest.files_selected_for_processing,
         files_skipped_already_committed=ingest.files_skipped_already_committed,

@@ -42,6 +42,11 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Confirmation token required to execute a full refresh.",
     )
+    parser.add_argument(
+        "--emit-ingest-summary",
+        action="store_true",
+        help="Write state/ingest_summary.json when the ingest stage runs.",
+    )
     parser.set_defaults(command="update", handler=handle)
 
 
@@ -79,12 +84,14 @@ def handle(args: argparse.Namespace) -> int:
                 ingest_only=bool(args.ingest_only),
                 transform_only=bool(args.transform_only),
                 full_refresh=True,
+                emit_ingest_summary=bool(args.emit_ingest_summary),
             )
         else:
             result = run_update(
                 settings,
                 ingest_only=bool(args.ingest_only),
                 transform_only=bool(args.transform_only),
+                emit_ingest_summary=bool(args.emit_ingest_summary),
             )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Update error: {exc}")

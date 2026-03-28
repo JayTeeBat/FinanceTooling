@@ -12,7 +12,13 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from finance_tooling.config import Settings
+from finance_tooling.config import (
+    LEGACY_STAGED_TRANSACTIONS_FILENAME,
+    TRANSFORM_SOURCE_REGISTRY_FILENAME,
+    Settings,
+    ingest_state_path,
+    state_root_path,
+)
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.scanner import discover_statement_pdfs
 from finance_tooling.source_inventory import (
@@ -20,12 +26,15 @@ from finance_tooling.source_inventory import (
     SourceInventorySnapshot,
     build_source_inventory,
     duplicate_groups,
+    load_source_inventory,
+    load_source_inventory_payload,
 )
 
 RunMode = Literal["incremental", "full_refresh"]
 
-SOURCE_REGISTRY_FILENAME = "source_registry.json"
-STAGED_BATCH_MANIFEST_FILENAME = "staged_batch_manifest.json"
+LEGACY_SOURCE_REGISTRY_FILENAME = "source_registry.json"
+INGEST_STAGED_BATCH_MANIFEST_FILENAME = "ingest_staged_batch_manifest.json"
+LEGACY_STAGED_BATCH_MANIFEST_FILENAME = "staged_batch_manifest.json"
 
 
 @dataclass(frozen=True)
@@ -59,7 +68,8 @@ class StagedBatchManifest:
 
     generated_at: str
     run_mode: RunMode
-    source_inventory_path: str
+    source_inventory: SourceInventorySnapshot | None
+    source_inventory_path: str | None
     selected_source_files: tuple[str, ...]
     selected_source_document_ids: tuple[str, ...]
     files_selected_for_processing: int
@@ -121,11 +131,39 @@ class FullRefreshPreflight:
 
 
 def source_registry_path(settings: Settings) -> Path:
-    return settings.summary_json_path.parent / SOURCE_REGISTRY_FILENAME
+    preferred = state_root_path(settings) / TRANSFORM_SOURCE_REGISTRY_FILENAME
+    if preferred.exists():
+        return preferred
+    legacy = settings.processed_path / LEGACY_SOURCE_REGISTRY_FILENAME
+    if legacy.exists():
+        return legacy
+    return preferred
 
 
 def staged_batch_manifest_path(settings: Settings) -> Path:
-    return settings.summary_json_path.parent / STAGED_BATCH_MANIFEST_FILENAME
+    return ingest_state_path(settings) / INGEST_STAGED_BATCH_MANIFEST_FILENAME
+
+
+def resolve_staged_transactions_path(settings: Settings) -> Path:
+    """Resolve the staged transactions path, falling back to the legacy root filename."""
+    preferred = settings.staged_transactions_path
+    if preferred.exists():
+        return preferred
+    legacy = settings.processed_path / LEGACY_STAGED_TRANSACTIONS_FILENAME
+    if legacy.exists():
+        return legacy
+    return preferred
+
+
+def resolve_staged_batch_manifest_path(settings: Settings) -> Path:
+    """Resolve the staged batch manifest path, falling back to the legacy root filename."""
+    preferred = staged_batch_manifest_path(settings)
+    if preferred.exists():
+        return preferred
+    legacy = settings.processed_path / LEGACY_STAGED_BATCH_MANIFEST_FILENAME
+    if legacy.exists():
+        return legacy
+    return preferred
 
 
 def _serialize_validation(validation: StatementValidation | None) -> dict[str, object] | None:
@@ -255,10 +293,24 @@ def load_staged_batch_manifest(path: Path) -> StagedBatchManifest | None:
     if not path.exists():
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
+    source_inventory_payload = payload.get("source_inventory")
+    source_inventory = None
+    if isinstance(source_inventory_payload, dict):
+        source_inventory = load_source_inventory_payload(source_inventory_payload)
+    source_inventory_path = payload.get("source_inventory_path")
+    if (
+        source_inventory is None
+        and isinstance(source_inventory_path, str)
+        and source_inventory_path
+    ):
+        source_inventory = load_source_inventory(Path(source_inventory_path))
     return StagedBatchManifest(
         generated_at=str(payload["generated_at"]),
         run_mode=str(payload["run_mode"]),  # type: ignore[arg-type]
-        source_inventory_path=str(payload["source_inventory_path"]),
+        source_inventory=source_inventory,
+        source_inventory_path=(
+            str(source_inventory_path) if isinstance(source_inventory_path, str) else None
+        ),
         selected_source_files=tuple(str(item) for item in payload["selected_source_files"]),
         selected_source_document_ids=tuple(
             str(item) for item in payload["selected_source_document_ids"]
@@ -374,13 +426,15 @@ def build_incremental_selection_plan(
 def build_manifest_from_selection_plan(
     *,
     selection_plan: IncrementalSelectionPlan,
-    source_inventory_path: Path,
+    source_inventory: SourceInventorySnapshot,
+    source_inventory_path: Path | None = None,
 ) -> StagedBatchManifest:
     """Build a staged-batch manifest from the ingest selection plan."""
     return StagedBatchManifest(
         generated_at=datetime.now(UTC).isoformat(),
         run_mode=selection_plan.run_mode,
-        source_inventory_path=str(source_inventory_path),
+        source_inventory=source_inventory,
+        source_inventory_path=str(source_inventory_path) if source_inventory_path else None,
         selected_source_files=tuple(str(path) for path in selection_plan.selected_source_files),
         selected_source_document_ids=tuple(
             entry.source_document_id for entry in selection_plan.selected_entries

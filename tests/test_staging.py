@@ -134,3 +134,52 @@ def test_read_staged_transactions_backfills_legacy_identity_columns(tmp_path: Pa
     assert [tx.source_record_index for tx in loaded] == [0, 1]
     assert loaded[0].source_document_id is not None
     assert loaded[0].source_document_id == loaded[1].source_document_id
+
+
+def test_read_staged_transactions_skips_legacy_backfill_for_modern_files(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    staged_path = tmp_path / "staged_transactions.parquet"
+    source_file = tmp_path / "statement.pdf"
+    source_file.write_text("fake", encoding="utf-8")
+
+    transaction = Transaction(
+        booking_date=date(2024, 5, 6),
+        description="Card payment",
+        amount_native=Decimal("-10.25"),
+        currency="EUR",
+        source_file=source_file,
+        bank="DummyBank",
+        parser="dummy",
+        category="Food",
+        subcategory="Groceries",
+        category_confidence=0.9,
+        category_source="rule",
+        category_rule_id="food_rule",
+        project="ProjectAtlas",
+        project_tags=("ProjectAtlas", "Family"),
+        project_source="project_rule",
+        account_label="Main",
+        fx_rate_to_eur=Decimal("1.0"),
+        fx_rate_date=date(2024, 5, 6),
+        fx_source="BASE",
+        amount_eur=Decimal("-10.25"),
+        source_record_index=7,
+        source_document_id="doc-1",
+        source_file_mtime=datetime.fromisoformat("2024-05-06T12:34:56+00:00"),
+    )
+
+    write_staged_transactions(staged_path, [transaction])
+
+    def fail_compute_source_document_id(_: Path) -> str:
+        raise AssertionError("legacy backfill should not run for modern staged files")
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.staging.compute_source_document_id",
+        fail_compute_source_document_id,
+    )
+
+    loaded = read_staged_transactions(staged_path)
+
+    assert loaded == [transaction]

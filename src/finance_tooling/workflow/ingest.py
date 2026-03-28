@@ -32,7 +32,6 @@ from finance_tooling.source_inventory import (
     SourceInventorySnapshot,
     build_source_inventory,
     representative_source_files,
-    write_source_inventory,
 )
 from finance_tooling.workflow.ingest_cache import (
     CachedExtractionRow,
@@ -413,8 +412,6 @@ def ingest_statements(
         if source_inventory is not None
         else build_source_inventory(discovered_files)
     )
-    source_inventory_path = settings.summary_json_path.parent / "source_inventory.json"
-    write_source_inventory(source_inventory_path, resolved_inventory)
     representative_files = representative_source_files(resolved_inventory)
     files = selected_source_files if selected_source_files is not None else representative_files
     source_document_ids = {
@@ -706,7 +703,6 @@ def ingest_statements(
         source_files=representative_files,
         raw_file_count=resolved_inventory.raw_file_count,
         duplicate_raw_file_count=resolved_inventory.ignored_duplicate_file_count,
-        source_inventory_path=source_inventory_path,
         all_source_files=representative_files,
         selected_source_files=files,
         transactions=extracted,
@@ -729,6 +725,7 @@ def ingest_statements(
         text_cache_hits=text_cache_hits,
         text_cache_misses=text_cache_misses,
         text_cache_write_count=text_cache_write_count,
+        source_inventory_path=None,
         run_mode=run_mode,
         files_selected_for_processing=len(files),
         files_skipped_already_committed=files_skipped_already_committed,

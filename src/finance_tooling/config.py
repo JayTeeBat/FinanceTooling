@@ -13,9 +13,11 @@ MASTER_PARQUET_ENV = "FINANCE_MASTER_PARQUET_PATH"
 BASE_CURRENCY_ENV = "FINANCE_BASE_CURRENCY"
 EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
+EXPORT_JSON_ENABLED_ENV = "FINANCE_EXPORT_JSON_ENABLED"
 STAGED_TRANSACTIONS_PATH_ENV = "FINANCE_STAGED_TRANSACTIONS_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
+TRANSFORM_DIAGNOSTICS_ENABLED_ENV = "FINANCE_TRANSFORM_DIAGNOSTICS_ENABLED"
 INGEST_WORKERS_ENV = "FINANCE_INGEST_WORKERS"
 INGEST_TEXT_CACHE_ENABLED_ENV = "FINANCE_INGEST_TEXT_CACHE_ENABLED"
 INGEST_TEXT_CACHE_PATH_ENV = "FINANCE_INGEST_TEXT_CACHE_PATH"
@@ -27,6 +29,21 @@ TRANSACTION_OVERRIDES_PATH_ENV = "FINANCE_TRANSACTION_OVERRIDES_PATH"
 REVIEW_STATE_PATH_ENV = "FINANCE_REVIEW_STATE_PATH"
 REVIEW_EXPORT_DARK_SAFE_ENV = "FINANCE_REVIEW_EXPORT_DARK_SAFE"
 DOTENV_PATH = Path(".env")
+PIPELINE_OUTPUTS_DIRNAME = "outputs"
+PIPELINE_STATE_DIRNAME = "state"
+INGEST_SUMMARY_FILENAME = "ingest_summary.json"
+INGEST_STAGED_TRANSACTIONS_FILENAME = "ingest_staged_transactions.parquet"
+LEGACY_STAGED_TRANSACTIONS_FILENAME = "staged_transactions.parquet"
+INGEST_TEXT_CACHE_FILENAME = "ingest_text_cache.parquet"
+TRANSFORM_TRANSACTIONS_FILENAME = "transform_transactions.parquet"
+TRANSFORM_TRANSACTIONS_CSV_FILENAME = "transform_transactions.csv"
+TRANSFORM_TRANSACTIONS_JSON_FILENAME = "transform_transactions.json"
+TRANSFORM_SUMMARY_FILENAME = "transform_run_summary.json"
+TRANSFORM_COMPLETENESS_FILENAME = "transform_completeness_report.json"
+TRANSFORM_DASHBOARD_FILENAME = "transform_dashboard.html"
+TRANSFORM_SOURCE_REGISTRY_FILENAME = "transform_source_registry.json"
+WORKFLOW_REVIEW_STATE_FILENAME = "workflow_review_state.parquet"
+WORKFLOW_FX_CACHE_FILENAME = "workflow_fx_rates_history.parquet"
 
 
 @dataclass(frozen=True)
@@ -34,6 +51,7 @@ class Settings:
     """Runtime settings resolved from environment variables."""
 
     input_path: Path
+    processed_path: Path
     output_path: Path
     master_parquet_path: Path
     export_csv_path: Path
@@ -54,6 +72,8 @@ class Settings:
     transaction_overrides_path: Path
     review_state_path: Path
     review_export_dark_safe: bool
+    export_json_enabled: bool = False
+    transform_diagnostics_enabled: bool = False
 
 
 def _resolve_path_from_env(env_name: str) -> Path | None:
@@ -86,6 +106,48 @@ def _parse_int(raw_value: str | None, *, default: int, minimum: int) -> int:
     if parsed < minimum:
         raise ValueError(f"Value must be >= {minimum}: {raw_value}")
     return parsed
+
+
+def _processed_root_from_settings(settings: Settings) -> Path:
+    """Resolve the processed root, tolerating lightweight test doubles."""
+    processed_path = getattr(settings, "processed_path", None)
+    if processed_path is not None:
+        return Path(processed_path)
+
+    for attr in (
+        "output_path",
+        "master_parquet_path",
+        "export_csv_path",
+        "export_json_path",
+        "summary_json_path",
+        "completeness_json_path",
+        "review_state_path",
+        "fx_cache_path",
+        "ingest_text_cache_path",
+    ):
+        value = getattr(settings, attr, None)
+        if value is not None:
+            path = Path(value)
+            if len(path.parents) >= 2:
+                return path.parent.parent
+            return path.parent
+
+    raise AttributeError("settings must define processed_path or a derived processed-path field")
+
+
+def outputs_root_path(settings: Settings) -> Path:
+    """Return the root directory for user-facing outputs."""
+    return _processed_root_from_settings(settings) / PIPELINE_OUTPUTS_DIRNAME
+
+
+def state_root_path(settings: Settings) -> Path:
+    """Return the root directory for pipeline state and monitoring."""
+    return _processed_root_from_settings(settings) / PIPELINE_STATE_DIRNAME
+
+
+def ingest_state_path(settings: Settings) -> Path:
+    """Return the ingest-owned state directory."""
+    return state_root_path(settings)
 
 
 def _load_dotenv(path: Path = DOTENV_PATH) -> None:
@@ -125,27 +187,37 @@ def load_settings_from_env() -> Settings:
     processed_dir = _resolve_path_from_env(PROCESSED_PATH_ENV)
     if processed_dir is None:
         raise ValueError(f"Missing required environment variable: {PROCESSED_PATH_ENV}")
+    outputs_dir = processed_dir / PIPELINE_OUTPUTS_DIRNAME
+    state_dir = processed_dir / PIPELINE_STATE_DIRNAME
     output_path = _resolve_path_from_env(OUTPUT_PATH_ENV) or (
-        processed_dir / "finance_dashboard.html"
+        outputs_dir / TRANSFORM_DASHBOARD_FILENAME
     )
     master_parquet_path = _resolve_path_from_env(MASTER_PARQUET_ENV) or (
-        processed_dir / "transactions_master.parquet"
+        outputs_dir / TRANSFORM_TRANSACTIONS_FILENAME
     )
     export_csv_path = _resolve_path_from_env(EXPORT_CSV_PATH_ENV) or (
-        processed_dir / "transactions_normalized.csv"
+        outputs_dir / TRANSFORM_TRANSACTIONS_CSV_FILENAME
     )
     export_json_path = _resolve_path_from_env(EXPORT_JSON_PATH_ENV) or (
-        processed_dir / "transactions_normalized.json"
+        outputs_dir / TRANSFORM_TRANSACTIONS_JSON_FILENAME
+    )
+    export_json_enabled = _parse_bool(
+        os.environ.get(EXPORT_JSON_ENABLED_ENV),
+        default=False,
+    )
+    transform_diagnostics_enabled = _parse_bool(
+        os.environ.get(TRANSFORM_DIAGNOSTICS_ENABLED_ENV),
+        default=False,
     )
     staged_transactions_path = _resolve_path_from_env(STAGED_TRANSACTIONS_PATH_ENV) or (
-        processed_dir / "staged_transactions.parquet"
+        state_dir / INGEST_STAGED_TRANSACTIONS_FILENAME
     )
-    summary_json_path = processed_dir / "run_summary.json"
-    completeness_json_path = processed_dir / "completeness_report.json"
+    summary_json_path = outputs_dir / TRANSFORM_SUMMARY_FILENAME
+    completeness_json_path = state_dir / TRANSFORM_COMPLETENESS_FILENAME
 
     base_currency = os.environ.get(BASE_CURRENCY_ENV, "EUR").strip().upper() or "EUR"
     fx_cache_path = _resolve_path_from_env(FX_CACHE_PATH_ENV) or (
-        processed_dir / "fx_rates_history.parquet"
+        state_dir / WORKFLOW_FX_CACHE_FILENAME
     )
     fx_auto_fetch = _parse_bool(os.environ.get(FX_AUTO_FETCH_ENV), default=True)
     ingest_workers = _parse_int(os.environ.get(INGEST_WORKERS_ENV), default=1, minimum=1)
@@ -154,7 +226,7 @@ def load_settings_from_env() -> Settings:
         default=False,
     )
     ingest_text_cache_path = _resolve_path_from_env(INGEST_TEXT_CACHE_PATH_ENV) or (
-        input_path.parent / "cache" / "ingest_text_cache.parquet"
+        state_dir / INGEST_TEXT_CACHE_FILENAME
     )
     config_dir = input_path.parent / "config"
     category_rules_path = _resolve_path_from_env(CATEGORY_RULES_PATH_ENV) or (
@@ -173,7 +245,7 @@ def load_settings_from_env() -> Settings:
         config_dir / "transaction_overrides.yaml"
     )
     review_state_path = _resolve_path_from_env(REVIEW_STATE_PATH_ENV) or (
-        processed_dir / "review_state.parquet"
+        state_dir / WORKFLOW_REVIEW_STATE_FILENAME
     )
     review_export_dark_safe = _parse_bool(
         os.environ.get(REVIEW_EXPORT_DARK_SAFE_ENV),
@@ -182,10 +254,12 @@ def load_settings_from_env() -> Settings:
 
     return Settings(
         input_path=input_path,
+        processed_path=processed_dir,
         output_path=output_path,
         master_parquet_path=master_parquet_path,
         export_csv_path=export_csv_path,
         export_json_path=export_json_path,
+        export_json_enabled=export_json_enabled,
         staged_transactions_path=staged_transactions_path,
         summary_json_path=summary_json_path,
         completeness_json_path=completeness_json_path,
@@ -202,4 +276,5 @@ def load_settings_from_env() -> Settings:
         transaction_overrides_path=transaction_overrides_path,
         review_state_path=review_state_path,
         review_export_dark_safe=review_export_dark_safe,
+        transform_diagnostics_enabled=transform_diagnostics_enabled,
     )

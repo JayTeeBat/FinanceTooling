@@ -187,6 +187,22 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-28 - codex
+- Branch: `feature/pipeline-output-layout`
+- Completed:
+  - Reconciled the ingest and transform output-layout work into a single flat processed contract with `outputs/` for user-facing transform artifacts and `state/` for pipeline state/monitoring artifacts.
+  - Renamed default pipeline artifacts to stage-explicit names, including `ingest_staged_transactions.parquet`, `ingest_staged_batch_manifest.json`, `transform_transactions.parquet`, `transform_transactions.csv`, `transform_run_summary.json`, and `transform_source_registry.json`, while keeping legacy fallbacks where needed.
+  - Updated `README.md`, review-export path resolution, reporting metadata, and metrics logs to match the new output layout and defaults, then tightened transform defaults so JSON export is opt-in and the legacy identity collision CSV is no longer generated.
+- Checks:
+  - `uv run ruff check tests/test_config.py tests/test_enrichment.py tests/test_ingest.py tests/test_perf_check.py tests/test_backup.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_workflow_status.py src/finance_tooling/commands/common.py src/finance_tooling/perf_check.py src/finance_tooling/workflow_status.py`: pass
+  - `uv run pytest -q tests/test_config.py tests/test_ingest.py tests/test_enrichment.py tests/test_workflow_status.py tests/test_perf_check.py tests/test_backup.py tests/test_cli_dispatch.py tests/test_workflow_stages.py tests/test_review_workflow.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling tests`: fail, but only on the pre-existing diagnostics in `tests/test_planning_dashboard.py`
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run metrics-log-update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`: pass
+- Open items:
+  - `docs/categorization_review_workflow.md` and `docs/category_rules_review_workflow.md` still reference legacy processed-root filenames and should be updated in a follow-up docs pass.
+- Next action:
+  - Open and merge the pipeline-output-layout PR, then land the isolated transform performance improvements on top of the stabilized output contract.
+
 ### 2026-03-21 - codex
 - Branch: `feature/reporting-dataframe-optimizations`
 - Completed:
@@ -216,17 +232,3 @@ Success target for the 2026 validation campaign:
   - Phase 1 does not yet support targeted date-window reruns; modified/missing historical files and config drift are surfaced as stale conditions that still require a guarded full refresh.
 - Next action:
   - Run `uv run workflow-status` and a real incremental `uv run update` on the live corpus, then validate that stale-state reporting and source-registry commits behave as expected before designing targeted reruns.
-
-### 2026-03-21 - codex
-- Branch: `main`
-- Completed:
-  - Added automatic stage-scoped pipeline backups for `ingest`, `transform`, and `update`, with timestamped run folders, backup manifests, and 10-run FIFO retention.
-  - Expanded transform backups to snapshot the current master parquet plus category/project rule and override configs, while ingest snapshots the prior staged parquet only.
-  - Surfaced backup run metadata in CLI output and stage summaries, and documented the automatic backup behavior in `README.md`.
-- Checks:
-  - `uv run pytest tests/test_backup.py tests/test_workflow_stages.py tests/test_cli_dispatch.py`: pass
-  - `uv run ruff format src/finance_tooling/backup.py src/finance_tooling/models.py src/finance_tooling/workflow/types.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py src/finance_tooling/commands/common.py tests/test_backup.py tests/test_workflow_stages.py tests/test_cli_dispatch.py`: pass
-- Open items:
-  - The automatic pipeline backup flow is stage-scoped, but non-pipeline commands such as `review-import` still use the older per-file backup helper and have not been unified onto run-folder manifests.
-- Next action:
-  - Run the broader lint/type/test gates and decide whether the remaining non-pipeline backup commands should migrate onto the same run-based backup subsystem.

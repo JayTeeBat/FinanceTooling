@@ -9,6 +9,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from finance_tooling.config import (
+    INGEST_STAGED_TRANSACTIONS_FILENAME,
+    LEGACY_STAGED_TRANSACTIONS_FILENAME,
+    Settings,
+)
 from finance_tooling.models import Transaction
 from finance_tooling.source_inventory import compute_source_document_id
 from finance_tooling.workflow.types import StagingWriteResult
@@ -49,6 +54,22 @@ def _require_parquet_engine() -> None:
         raise RuntimeError(
             "Parquet support requires pyarrow. Install dependencies with `uv sync --all-groups`."
         ) from exc
+
+
+def resolve_staged_transactions_path(
+    settings: Settings,
+    *,
+    staged_path: Path | None = None,
+) -> Path:
+    """Resolve the staged transactions path, falling back to the legacy filename."""
+    candidate = staged_path or settings.staged_transactions_path
+    if candidate.exists():
+        return candidate
+    if staged_path is None and candidate.name == INGEST_STAGED_TRANSACTIONS_FILENAME:
+        legacy_path = candidate.with_name(LEGACY_STAGED_TRANSACTIONS_FILENAME)
+        if legacy_path.exists():
+            return legacy_path
+    return candidate
 
 
 def _is_missing(value: object) -> bool:
@@ -121,6 +142,10 @@ def _backfill_legacy_staged_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
         missing = ", ".join(sorted(incompatible_columns))
         raise ValueError(f"Invalid staged transaction schema; missing columns: {missing}")
 
+    required_columns = list(_REQUIRED_STAGED_COLUMNS)
+    if not missing_columns:
+        return dataframe.loc[:, required_columns]
+
     migrated = dataframe.copy()
     if "source_record_index" not in migrated.columns:
         migrated["source_record_index"] = migrated.groupby("source_file", sort=False).cumcount()
@@ -135,7 +160,7 @@ def _backfill_legacy_staged_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
     for column in _REQUIRED_STAGED_COLUMNS:
         if column not in migrated.columns:
             migrated[column] = None
-    return migrated.loc[:, list(_REQUIRED_STAGED_COLUMNS)]
+    return migrated.loc[:, required_columns]
 
 
 def write_staged_transactions(path: Path, transactions: list[Transaction]) -> StagingWriteResult:

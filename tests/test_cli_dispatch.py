@@ -24,9 +24,14 @@ def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> Non
     monkeypatch.setattr("finance_tooling.commands.update.load_settings_from_env", lambda: object())
 
     def _run_update(
-        settings: Any, *, ingest_only: bool, transform_only: bool
+        settings: Any,
+        *,
+        ingest_only: bool,
+        transform_only: bool,
+        emit_ingest_summary: bool = False,
     ) -> object:  # pragma: no cover
         del settings
+        del emit_ingest_summary
         if ingest_only and transform_only:
             raise ValueError("--ingest-only and --transform-only are mutually exclusive.")
         return object()
@@ -124,15 +129,14 @@ def test_ingest_full_refresh_runs_with_confirmation(monkeypatch, tmp_path: Path,
     )
     monkeypatch.setattr(
         "finance_tooling.commands.ingest.run_ingest",
-        lambda _settings, run_mode="incremental": captured.setdefault(
+        lambda _settings, run_mode="incremental", emit_ingest_summary=False: captured.setdefault(
             "result",
             IngestExecutionResult(
-                staged_path=processed_dir / "staged_transactions.parquet",
-                ingest_summary_path=processed_dir / "ingest_summary.json",
+                staged_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+                ingest_summary_path=processed_dir / "state" / "ingest_summary.json",
                 files_scanned=1,
                 raw_files_discovered=1,
                 duplicate_raw_file_count=0,
-                source_inventory_path=processed_dir / "source_inventory.json",
                 files_failed=0,
                 transactions_parsed=1,
                 hsbc_csv_files_scanned=0,
@@ -210,7 +214,7 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     stdio = capsys.readouterr()
 
     assert exit_code == 0
-    assert captured["normalized_path"] == processed_dir / "transactions_normalized.csv"
+    assert captured["normalized_path"] == processed_dir / "outputs" / "transform_transactions.csv"
     assert captured["output_path"] == processed_dir / "transactions_review.xlsx"
     assert captured["include_categorized"] is False
     assert captured["review_state_path"] == processed_dir / "review_state.parquet"
@@ -536,13 +540,12 @@ def test_ingest_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsy
     monkeypatch.setattr("finance_tooling.commands.ingest.load_settings_from_env", lambda: object())
     monkeypatch.setattr(
         "finance_tooling.commands.ingest.run_ingest",
-        lambda _settings: IngestExecutionResult(
-            staged_path=processed_dir / "staged_transactions.parquet",
-            ingest_summary_path=processed_dir / "ingest_summary.json",
+        lambda _settings, emit_ingest_summary=False: IngestExecutionResult(
+            staged_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+            ingest_summary_path=processed_dir / "state" / "ingest_summary.json",
             files_scanned=0,
             raw_files_discovered=0,
             duplicate_raw_file_count=0,
-            source_inventory_path=processed_dir / "source_inventory.json",
             files_failed=0,
             transactions_parsed=0,
             hsbc_csv_files_scanned=0,

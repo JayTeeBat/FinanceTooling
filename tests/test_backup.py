@@ -12,8 +12,9 @@ def test_create_stage_backup_run_copies_files_and_prunes_oldest_run(tmp_path: Pa
     processed_dir.mkdir()
     config_dir.mkdir()
 
-    staged_file = processed_dir / "transactions_master.parquet"
+    staged_file = processed_dir / "outputs" / "transform_transactions.parquet"
     category_rules = config_dir / "category_rules.yaml"
+    staged_file.parent.mkdir(parents=True, exist_ok=True)
     staged_file.write_text("master", encoding="utf-8")
     category_rules.write_text("version: 1\nrules: []\n", encoding="utf-8")
 
@@ -56,7 +57,7 @@ def test_create_stage_backup_run_records_missing_files_in_manifest(tmp_path: Pat
         stage="ingest",
         command="ingest",
         processed_dir=processed_dir,
-        processed_targets=(processed_dir / "staged_transactions.parquet",),
+        processed_targets=(processed_dir / "state" / "ingest_staged_transactions.parquet",),
         config_dir=config_dir,
         config_targets=(config_dir / "project_rules.yaml",),
     )
