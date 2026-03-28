@@ -1,11 +1,9 @@
-import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from openpyxl import load_workbook
 
-from finance_tooling.migrate_category_overrides import migrate_category_overrides_to_rules
 from finance_tooling.review_export import export_review_rows
 from finance_tooling.review_import import import_review_into_overrides
 from finance_tooling.review_state import load_review_state
@@ -654,37 +652,3 @@ def test_import_review_into_overrides_requires_transaction_id_for_category_edits
 
     assert result.transaction_overrides_upserted == 0
     assert result.rows_skipped_invalid_category == 1
-
-
-def test_migrate_category_overrides_to_rules_converts_entries(tmp_path: Path) -> None:
-    overrides_path = tmp_path / "category_overrides.yaml"
-    rules_path = tmp_path / "category_rules.yaml"
-    report_path = tmp_path / "migration_report.json"
-    overrides_path.write_text(
-        "\n".join(
-            [
-                "version: 1",
-                "overrides:",
-                "  - fingerprint: paypal payment",
-                "    category: Transfers",
-                "    subcategory: Wallet Transfer",
-                "    bank: REVOLUT",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
-
-    result = migrate_category_overrides_to_rules(
-        overrides_path=overrides_path,
-        rules_path=rules_path,
-        report_path=report_path,
-    )
-
-    assert result.migrated_count == 1
-    payload = json.loads(report_path.read_text(encoding="utf-8"))
-    assert payload["conflict_count"] == 0
-    rules = rules_path.read_text(encoding="utf-8")
-    assert "migrated.override.revolut.paypal_payment.1" in rules
-    assert "match: exact" in rules
-    assert "- paypal payment" in rules

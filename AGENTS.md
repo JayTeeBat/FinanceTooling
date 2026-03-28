@@ -188,6 +188,20 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-03-28 - codex
+- Branch: `feature/api-surface-cleanup`
+- Completed:
+  - Removed one-off migration and planning commands from the public top-level CLI so the operator-facing API is limited to ingest/transform/update/review/workflow-status.
+  - Deleted the category-override migration feature entirely, including its command wrapper, internal implementation, and direct tests.
+  - Removed public README and workflow-doc references for `migrate-transaction-ids`, `migrate-category-overrides-to-rules`, `metrics-log-update`, and the `plan-*` commands while leaving the remaining internal maintenance modules available where intentionally retained.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_command_entrypoints.py tests/test_cli_dispatch.py tests/test_review_workflow.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/__main__.py tests/test_command_entrypoints.py tests/test_cli_dispatch.py tests/test_review_workflow.py README.md docs/categorization_review_workflow.md`: pass
+- Open items:
+  - `metrics_log_update.py`, `migrate_transaction_ids.py`, and the `plan_*` command modules still exist as internal entrypoints/modules even though they are no longer part of the public top-level CLI.
+- Next action:
+  - Open and merge the API-surface cleanup PR, then decide whether the remaining internal maintenance/planning modules should stay as private utilities or move to a separate namespace/tool.
+
+### 2026-03-28 - codex
 - Branch: `feature/pipeline-output-layout`
 - Completed:
   - Reconciled the ingest and transform output-layout work into a single flat processed contract with `outputs/` for user-facing transform artifacts and `state/` for pipeline state/monitoring artifacts.
@@ -202,21 +216,6 @@ Success target for the 2026 validation campaign:
   - `docs/categorization_review_workflow.md` and `docs/category_rules_review_workflow.md` still reference legacy processed-root filenames and should be updated in a follow-up docs pass.
 - Next action:
   - Open and merge the pipeline-output-layout PR, then land the isolated transform performance improvements on top of the stabilized output contract.
-
-### 2026-03-21 - codex
-- Branch: `feature/reporting-dataframe-optimizations`
-- Completed:
-  - Vectorized dashboard transaction-row preparation so booking dates, category/project defaults, and transfer flags are normalized at the dataframe level before HTML rendering.
-  - Reworked reporting/completeness to stay dataframe-native, avoiding full `Transaction` reconstruction for classification diagnostics, completeness coverage, legacy-ID collision export, and per-bank category metrics.
-  - Added regression coverage for vectorized dashboard payload normalization and parity coverage for dataframe-based completeness reporting.
-- Checks:
-  - `uv run pytest tests/test_dashboard.py tests/test_completeness.py tests/test_workflow_stages.py tests/test_perf_check.py`: pass
-  - `uv run ruff check src/finance_tooling/dashboard.py src/finance_tooling/completeness.py src/finance_tooling/workflow/reporting.py tests/test_dashboard.py tests/test_completeness.py`: pass
-  - `uv run ty check src/finance_tooling tests`: fail, but only on pre-existing diagnostics in `tests/test_planning_dashboard.py`
-- Open items:
-  - No-op incremental `update`/`transform` runs still spend most of their remaining time on YAML loads, backups, CSV export, and dashboard refresh even when no files were selected.
-- Next action:
-  - Decide whether to implement a true no-op fast path for unchanged incremental runs, since that is now the biggest remaining end-user speed win.
 
 ### 2026-03-21 - codex
 - Branch: `main`
