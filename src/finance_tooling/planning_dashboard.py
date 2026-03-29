@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,13 +28,20 @@ def _build_payload(inputs: dict[str, Any]) -> dict[str, object]:
     mortgage = inputs.get("mortgage", {})
     assumptions = inputs["assumptions"]
 
+    current_date = datetime.now(UTC).date()
     current_house_target_years = 5.0
     target_date = house_project.get("target_date")
     if target_date:
         try:
-            year = int(str(target_date)[:4])
-            current_year = datetime.now(UTC).year
-            current_house_target_years = max(0.0, year - current_year)
+            parsed_target_date = (
+                target_date
+                if isinstance(target_date, date)
+                else date.fromisoformat(str(target_date))
+            )
+            current_house_target_years = max(
+                0.0,
+                (parsed_target_date - current_date).days / 365.25,
+            )
         except ValueError:
             current_house_target_years = 5.0
 
@@ -44,14 +51,36 @@ def _build_payload(inputs: dict[str, Any]) -> dict[str, object]:
             "title": "Household Finance Hypothesis Playground",
         },
         "baseline": {
+            "as_of_date": current_date.isoformat(),
             "adult_1_date_of_birth": str(adults.get("adult_1_date_of_birth", "")),
             "adult_1_age": adults["adult_1_current_age"],
             "adult_2_date_of_birth": str(adults.get("adult_2_date_of_birth", "")),
             "adult_2_age": adults["adult_2_current_age"],
-            "child_ages": [
-                children["child_1_current_age"],
-                children["child_2_current_age"],
-                children["child_3_current_age"],
+            "children": [
+                {
+                    "label": "Child 1",
+                    "current_age": children["child_1_current_age"],
+                    "target_age": education["child_1_target_age"],
+                    "target_fund_eur": education["child_1_target_fund_eur"],
+                    "current_fund_eur": education["child_1_current_fund_eur"],
+                    "expected_return_pct": education["child_1_expected_return_pct"],
+                },
+                {
+                    "label": "Child 2",
+                    "current_age": children["child_2_current_age"],
+                    "target_age": education["child_2_target_age"],
+                    "target_fund_eur": education["child_2_target_fund_eur"],
+                    "current_fund_eur": education["child_2_current_fund_eur"],
+                    "expected_return_pct": education["child_2_expected_return_pct"],
+                },
+                {
+                    "label": "Child 3",
+                    "current_age": children["child_3_current_age"],
+                    "target_age": education["child_3_target_age"],
+                    "target_fund_eur": education["child_3_target_fund_eur"],
+                    "current_fund_eur": education["child_3_current_fund_eur"],
+                    "expected_return_pct": education["child_3_expected_return_pct"],
+                },
             ],
             "estimated_net_household_income_eur": income["estimated_net_household_income_eur"],
             "essential_monthly_spend_eur": liquidity["essential_monthly_spend_eur"],
@@ -73,12 +102,6 @@ def _build_payload(inputs: dict[str, Any]) -> dict[str, object]:
             ],
             "withdrawal_rate_pct": retirement["safe_withdrawal_rate_pct"],
             "current_retirement_assets_eur": retirement["current_retirement_assets_eur"],
-            "kids_target_fund_per_child_eur": education["child_1_target_fund_eur"],
-            "current_child_funds_eur": [
-                education["child_1_current_fund_eur"],
-                education["child_2_current_fund_eur"],
-                education["child_3_current_fund_eur"],
-            ],
             "house_project_cost_eur": house_project["target_cost_eur"],
             "house_contingency_pct": house_project["contingency_pct"],
             "house_target_years": current_house_target_years,
@@ -423,8 +446,28 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
           </div>
           <div class="field">
-            <label for="kids-fund">Kids fund target per child (EUR)</label>
-            <input id="kids-fund" type="number" min="0" step="1000" />
+            <label for="child-1-fund">Child 1 target fund (EUR)</label>
+            <input id="child-1-fund" type="number" min="0" step="1000" />
+          </div>
+          <div class="field">
+            <label for="child-1-return">Child 1 expected return (%)</label>
+            <input id="child-1-return" type="number" min="0" max="10" step="0.1" />
+          </div>
+          <div class="field">
+            <label for="child-2-fund">Child 2 target fund (EUR)</label>
+            <input id="child-2-fund" type="number" min="0" step="1000" />
+          </div>
+          <div class="field">
+            <label for="child-2-return">Child 2 expected return (%)</label>
+            <input id="child-2-return" type="number" min="0" max="10" step="0.1" />
+          </div>
+          <div class="field">
+            <label for="child-3-fund">Child 3 target fund (EUR)</label>
+            <input id="child-3-fund" type="number" min="0" step="1000" />
+          </div>
+          <div class="field">
+            <label for="child-3-return">Child 3 expected return (%)</label>
+            <input id="child-3-return" type="number" min="0" max="10" step="0.1" />
           </div>
           <div class="field">
             <label for="house-cost">House project cost (EUR)</label>
@@ -572,7 +615,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             Retirement need is based on the annual gap between retirement
             spending and pension, converted into a capital target using the
             withdrawal rate. Education and house goals grow targets with
-            inflation and discount monthly saving needs with the selected
+            inflation and discount monthly saving needs with their configured
             return assumptions.
           </p>
         </section>
@@ -605,7 +648,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       mortgageYears: document.getElementById("mortgage-years"),
       homeGrowth: document.getElementById("home-growth"),
       homeGrowthOutput: document.getElementById("home-growth-output"),
-      kidsFund: document.getElementById("kids-fund"),
+      child1Fund: document.getElementById("child-1-fund"),
+      child1Return: document.getElementById("child-1-return"),
+      child2Fund: document.getElementById("child-2-fund"),
+      child2Return: document.getElementById("child-2-return"),
+      child3Fund: document.getElementById("child-3-fund"),
+      child3Return: document.getElementById("child-3-return"),
       houseCost: document.getElementById("house-cost"),
       houseYears: document.getElementById("house-years"),
       inflation: document.getElementById("inflation"),
@@ -636,15 +684,28 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       return amount * Math.pow(1 + inflationPct / 100, Math.max(0, years));
     }
 
-    function yearsFromDob(dobText, retirementAge) {
+    function ageAtAsOfDate(dobText, asOfDateText, fallbackAge) {
       const dob = new Date(dobText);
-      if (Number.isNaN(dob.getTime())) {
-        return 0;
+      const asOfDate = new Date(asOfDateText + "T00:00:00Z");
+      if (Number.isNaN(dob.getTime()) || Number.isNaN(asOfDate.getTime())) {
+        return fallbackAge;
       }
-      const retirementDate = new Date(dob);
-      retirementDate.setFullYear(retirementDate.getFullYear() + retirementAge);
-      const now = new Date();
-      return Math.max(0, (retirementDate - now) / (365.25 * 24 * 60 * 60 * 1000));
+      let age = asOfDate.getUTCFullYear() - dob.getUTCFullYear();
+      const beforeBirthday =
+        asOfDate.getUTCMonth() < dob.getUTCMonth() ||
+        (
+          asOfDate.getUTCMonth() === dob.getUTCMonth() &&
+          asOfDate.getUTCDate() < dob.getUTCDate()
+        );
+      if (beforeBirthday) {
+        age -= 1;
+      }
+      return Math.max(0, age);
+    }
+
+    function yearsToRetirementFromDob(dobText, retirementAge, asOfDateText, fallbackAge) {
+      const currentAge = ageAtAsOfDate(dobText, asOfDateText, fallbackAge);
+      return Math.max(0, retirementAge - currentAge);
     }
 
     function retirementYearFromDob(dobText, retirementAge) {
@@ -722,7 +783,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       ids.mortgagePayment.value = baseline.mortgage_monthly_payment_eur;
       ids.mortgageYears.value = baseline.mortgage_years_remaining;
       ids.homeGrowth.value = baseline.inflation_pct;
-      ids.kidsFund.value = baseline.kids_target_fund_per_child_eur;
+      ids.child1Fund.value = baseline.children[0].target_fund_eur;
+      ids.child1Return.value = baseline.children[0].expected_return_pct;
+      ids.child2Fund.value = baseline.children[1].target_fund_eur;
+      ids.child2Return.value = baseline.children[1].expected_return_pct;
+      ids.child3Fund.value = baseline.children[2].target_fund_eur;
+      ids.child3Return.value = baseline.children[2].expected_return_pct;
       ids.houseCost.value = baseline.house_project_cost_eur;
       ids.houseYears.value = baseline.house_target_years;
       ids.inflation.value = baseline.inflation_pct;
@@ -759,7 +825,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       const mortgagePayment = Number(ids.mortgagePayment.value);
       const mortgageYears = Number(ids.mortgageYears.value);
       const homeGrowth = Number(ids.homeGrowth.value);
-      const kidsFund = Number(ids.kidsFund.value);
+      const childFunds = [
+        Number(ids.child1Fund.value),
+        Number(ids.child2Fund.value),
+        Number(ids.child3Fund.value),
+      ];
+      const childReturns = [
+        Number(ids.child1Return.value),
+        Number(ids.child2Return.value),
+        Number(ids.child3Return.value),
+      ];
       const houseCost = Number(ids.houseCost.value);
       const houseYears = Number(ids.houseYears.value);
       const inflation = Number(ids.inflation.value);
@@ -773,8 +848,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       ids.houseReturnOutput.textContent = fmtNumber(houseReturn) + "%";
       ids.homeGrowthOutput.textContent = fmtNumber(homeGrowth) + "%";
 
-      const yearsToRetirementAdult1 = yearsFromDob(adult1Dob, retirementAgeAdult1);
-      const yearsToRetirementAdult2 = yearsFromDob(adult2Dob, retirementAgeAdult2);
+      const yearsToRetirementAdult1 = yearsToRetirementFromDob(
+        adult1Dob,
+        retirementAgeAdult1,
+        baseline.as_of_date,
+        baseline.adult_1_age
+      );
+      const yearsToRetirementAdult2 = yearsToRetirementFromDob(
+        adult2Dob,
+        retirementAgeAdult2,
+        baseline.as_of_date,
+        baseline.adult_2_age
+      );
       const yearsToRetirement = Math.max(
         0,
         Math.min(yearsToRetirementAdult1, yearsToRetirementAdult2)
@@ -792,21 +877,22 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
       const educationRows = [];
       let educationMonthly = 0;
-      baseline.child_ages.forEach((age, index) => {
-        const yearsToGoal = Math.max(0, 18 - age);
-        const futureTarget = inflate(kidsFund, yearsToGoal, inflation);
+      baseline.children.forEach((child, index) => {
+        const yearsToGoal = Math.max(0, child.target_age - child.current_age);
+        const futureTarget = inflate(childFunds[index], yearsToGoal, inflation);
         const monthly = requiredMonthlyContribution(
           futureTarget,
-          Number(baseline.current_child_funds_eur[index] || 0),
+          Number(child.current_fund_eur || 0),
           yearsToGoal,
-          growthReturn
+          childReturns[index]
         );
         educationMonthly += monthly;
         educationRows.push({
-          label: "Child " + (index + 1),
+          label: child.label,
           yearsToGoal,
           futureTarget,
           monthly,
+          expectedReturnPct: childReturns[index],
         });
       });
 
@@ -885,7 +971,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         " years to retirement";
       document.getElementById("education-monthly").textContent = fmtCurrency(educationMonthly);
       document.getElementById("education-detail").textContent =
-        fmtCurrency(kidsFund) + " target per child, inflation-adjusted";
+        "Per-child targets and return assumptions from the planning model";
       document.getElementById("house-monthly").textContent = fmtCurrency(houseMonthly);
       document.getElementById("house-detail").textContent =
         fmtCurrency(houseTargetFuture) +
@@ -901,7 +987,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           <td>${row.label}</td>
           <td>${fmtNumber(row.yearsToGoal, 1)}</td>
           <td class="right">${fmtCurrency(row.futureTarget)}</td>
-          <td class="right">${fmtCurrency(row.monthly)}</td>
+          <td class="right">${fmtCurrency(row.monthly)} at ${fmtNumber(row.expectedReturnPct)}%</td>
         `;
         tbody.appendChild(tr);
       });

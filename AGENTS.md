@@ -176,6 +176,20 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-03-29 - codex
+- Branch: `codex/fix-hypothesis-dashboard-calculations`
+- Completed:
+  - Corrected the planning hypothesis dashboard baseline math so retirement timing uses the planner's age-based horizon, house timing uses the exact target-date horizon, and education uses per-child target/return assumptions instead of flattening to one shared input.
+  - Added a regression test that compares the dashboard baseline calculations against `build_planning_summary`, and regenerated `planning/household_finance_360/15_hypothesis_playground.html`.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/planning_dashboard.py tests/test_planning_dashboard.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling/planning_dashboard.py tests/test_planning_dashboard.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_planning_dashboard.py tests/test_planning.py tests/test_planning_doe.py`: pass
+- Open items:
+  - The dashboard still has its own interactive browser-side projection layer for net-worth and housing visuals; if more planning logic moves into the canonical engine, keep the static page in sync.
+- Next action:
+  - Review the draft PR and decide whether the dashboard should keep per-child education controls or collapse them into a different UX with explicit approximation.
+
 ### 2026-03-28 - codex
 - Branch: `main`
 - Completed:
@@ -204,19 +218,3 @@ Success target for the 2026 validation campaign:
   - The no-op change detection still scans the raw corpus to build source inventory, so hashing/discovery remains a noticeable floor for large corpora.
 - Next action:
   - Add targeted transform scopes so review-state-only and small override/config edits can run the minimal valid transform slice instead of the full transform pipeline.
-
-### 2026-03-28 - codex
-- Branch: `feature/progress-and-transform-performance`
-- Completed:
-  - Added stage-level `tqdm` progress bars for `ingest` and `transform`, while keeping the existing per-file ingest parsing progress bar intact.
-  - Landed the transform hot-path performance pass: FX lookups now use a prebuilt currency/date index, source-file mtimes are memoized per unique file, transaction overrides use indexed candidate matching, and staged legacy identity backfill avoids unnecessary work for modern files.
-  - Cleaned `pyproject.toml` so packaged script entrypoints match the current public CLI surface instead of publishing removed/internal commands.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/fx.py src/finance_tooling/workflow/enrichment.py src/finance_tooling/transaction_overrides.py src/finance_tooling/workflow/staging.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py tests/test_fx.py tests/test_enrichment.py tests/test_staging.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling/fx.py src/finance_tooling/workflow/enrichment.py src/finance_tooling/transaction_overrides.py src/finance_tooling/workflow/staging.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py tests/test_fx.py tests/test_enrichment.py tests/test_staging.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_fx.py tests/test_enrichment.py tests/test_staging.py tests/test_workflow_stages.py`: pass
-- Open items:
-  - Small targeted config/review changes still rerun the full transform stage when transform is required; only true no-op cases short-circuit today.
-  - Performance-check execution still lives behind an internal module path rather than the packaged public CLI surface.
-- Next action:
-  - Add targeted transform scopes so small review/config changes can avoid a full transform rebuild when correctness allows.
