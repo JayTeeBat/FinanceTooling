@@ -311,8 +311,28 @@
             </div>
           </div>
           <div class="field">
-            <label for="kids-fund">Kids fund target per child (EUR)</label>
-            <input id="kids-fund" type="number" min="0" step="1000" />
+            <label for="child-1-fund">Child 1 target fund (EUR)</label>
+            <input id="child-1-fund" type="number" min="0" step="1000" />
+          </div>
+          <div class="field">
+            <label for="child-1-return">Child 1 expected return (%)</label>
+            <input id="child-1-return" type="number" min="0" max="10" step="0.1" />
+          </div>
+          <div class="field">
+            <label for="child-2-fund">Child 2 target fund (EUR)</label>
+            <input id="child-2-fund" type="number" min="0" step="1000" />
+          </div>
+          <div class="field">
+            <label for="child-2-return">Child 2 expected return (%)</label>
+            <input id="child-2-return" type="number" min="0" max="10" step="0.1" />
+          </div>
+          <div class="field">
+            <label for="child-3-fund">Child 3 target fund (EUR)</label>
+            <input id="child-3-fund" type="number" min="0" step="1000" />
+          </div>
+          <div class="field">
+            <label for="child-3-return">Child 3 expected return (%)</label>
+            <input id="child-3-return" type="number" min="0" max="10" step="0.1" />
           </div>
           <div class="field">
             <label for="house-cost">House project cost (EUR)</label>
@@ -460,7 +480,7 @@
             Retirement need is based on the annual gap between retirement
             spending and pension, converted into a capital target using the
             withdrawal rate. Education and house goals grow targets with
-            inflation and discount monthly saving needs with the selected
+            inflation and discount monthly saving needs with their configured
             return assumptions.
           </p>
         </section>
@@ -468,7 +488,7 @@
     </div>
   </div>
 
-  <script id="planning-dashboard-data" type="application/json">{"meta":{"generated_at":"2026-03-16 21:49 UTC","title":"Household Finance Hypothesis Playground"},"baseline":{"adult_1_date_of_birth":"1988-01-01","adult_1_age":38,"adult_2_date_of_birth":"1989-01-01","adult_2_age":37,"child_ages":[13,11,7],"estimated_net_household_income_eur":85000,"essential_monthly_spend_eur":4500,"emergency_fund_target_months":6,"retirement_age":62,"retirement_age_adult_1":62,"retirement_age_adult_2":62,"combined_pension_before_tax_eur":30000,"pension_adult_1_before_tax_eur":15000,"pension_adult_2_before_tax_eur":15000,"retirement_spending_before_tax_eur":60000,"withdrawal_rate_pct":3.0,"current_retirement_assets_eur":50000,"kids_target_fund_per_child_eur":25000,"current_child_funds_eur":[0,0,0],"house_project_cost_eur":110000,"house_contingency_pct":10,"house_target_years":5,"current_house_reserved_eur":50000,"inflation_pct":2.0,"growth_return_pct":5.0,"house_return_pct":1.5,"current_total_net_worth_eur":200000,"current_investable_net_worth_eur":200000,"current_home_value_eur":200000,"current_total_financial_assets_eur":200000,"current_mortgage_balance_eur":200000,"mortgage_annual_rate_pct":2.4,"mortgage_monthly_payment_eur":1300,"mortgage_years_remaining":17}}</script>
+  <script id="planning-dashboard-data" type="application/json">{"meta":{"generated_at":"2026-03-29 20:57 UTC","title":"Household Finance Hypothesis Playground"},"baseline":{"as_of_date":"2026-03-29","adult_1_date_of_birth":"1988-01-01","adult_1_age":38,"adult_2_date_of_birth":"1989-01-01","adult_2_age":37,"children":[{"label":"Child 1","current_age":13,"target_age":18,"target_fund_eur":25000,"current_fund_eur":0,"expected_return_pct":2.0},{"label":"Child 2","current_age":11,"target_age":18,"target_fund_eur":30000,"current_fund_eur":0,"expected_return_pct":3.0},{"label":"Child 3","current_age":7,"target_age":18,"target_fund_eur":35000,"current_fund_eur":0,"expected_return_pct":4.5}],"estimated_net_household_income_eur":85000,"essential_monthly_spend_eur":4500,"emergency_fund_target_months":6,"retirement_age":62,"retirement_age_adult_1":62,"retirement_age_adult_2":62,"combined_pension_before_tax_eur":30000,"pension_adult_1_before_tax_eur":15000,"pension_adult_2_before_tax_eur":15000,"retirement_spending_before_tax_eur":60000,"withdrawal_rate_pct":3.0,"current_retirement_assets_eur":50000,"house_project_cost_eur":110000,"house_contingency_pct":10,"house_target_years":4.960985626283367,"current_house_reserved_eur":50000,"inflation_pct":2.0,"growth_return_pct":5.0,"house_return_pct":1.5,"current_total_net_worth_eur":200000,"current_investable_net_worth_eur":200000,"current_home_value_eur":200000,"current_total_financial_assets_eur":200000,"current_mortgage_balance_eur":200000,"mortgage_annual_rate_pct":2.4,"mortgage_monthly_payment_eur":1300,"mortgage_years_remaining":17}}</script>
   <script>
     const payload = JSON.parse(document.getElementById("planning-dashboard-data").textContent);
     const baseline = payload.baseline;
@@ -493,7 +513,12 @@
       mortgageYears: document.getElementById("mortgage-years"),
       homeGrowth: document.getElementById("home-growth"),
       homeGrowthOutput: document.getElementById("home-growth-output"),
-      kidsFund: document.getElementById("kids-fund"),
+      child1Fund: document.getElementById("child-1-fund"),
+      child1Return: document.getElementById("child-1-return"),
+      child2Fund: document.getElementById("child-2-fund"),
+      child2Return: document.getElementById("child-2-return"),
+      child3Fund: document.getElementById("child-3-fund"),
+      child3Return: document.getElementById("child-3-return"),
       houseCost: document.getElementById("house-cost"),
       houseYears: document.getElementById("house-years"),
       inflation: document.getElementById("inflation"),
@@ -524,15 +549,28 @@
       return amount * Math.pow(1 + inflationPct / 100, Math.max(0, years));
     }
 
-    function yearsFromDob(dobText, retirementAge) {
+    function ageAtAsOfDate(dobText, asOfDateText, fallbackAge) {
       const dob = new Date(dobText);
-      if (Number.isNaN(dob.getTime())) {
-        return 0;
+      const asOfDate = new Date(asOfDateText + "T00:00:00Z");
+      if (Number.isNaN(dob.getTime()) || Number.isNaN(asOfDate.getTime())) {
+        return fallbackAge;
       }
-      const retirementDate = new Date(dob);
-      retirementDate.setFullYear(retirementDate.getFullYear() + retirementAge);
-      const now = new Date();
-      return Math.max(0, (retirementDate - now) / (365.25 * 24 * 60 * 60 * 1000));
+      let age = asOfDate.getUTCFullYear() - dob.getUTCFullYear();
+      const beforeBirthday =
+        asOfDate.getUTCMonth() < dob.getUTCMonth() ||
+        (
+          asOfDate.getUTCMonth() === dob.getUTCMonth() &&
+          asOfDate.getUTCDate() < dob.getUTCDate()
+        );
+      if (beforeBirthday) {
+        age -= 1;
+      }
+      return Math.max(0, age);
+    }
+
+    function yearsToRetirementFromDob(dobText, retirementAge, asOfDateText, fallbackAge) {
+      const currentAge = ageAtAsOfDate(dobText, asOfDateText, fallbackAge);
+      return Math.max(0, retirementAge - currentAge);
     }
 
     function retirementYearFromDob(dobText, retirementAge) {
@@ -610,7 +648,12 @@
       ids.mortgagePayment.value = baseline.mortgage_monthly_payment_eur;
       ids.mortgageYears.value = baseline.mortgage_years_remaining;
       ids.homeGrowth.value = baseline.inflation_pct;
-      ids.kidsFund.value = baseline.kids_target_fund_per_child_eur;
+      ids.child1Fund.value = baseline.children[0].target_fund_eur;
+      ids.child1Return.value = baseline.children[0].expected_return_pct;
+      ids.child2Fund.value = baseline.children[1].target_fund_eur;
+      ids.child2Return.value = baseline.children[1].expected_return_pct;
+      ids.child3Fund.value = baseline.children[2].target_fund_eur;
+      ids.child3Return.value = baseline.children[2].expected_return_pct;
       ids.houseCost.value = baseline.house_project_cost_eur;
       ids.houseYears.value = baseline.house_target_years;
       ids.inflation.value = baseline.inflation_pct;
@@ -647,7 +690,16 @@
       const mortgagePayment = Number(ids.mortgagePayment.value);
       const mortgageYears = Number(ids.mortgageYears.value);
       const homeGrowth = Number(ids.homeGrowth.value);
-      const kidsFund = Number(ids.kidsFund.value);
+      const childFunds = [
+        Number(ids.child1Fund.value),
+        Number(ids.child2Fund.value),
+        Number(ids.child3Fund.value),
+      ];
+      const childReturns = [
+        Number(ids.child1Return.value),
+        Number(ids.child2Return.value),
+        Number(ids.child3Return.value),
+      ];
       const houseCost = Number(ids.houseCost.value);
       const houseYears = Number(ids.houseYears.value);
       const inflation = Number(ids.inflation.value);
@@ -661,8 +713,18 @@
       ids.houseReturnOutput.textContent = fmtNumber(houseReturn) + "%";
       ids.homeGrowthOutput.textContent = fmtNumber(homeGrowth) + "%";
 
-      const yearsToRetirementAdult1 = yearsFromDob(adult1Dob, retirementAgeAdult1);
-      const yearsToRetirementAdult2 = yearsFromDob(adult2Dob, retirementAgeAdult2);
+      const yearsToRetirementAdult1 = yearsToRetirementFromDob(
+        adult1Dob,
+        retirementAgeAdult1,
+        baseline.as_of_date,
+        baseline.adult_1_age
+      );
+      const yearsToRetirementAdult2 = yearsToRetirementFromDob(
+        adult2Dob,
+        retirementAgeAdult2,
+        baseline.as_of_date,
+        baseline.adult_2_age
+      );
       const yearsToRetirement = Math.max(
         0,
         Math.min(yearsToRetirementAdult1, yearsToRetirementAdult2)
@@ -680,21 +742,22 @@
 
       const educationRows = [];
       let educationMonthly = 0;
-      baseline.child_ages.forEach((age, index) => {
-        const yearsToGoal = Math.max(0, 18 - age);
-        const futureTarget = inflate(kidsFund, yearsToGoal, inflation);
+      baseline.children.forEach((child, index) => {
+        const yearsToGoal = Math.max(0, child.target_age - child.current_age);
+        const futureTarget = inflate(childFunds[index], yearsToGoal, inflation);
         const monthly = requiredMonthlyContribution(
           futureTarget,
-          Number(baseline.current_child_funds_eur[index] || 0),
+          Number(child.current_fund_eur || 0),
           yearsToGoal,
-          growthReturn
+          childReturns[index]
         );
         educationMonthly += monthly;
         educationRows.push({
-          label: "Child " + (index + 1),
+          label: child.label,
           yearsToGoal,
           futureTarget,
           monthly,
+          expectedReturnPct: childReturns[index],
         });
       });
 
@@ -773,7 +836,7 @@
         " years to retirement";
       document.getElementById("education-monthly").textContent = fmtCurrency(educationMonthly);
       document.getElementById("education-detail").textContent =
-        fmtCurrency(kidsFund) + " target per child, inflation-adjusted";
+        "Per-child targets and return assumptions from the planning model";
       document.getElementById("house-monthly").textContent = fmtCurrency(houseMonthly);
       document.getElementById("house-detail").textContent =
         fmtCurrency(houseTargetFuture) +
@@ -789,7 +852,7 @@
           <td>${row.label}</td>
           <td>${fmtNumber(row.yearsToGoal, 1)}</td>
           <td class="right">${fmtCurrency(row.futureTarget)}</td>
-          <td class="right">${fmtCurrency(row.monthly)}</td>
+          <td class="right">${fmtCurrency(row.monthly)} at ${fmtNumber(row.expectedReturnPct)}%</td>
         `;
         tbody.appendChild(tr);
       });
