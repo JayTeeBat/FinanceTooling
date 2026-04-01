@@ -186,6 +186,8 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         contains: str | None = None,
         bank: str | None = None,
         account_label: str | None = None,
+        min_amount: str | None = None,
+        max_amount: str | None = None,
         min_abs_amount: str | None = None,
         max_abs_amount: str | None = None,
         only_unreviewed: bool = False,
@@ -235,6 +237,8 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
         contains: str | None = None,
         bank: str | None = None,
         account_label: str | None = None,
+        min_amount: str | None = None,
+        max_amount: str | None = None,
         min_abs_amount: str | None = None,
         max_abs_amount: str | None = None,
         only_unreviewed: bool = False,
@@ -252,6 +256,8 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
                 "contains": contains,
                 "bank": bank,
                 "account_label": account_label,
+                "min_amount": min_amount,
+                "max_amount": max_amount,
                 "min_abs_amount": min_abs_amount,
                 "max_abs_amount": max_abs_amount,
                 "only_unreviewed": only_unreviewed,
@@ -282,10 +288,10 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
             "revolut",
             "--account-label",
             "main",
-            "--min-abs-amount",
+            "--min-amount",
+            "-200",
+            "--max-amount",
             "50",
-            "--max-abs-amount",
-            "200",
             "--only-unreviewed",
             "--no-dark-safe",
         ]
@@ -301,11 +307,48 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert captured["contains"] == "merchant"
     assert captured["bank"] == "revolut"
     assert captured["account_label"] == "main"
-    assert captured["min_abs_amount"] == "50"
-    assert captured["max_abs_amount"] == "200"
+    assert captured["min_amount"] == "-200"
+    assert captured["max_amount"] == "50"
+    assert captured["min_abs_amount"] is None
+    assert captured["max_abs_amount"] is None
     assert captured["only_unreviewed"] is True
     assert captured["dark_safe"] is False
     assert "Exported 1 review rows" in stdio.out
+
+
+def test_review_export_reports_error_for_mixed_amount_filter_types(
+    tmp_path: Path, capsys
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    normalized_path.write_text(
+        (
+            "transaction_id,booking_date,description,amount_native,currency,bank,"
+            "account_label,category,subcategory,category_source\n"
+            "tx_1,2026-01-01,UNKNOWN,-10,EUR,REVOLUT,,Uncategorized,,uncategorized\n"
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "review-export",
+            "--normalized-path",
+            str(normalized_path),
+            "--output-path",
+            str(tmp_path / "transactions_review.csv"),
+            "--min-amount",
+            "-50",
+            "--min-abs-amount",
+            "50",
+        ]
+    )
+    stdio = capsys.readouterr()
+
+    assert exit_code == 1
+    assert (
+        "Review export error: min_amount/max_amount cannot be combined with "
+        "min_abs_amount/max_abs_amount" in stdio.out
+    )
 
 
 def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:

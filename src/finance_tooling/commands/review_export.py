@@ -59,6 +59,18 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         help="Optional exact account label filter.",
     )
     parser.add_argument(
+        "--min-amount",
+        type=str,
+        default=None,
+        help="Optional inclusive lower bound on signed amount_native.",
+    )
+    parser.add_argument(
+        "--max-amount",
+        type=str,
+        default=None,
+        help="Optional inclusive upper bound on signed amount_native.",
+    )
+    parser.add_argument(
         "--min-abs-amount",
         type=str,
         default=None,
@@ -111,6 +123,8 @@ def handle(args: argparse.Namespace) -> int:
             contains=args.contains,
             bank=args.bank,
             account_label=args.account_label,
+            min_amount=args.min_amount,
+            max_amount=args.max_amount,
             min_abs_amount=args.min_abs_amount,
             max_abs_amount=args.max_abs_amount,
             only_unreviewed=bool(args.only_unreviewed),

@@ -304,6 +304,78 @@ def test_export_review_rows_filters_by_absolute_amount_bounds(tmp_path: Path) ->
     assert exported_df["transaction_id"].tolist() == ["tx_mid"]
 
 
+def test_export_review_rows_filters_by_signed_amount_bounds(tmp_path: Path) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_negative_large",
+                "booking_date": "2026-01-01",
+                "description": "Large expense",
+                "amount_native": -120.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_negative_small",
+                "booking_date": "2026-01-02",
+                "description": "Small expense",
+                "amount_native": -20.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_zero",
+                "booking_date": "2026-01-03",
+                "description": "Zero adjustment",
+                "amount_native": 0.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_positive",
+                "booking_date": "2026-01-04",
+                "description": "Refund",
+                "amount_native": 75.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_review_rows(
+        normalized_path,
+        output_path,
+        min_amount="-20",
+        max_amount="75",
+    )
+
+    assert exported == 3
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == [
+        "tx_negative_small",
+        "tx_zero",
+        "tx_positive",
+    ]
+
+
 def test_export_review_rows_rejects_invalid_absolute_amount_bounds(tmp_path: Path) -> None:
     normalized_path = tmp_path / "transactions_normalized.csv"
     output_path = tmp_path / "review.csv"
@@ -337,6 +409,79 @@ def test_export_review_rows_rejects_invalid_absolute_amount_bounds(tmp_path: Pat
             normalized_path,
             output_path,
             min_abs_amount="abc",
+        )
+
+
+def test_export_review_rows_rejects_invalid_signed_amount_bounds(tmp_path: Path) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            }
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    with pytest.raises(ValueError, match="min_amount must be <= max_amount"):
+        export_review_rows(
+            normalized_path,
+            output_path,
+            min_amount="200",
+            max_amount="100",
+        )
+
+    with pytest.raises(ValueError, match="min_amount must be a valid decimal value"):
+        export_review_rows(
+            normalized_path,
+            output_path,
+            min_amount="abc",
+        )
+
+
+def test_export_review_rows_rejects_mixed_signed_and_absolute_amount_bounds(
+    tmp_path: Path,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            }
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "min_amount/max_amount cannot be combined with "
+            "min_abs_amount/max_abs_amount"
+        ),
+    ):
+        export_review_rows(
+            normalized_path,
+            output_path,
+            min_amount="-50",
+            min_abs_amount="50",
         )
 
 
