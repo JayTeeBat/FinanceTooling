@@ -247,11 +247,18 @@ For `review-export`, output is uncategorized-only by default; use
 `--include-categorized` to include already-categorized rows. Optional
 `--start-date` and `--end-date` apply inclusive `booking_date` filters.
 Additional review filters:
+- `--min-amount`
+- `--max-amount`
 - `--contains`
 - `--bank`
 - `--account-label`
 - `--only-unreviewed`
 - `--dark-safe` / `--no-dark-safe`
+
+Use `--min-amount` / `--max-amount` for inclusive signed `amount_native`
+bounds. Existing `--min-abs-amount` / `--max-abs-amount` remain available for
+absolute-value filtering, but signed and absolute amount filters cannot be
+combined in the same invocation.
 
 For `.xlsx` review exports, dark-safe rendering is enabled by default. It
 writes explicit light text on dark fills so the workbook stays readable in dark

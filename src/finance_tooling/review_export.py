@@ -171,6 +171,28 @@ def _apply_abs_amount_filter(
     return dataframe.loc[mask]
 
 
+def _apply_amount_filter(
+    dataframe: pd.DataFrame,
+    *,
+    min_amount: str | None,
+    max_amount: str | None,
+) -> pd.DataFrame:
+    min_value = _parse_decimal_filter(min_amount, label="min_amount")
+    max_value = _parse_decimal_filter(max_amount, label="max_amount")
+    if min_value is not None and max_value is not None and min_value > max_value:
+        raise ValueError("min_amount must be <= max_amount")
+    if min_value is None and max_value is None:
+        return dataframe
+
+    amounts = dataframe["amount_native"].map(lambda value: Decimal(str(value)))
+    mask = pd.Series(True, index=dataframe.index)
+    if min_value is not None:
+        mask = mask & (amounts >= min_value)
+    if max_value is not None:
+        mask = mask & (amounts <= max_value)
+    return dataframe.loc[mask]
+
+
 def _order_review_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
     ordered: list[str] = []
     for column in (
@@ -218,6 +240,8 @@ def export_review_rows(
     contains: str | None = None,
     bank: str | None = None,
     account_label: str | None = None,
+    min_amount: str | None = None,
+    max_amount: str | None = None,
     min_abs_amount: str | None = None,
     max_abs_amount: str | None = None,
     only_unreviewed: bool = False,
@@ -242,6 +266,13 @@ def export_review_rows(
         and start_date_value > end_date_value
     ):
         raise ValueError("start_date must be <= end_date")
+    if (min_amount is not None or max_amount is not None) and (
+        min_abs_amount is not None or max_abs_amount is not None
+    ):
+        raise ValueError(
+            "min_amount/max_amount cannot be combined with "
+            "min_abs_amount/max_abs_amount"
+        )
 
     filtered_rows = dataframe.copy()
     filtered_rows[FINGERPRINT_COLUMN] = filtered_rows["description"].map(
@@ -261,6 +292,11 @@ def export_review_rows(
     filtered_rows = _apply_contains_filter(filtered_rows, contains)
     filtered_rows = _apply_exact_filter(filtered_rows, "bank", bank)
     filtered_rows = _apply_exact_filter(filtered_rows, "account_label", account_label)
+    filtered_rows = _apply_amount_filter(
+        filtered_rows,
+        min_amount=min_amount,
+        max_amount=max_amount,
+    )
     filtered_rows = _apply_abs_amount_filter(
         filtered_rows,
         min_abs_amount=min_abs_amount,
