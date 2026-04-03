@@ -77,7 +77,10 @@ def handle(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     """Standalone CLI entrypoint for ingest."""
-    parser = argparse.ArgumentParser(prog="ingest", description="Run ingest stage only.")
+    parser = argparse.ArgumentParser(
+        prog="ingest",
+        description="Advanced: run only the ingest stage and write staged state artifacts.",
+    )
     configure_parser(parser)
     args = parser.parse_args(argv)
     return handle(args)

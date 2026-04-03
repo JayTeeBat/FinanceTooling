@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from finance_tooling.__main__ import main
+from finance_tooling.__main__ import _build_parser, main
 from finance_tooling.backup import BackupRunResult
 from finance_tooling.models import WorkflowResult
 from finance_tooling.review_import import ReviewImportResult
@@ -18,6 +18,18 @@ def test_main_without_subcommand_prints_help(capsys) -> None:
 
     assert exit_code == 1
     assert "usage:" in stdio.out
+
+
+def test_build_parser_help_labels_primary_and_advanced_commands() -> None:
+    parser = _build_parser()
+    help_text = parser.format_help()
+
+    assert "Recommended: run the end-to-end workflow" in help_text
+    assert "Recommended: export review rows" in help_text
+    assert "Recommended: import reviewed workbook changes" in help_text
+    assert "Recommended: inspect pipeline health" in help_text
+    assert "Advanced: parse raw statements" in help_text
+    assert "Advanced: rebuild canonical outputs" in help_text
 
 
 def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> None:
@@ -473,7 +485,7 @@ def test_workflow_status_command_prints_summary(monkeypatch, tmp_path: Path, cap
                     }
                 ],
             },
-            processed_dir / "pipeline_state.json",
+            processed_dir / "state" / "workflow_pipeline_state.json",
         ),
     )
 
@@ -483,7 +495,7 @@ def test_workflow_status_command_prints_summary(monkeypatch, tmp_path: Path, cap
     assert exit_code == 0
     assert "Pipeline health: warn" in stdio.out
     assert "ignored duplicates" in stdio.out
-    assert "pipeline_state.json" in stdio.out
+    assert "workflow_pipeline_state.json" in stdio.out
 
 
 def test_ingest_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsys) -> None:

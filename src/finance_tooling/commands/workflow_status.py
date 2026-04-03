@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     """Standalone CLI entrypoint for workflow-status."""
     parser = argparse.ArgumentParser(
         prog="workflow-status",
-        description="Inspect raw, staged, and transformed pipeline state.",
+        description="Recommended: inspect pipeline health and write a state snapshot.",
     )
     configure_parser(parser)
     args = parser.parse_args(argv)
