@@ -8,12 +8,15 @@ from finance_tooling.config import (
     EXPORT_JSON_PATH_ENV,
     FX_AUTO_FETCH_ENV,
     FX_CACHE_PATH_ENV,
+    INGEST_STAGED_TRANSACTIONS_FILENAME,
     INGEST_TEXT_CACHE_ENABLED_ENV,
     INGEST_TEXT_CACHE_PATH_ENV,
     INGEST_WORKERS_ENV,
     INPUT_PATH_ENV,
     MASTER_PARQUET_ENV,
     OUTPUT_PATH_ENV,
+    PIPELINE_OUTPUTS_DIRNAME,
+    PIPELINE_STATE_DIRNAME,
     PROCESSED_PATH_ENV,
     PROJECT_OVERRIDES_PATH_ENV,
     PROJECT_RULES_PATH_ENV,
@@ -21,6 +24,14 @@ from finance_tooling.config import (
     REVIEW_STATE_PATH_ENV,
     STAGED_TRANSACTIONS_PATH_ENV,
     TRANSACTION_OVERRIDES_PATH_ENV,
+    TRANSFORM_COMPLETENESS_FILENAME,
+    TRANSFORM_DASHBOARD_FILENAME,
+    TRANSFORM_SUMMARY_FILENAME,
+    TRANSFORM_TRANSACTIONS_CSV_FILENAME,
+    TRANSFORM_TRANSACTIONS_FILENAME,
+    TRANSFORM_TRANSACTIONS_JSON_FILENAME,
+    WORKFLOW_FX_CACHE_FILENAME,
+    WORKFLOW_REVIEW_STATE_FILENAME,
     load_settings_from_env,
 )
 
@@ -240,3 +251,17 @@ def test_load_settings_rejects_invalid_ingest_workers(monkeypatch, tmp_path: Pat
         assert ">= 1" in str(exc)
     else:
         raise AssertionError("Expected ValueError for ingest_workers < 1")
+
+
+def test_artifact_constants_match_public_outputs_and_state_contract() -> None:
+    assert PIPELINE_OUTPUTS_DIRNAME == "outputs"
+    assert PIPELINE_STATE_DIRNAME == "state"
+    assert TRANSFORM_TRANSACTIONS_FILENAME == "transform_transactions.parquet"
+    assert TRANSFORM_TRANSACTIONS_CSV_FILENAME == "transform_transactions.csv"
+    assert TRANSFORM_SUMMARY_FILENAME == "transform_run_summary.json"
+    assert TRANSFORM_DASHBOARD_FILENAME == "transform_dashboard.html"
+    assert TRANSFORM_TRANSACTIONS_JSON_FILENAME == "transform_transactions.json"
+    assert INGEST_STAGED_TRANSACTIONS_FILENAME == "ingest_staged_transactions.parquet"
+    assert TRANSFORM_COMPLETENESS_FILENAME == "transform_completeness_report.json"
+    assert WORKFLOW_FX_CACHE_FILENAME == "workflow_fx_rates_history.parquet"
+    assert WORKFLOW_REVIEW_STATE_FILENAME == "workflow_review_state.parquet"

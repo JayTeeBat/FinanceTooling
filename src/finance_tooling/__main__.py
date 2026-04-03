@@ -27,43 +27,46 @@ from finance_tooling.commands import (
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m finance_tooling",
-        description="Finance tooling workflow and categorization review utilities.",
+        description=(
+            "Finance tooling workflow for importing statements, reviewing categories, "
+            "and inspecting pipeline health."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command")
 
     ingest_parser = subparsers.add_parser(
         "ingest",
-        help="Run ingest stage and write staged transactions.",
+        help="Advanced: parse raw statements and write staged state only.",
     )
     ingest_command.configure_parser(ingest_parser)
 
     transform_parser = subparsers.add_parser(
         "transform",
-        help="Run transform stage from staged transactions.",
+        help="Advanced: rebuild canonical outputs from staged transactions.",
     )
     transform_command.configure_parser(transform_parser)
 
     update_parser = subparsers.add_parser(
         "update",
-        help="Run ingest then transform (or a single stage with flags).",
+        help="Recommended: run the end-to-end workflow and refresh canonical outputs.",
     )
     update_command.configure_parser(update_parser)
 
     review_export_parser = subparsers.add_parser(
         "review-export",
-        help="Export uncategorized transaction rows for manual review.",
+        help="Recommended: export review rows into the standard workbook.",
     )
     review_export_command.configure_parser(review_export_parser)
 
     review_import_parser = subparsers.add_parser(
         "review-import",
-        help="Import reviewed categories and upsert overrides.",
+        help="Recommended: import reviewed workbook changes into overrides.",
     )
     review_import_command.configure_parser(review_import_parser)
 
     workflow_status_parser = subparsers.add_parser(
         "workflow-status",
-        help="Inspect raw, staged, and transformed pipeline state.",
+        help="Recommended: inspect pipeline health and write a state snapshot.",
     )
     workflow_status_command.configure_parser(workflow_status_parser)
 

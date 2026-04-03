@@ -120,7 +120,7 @@ Default path resolution:
     `${REVIEW_PATH_PARENT}/../config/transaction_overrides.yaml`
 - review state path:
   - `FINANCE_REVIEW_STATE_PATH` if configured
-  - else `${FINANCE_PROCESSED_PATH}/review_state.parquet`
+  - else `${FINANCE_PROCESSED_PATH}/state/workflow_review_state.parquet`
 
 Default safety behavior:
 

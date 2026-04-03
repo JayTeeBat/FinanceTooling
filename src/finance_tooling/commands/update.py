@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     """Standalone CLI entrypoint for update."""
     parser = argparse.ArgumentParser(
         prog="update",
-        description="Run ingest then transform, or a single stage with flags.",
+        description="Recommended: run the end-to-end workflow and refresh canonical outputs.",
     )
     configure_parser(parser)
     args = parser.parse_args(argv)

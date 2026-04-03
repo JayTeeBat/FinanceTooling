@@ -176,6 +176,19 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-04-03 - codex
+- Branch: `main`
+- Completed:
+  - Tightened the public workflow contract around the CLI, making `update`, `review-export`, `review-import`, and `workflow-status` the clearly recommended user path while marking `ingest` and `transform` as advanced stage-level commands.
+  - Aligned config comments, README/docs, and tests around the `processed/outputs/` vs `processed/state/` split, including documenting `transform_transactions.json` as compatibility-only and fixing the workflow-status snapshot path to `state/workflow_pipeline_state.json`.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/config.py src/finance_tooling/__main__.py src/finance_tooling/commands/common.py src/finance_tooling/commands/ingest.py src/finance_tooling/commands/transform.py src/finance_tooling/commands/update.py src/finance_tooling/commands/workflow_status.py tests/test_config.py tests/test_cli_dispatch.py tests/test_workflow_status.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_config.py tests/test_cli_dispatch.py tests/test_workflow_status.py`: pass
+- Open items:
+  - The env-var surface is still broader than the minimal public contract; low-level per-file overrides and cache toggles remain supported but are intentionally de-emphasized rather than removed.
+- Next action:
+  - Decide whether to follow this contract pass with a smaller compatibility/deprecation pass for low-level env/path overrides and optional JSON export behavior.
+
 ### 2026-03-29 - codex
 - Branch: `codex/fix-hypothesis-dashboard-calculations`
 - Completed:
@@ -201,20 +214,3 @@ Success target for the 2026 validation campaign:
   - `README.md` and category-rule workflow docs still need periodic drift checks as internal helper commands and optional planning features evolve.
 - Next action:
   - Continue the 2026 review cycle using `transform_transactions.csv` and `transform_run_summary.json` as the live checkpoints.
-
-### 2026-03-28 - codex
-- Branch: `feature/noop-workflow-fast-path`
-- Completed:
-  - Added a true no-op fast path for `update`, `ingest`, and `transform` so unchanged raw files and unchanged staged/config/review inputs reuse existing outputs instead of re-running the pipeline.
-  - Moved the no-op decision ahead of stage backups, so unchanged runs no longer create backup snapshots.
-  - Added workflow-stage coverage for no-op ingest, no-op transform, and no-op update orchestration, and verified the end-to-end no-op update path on an isolated processed copy (~1.66s wall time with truthful `0 selected / 204 already committed` reporting).
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py tests/test_workflow_stages.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py tests/test_workflow_stages.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_workflow_stages.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run python -m finance_tooling.commands.metrics_log_update --summary-path "/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed/outputs/transform_run_summary.json" --log-path "docs/metrics_commit_log.csv" --log-path-by-bank "docs/metrics_commit_log_by_bank.csv"`: pass
-- Open items:
-  - Small targeted config/review changes still rerun the full transform stage when transform is required; only true no-op cases short-circuit today.
-  - The no-op change detection still scans the raw corpus to build source inventory, so hashing/discovery remains a noticeable floor for large corpora.
-- Next action:
-  - Add targeted transform scopes so review-state-only and small override/config edits can run the minimal valid transform slice instead of the full transform pipeline.

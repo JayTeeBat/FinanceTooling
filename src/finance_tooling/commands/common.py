@@ -5,10 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from finance_tooling.backup import BackupRunResult
-from finance_tooling.config import Settings, load_settings_from_env
+from finance_tooling.config import (
+    PIPELINE_OUTPUTS_DIRNAME,
+    TRANSFORM_TRANSACTIONS_CSV_FILENAME,
+    Settings,
+    load_settings_from_env,
+)
 from finance_tooling.models import WorkflowResult
 from finance_tooling.workflow.incremental_state import FullRefreshPreflight
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
+
+DEFAULT_REVIEW_WORKBOOK_FILENAME = "transactions_review.xlsx"
+LEGACY_REVIEW_CSV_FILENAME = "transactions_review.csv"
 
 
 def try_load_settings_for_defaults() -> Settings | None:
@@ -26,7 +34,8 @@ def processed_dir_from_settings(settings: Settings) -> Path:
         return Path(processed_path)
     summary_json_path = getattr(settings, "summary_json_path", None)
     if summary_json_path is not None:
-        return Path(summary_json_path).parent
+        parent = Path(summary_json_path).parent
+        return parent.parent if parent.name == PIPELINE_OUTPUTS_DIRNAME else parent
     raise AttributeError("settings must define processed_path or summary_json_path")
 
 
@@ -39,7 +48,7 @@ def resolve_review_export_paths(
     normalized_path: Path | None,
     output_path: Path | None,
 ) -> tuple[Path, Path, Path | None, bool]:
-    """Resolve normalized and review output paths using settings defaults when possible."""
+    """Resolve canonical CSV input and the standard review workbook path."""
     if normalized_path is not None and output_path is not None:
         settings = try_load_settings_for_defaults()
         review_state_path = (
@@ -67,11 +76,11 @@ def resolve_review_export_paths(
     default_normalized_path = getattr(
         settings,
         "export_csv_path",
-        processed_dir / "outputs" / "transform_transactions.csv",
+        processed_dir / PIPELINE_OUTPUTS_DIRNAME / TRANSFORM_TRANSACTIONS_CSV_FILENAME,
     )
     return (
         normalized_path or default_normalized_path,
-        output_path or (processed_dir / "transactions_review.xlsx"),
+        output_path or (processed_dir / DEFAULT_REVIEW_WORKBOOK_FILENAME),
         getattr(settings, "review_state_path", None),
         getattr(settings, "review_export_dark_safe", True),
     )
@@ -81,7 +90,7 @@ def resolve_review_import_paths(
     review_path: Path | None,
     transaction_overrides_path: Path | None,
 ) -> tuple[Path, Path, Path | None]:
-    """Resolve review-import paths using settings or review-file-adjacent defaults."""
+    """Resolve review-import paths using the standard workbook and compatibility fallbacks."""
     settings = try_load_settings_for_defaults()
     settings_transaction_overrides = (
         getattr(settings, "transaction_overrides_path", None) if settings is not None else None
@@ -119,8 +128,8 @@ def resolve_review_import_paths(
         )
 
     processed_dir = processed_dir_from_settings(settings)
-    default_review_xlsx = processed_dir / "transactions_review.xlsx"
-    default_review_csv = processed_dir / "transactions_review.csv"
+    default_review_xlsx = processed_dir / DEFAULT_REVIEW_WORKBOOK_FILENAME
+    default_review_csv = processed_dir / LEGACY_REVIEW_CSV_FILENAME
     if default_review_xlsx.exists():
         resolved_review_path = default_review_xlsx
     elif default_review_csv.exists():

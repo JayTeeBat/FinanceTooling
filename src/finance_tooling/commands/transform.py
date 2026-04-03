@@ -39,7 +39,10 @@ def handle(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     """Standalone CLI entrypoint for transform."""
-    parser = argparse.ArgumentParser(prog="transform", description="Run transform stage only.")
+    parser = argparse.ArgumentParser(
+        prog="transform",
+        description="Advanced: run only the transform stage and rebuild canonical outputs.",
+    )
     configure_parser(parser)
     args = parser.parse_args(argv)
     return handle(args)

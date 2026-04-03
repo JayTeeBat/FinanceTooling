@@ -8,19 +8,27 @@ from pathlib import Path
 
 INPUT_PATH_ENV = "FINANCE_STATEMENTS_PATH"
 PROCESSED_PATH_ENV = "FINANCE_PROCESSED_PATH"
+# Supported advanced override for the primary dashboard output.
 OUTPUT_PATH_ENV = "FINANCE_DASHBOARD_PATH"
+# Supported advanced override for the canonical parquet output.
 MASTER_PARQUET_ENV = "FINANCE_MASTER_PARQUET_PATH"
+# Supported advanced runtime knob.
 BASE_CURRENCY_ENV = "FINANCE_BASE_CURRENCY"
+# Supported advanced override for the canonical CSV export.
 EXPORT_CSV_PATH_ENV = "FINANCE_EXPORT_CSV_PATH"
+# Compatibility override for an optional JSON export; not part of the primary output contract.
 EXPORT_JSON_PATH_ENV = "FINANCE_EXPORT_JSON_PATH"
 EXPORT_JSON_ENABLED_ENV = "FINANCE_EXPORT_JSON_ENABLED"
+# Compatibility override for low-level stage wiring; most users should rely on defaults.
 STAGED_TRANSACTIONS_PATH_ENV = "FINANCE_STAGED_TRANSACTIONS_PATH"
 FX_CACHE_PATH_ENV = "FINANCE_FX_CACHE_PATH"
 FX_AUTO_FETCH_ENV = "FINANCE_FX_AUTO_FETCH"
 TRANSFORM_DIAGNOSTICS_ENABLED_ENV = "FINANCE_TRANSFORM_DIAGNOSTICS_ENABLED"
+# Supported advanced runtime knob.
 INGEST_WORKERS_ENV = "FINANCE_INGEST_WORKERS"
 INGEST_TEXT_CACHE_ENABLED_ENV = "FINANCE_INGEST_TEXT_CACHE_ENABLED"
 INGEST_TEXT_CACHE_PATH_ENV = "FINANCE_INGEST_TEXT_CACHE_PATH"
+# Supported advanced config overrides for the workflow contract.
 CATEGORY_RULES_PATH_ENV = "FINANCE_CATEGORY_RULES_PATH"
 PROJECT_RULES_PATH_ENV = "FINANCE_PROJECT_RULES_PATH"
 BUDGET_TARGETS_PATH_ENV = "FINANCE_BUDGET_TARGETS_PATH"
@@ -31,14 +39,22 @@ REVIEW_EXPORT_DARK_SAFE_ENV = "FINANCE_REVIEW_EXPORT_DARK_SAFE"
 DOTENV_PATH = Path(".env")
 PIPELINE_OUTPUTS_DIRNAME = "outputs"
 PIPELINE_STATE_DIRNAME = "state"
+
+# Optional diagnostics/state artifacts.
 INGEST_SUMMARY_FILENAME = "ingest_summary.json"
 INGEST_STAGED_TRANSACTIONS_FILENAME = "ingest_staged_transactions.parquet"
 LEGACY_STAGED_TRANSACTIONS_FILENAME = "staged_transactions.parquet"
 INGEST_TEXT_CACHE_FILENAME = "ingest_text_cache.parquet"
+
+# Canonical operator-facing transform outputs.
 TRANSFORM_TRANSACTIONS_FILENAME = "transform_transactions.parquet"
 TRANSFORM_TRANSACTIONS_CSV_FILENAME = "transform_transactions.csv"
+
+# Compatibility-only optional export. Keep supported, but do not treat as canonical.
 TRANSFORM_TRANSACTIONS_JSON_FILENAME = "transform_transactions.json"
 TRANSFORM_SUMMARY_FILENAME = "transform_run_summary.json"
+
+# Diagnostics and internal workflow state.
 TRANSFORM_COMPLETENESS_FILENAME = "transform_completeness_report.json"
 TRANSFORM_DASHBOARD_FILENAME = "transform_dashboard.html"
 TRANSFORM_SOURCE_REGISTRY_FILENAME = "transform_source_registry.json"
@@ -48,7 +64,13 @@ WORKFLOW_FX_CACHE_FILENAME = "workflow_fx_rates_history.parquet"
 
 @dataclass(frozen=True)
 class Settings:
-    """Runtime settings resolved from environment variables."""
+    """Runtime settings resolved from environment variables.
+
+    The primary public contract for operators is the workflow CLI plus stable
+    files under ``processed/outputs`` and ``processed/state``. Some settings
+    fields remain configurable for compatibility or advanced workflows even
+    when they are not part of the minimal day-to-day interface.
+    """
 
     input_path: Path
     processed_path: Path
@@ -136,17 +158,17 @@ def _processed_root_from_settings(settings: Settings) -> Path:
 
 
 def outputs_root_path(settings: Settings) -> Path:
-    """Return the root directory for user-facing outputs."""
+    """Return the root directory for stable operator-facing outputs."""
     return _processed_root_from_settings(settings) / PIPELINE_OUTPUTS_DIRNAME
 
 
 def state_root_path(settings: Settings) -> Path:
-    """Return the root directory for pipeline state and monitoring."""
+    """Return the root directory for internal state and diagnostics."""
     return _processed_root_from_settings(settings) / PIPELINE_STATE_DIRNAME
 
 
 def ingest_state_path(settings: Settings) -> Path:
-    """Return the ingest-owned state directory."""
+    """Return the ingest-owned state directory under ``processed/state``."""
     return state_root_path(settings)
 
 

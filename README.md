@@ -6,14 +6,6 @@ bank statements and expanding toward categorization, reconciliation, and reporti
 For higher-level household planning alongside the transaction pipeline, see the
 starter workspace in `planning/household_finance_360/`.
 
-## Tech Stack
-
-- `uv` for environment and dependency management
-- `ruff` for linting and formatting
-- `ty` for static type analysis
-- `pre-commit` for local quality gates
-- `pytest` for automated tests
-
 ## Quick Start
 
 ```bash
@@ -25,38 +17,61 @@ uv run update
 but only parse source documents that have not yet been committed into the
 canonical dataset.
 
+## Public API
+
+This tool's primary public API is its workflow CLI plus a small set of stable
+files under `processed/outputs/` and `processed/state/`.
+
+Recommended day-to-day commands:
+
+- `uv run update`
+- `uv run review-export`
+- `uv run review-import`
+- `uv run workflow-status`
+
+Advanced/recovery commands:
+
+- `uv run ingest`
+- `uv run transform`
+
+Stable operator-facing outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
+
+- `transform_transactions.parquet`
+- `transform_transactions.csv`
+- `transform_run_summary.json`
+- `transform_dashboard.html`
+
+Internal state and diagnostics under `${FINANCE_PROCESSED_PATH}/state/`:
+
+- `ingest_staged_transactions.parquet`
+- `ingest_staged_batch_manifest.json`
+- `workflow_pipeline_state.json`
+- `workflow_source_inventory.json`
+- `workflow_review_state.parquet`
+- `transform_source_registry.json`
+- `workflow_fx_rates_history.parquet`
+- `transform_completeness_report.json` when diagnostics are enabled
+- `ingest_summary.json` when requested
+
+Compatibility-only optional export:
+
+- `transform_transactions.json` when JSON export is explicitly enabled
+
 ## Workflow Overview (Newcomer)
 
 Use this sequence when processing new statements and optionally refining
 categorization.
 
-### 1) Ingest (parse and stage)
+### 1) Update (recommended end-to-end refresh)
 
-What it does:
-- Scans statements under `FINANCE_STATEMENTS_PATH`.
-- Builds a content-based source inventory so raw-file renames do not change
-  document identity.
-- Ignores duplicate raw files with identical content and records them in
-  `${FINANCE_PROCESSED_PATH}/state/workflow_source_inventory.json`.
-- Loads `${FINANCE_PROCESSED_PATH}/state/transform_source_registry.json` to decide which
-  representative source documents are already committed.
-- In the default incremental path, parses only never-committed representative
-  source documents. Modified or missing previously committed files are reported
-  as stale conditions and require a guarded full refresh to re-sync history.
-- Parses and normalizes raw transaction records.
-- Creates a pre-run backup snapshot of the current staged parquet under
-  `${FINANCE_PROCESSED_PATH}/backup/ingest/<run_id>/` and keeps the latest 10
-  ingest runs.
-- Writes staged data to `${FINANCE_PROCESSED_PATH}/state/ingest_staged_transactions.parquet`.
-- Writes a self-describing staged batch manifest to
-  `${FINANCE_PROCESSED_PATH}/state/ingest_staged_batch_manifest.json`.
-- Optionally writes ingest diagnostics to
-  `${FINANCE_PROCESSED_PATH}/state/ingest_summary.json` with
-  `--emit-ingest-summary`.
+If you do not need a manual review stop, use:
 
 ```bash
-uv run ingest
+uv run update
 ```
+
+This runs `ingest` then `transform` end-to-end and refreshes the canonical
+outputs in `${FINANCE_PROCESSED_PATH}/outputs/`.
 
 ### 2) Optional review (human-in-the-loop categorization)
 
@@ -94,13 +109,9 @@ Detailed guides:
 - Transaction review import/export workflow: `docs/categorization_review_workflow.md`
 - Category rule create/amend/delete workflow: `docs/category_rules_review_workflow.md`
 
-### 3) Transform (apply rules/overrides and build final outputs)
+### 3) What the workflow writes
 
-```bash
-uv run transform
-```
-
-What it does:
+`update` and `transform`:
 - Reads staged data.
 - Requires the staged batch manifest created by `ingest`.
 - Applies category rules, project rules, and transaction overrides.
@@ -114,9 +125,9 @@ What it does:
 - Writes canonical outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
   `transform_transactions.parquet`, `transform_transactions.csv`,
   `transform_run_summary.json`, and `transform_dashboard.html`.
-- Optional transform diagnostics are written under `${FINANCE_PROCESSED_PATH}/state/`,
-  including `transform_transactions.json` and
-  `transform_completeness_report.json` when enabled.
+- Writes optional diagnostics under `${FINANCE_PROCESSED_PATH}/state/`,
+  including `transform_completeness_report.json` and, when explicitly enabled
+  for compatibility, `transform_transactions.json`.
 - In incremental mode, upserts only the staged source documents into the master
   parquet, then rebuilds summary/dashboard/export artifacts from the full merged
   canonical dataset.
@@ -134,17 +145,39 @@ Dashboard output:
 - `${FINANCE_PROCESSED_PATH}/outputs/transform_dashboard.html`
 - Open it in a browser after `transform` or `update`.
 
-### Single-command path
+### Advanced and recovery commands
 
-If you do not need a manual review stop, use:
+Use these when you intentionally need stage-level control rather than the
+normal `update` flow.
 
-```bash
-uv run update
-```
+#### `uv run ingest`
 
-This runs `ingest` then `transform` end-to-end.
-It also takes the same stage-scoped backups before each stage, so a full
-`update` run creates one ingest backup run and one transform backup run.
+- Scans statements under `FINANCE_STATEMENTS_PATH`.
+- Builds a content-based source inventory so raw-file renames do not change
+  document identity.
+- Ignores duplicate raw files with identical content and records them in
+  `${FINANCE_PROCESSED_PATH}/state/workflow_source_inventory.json`.
+- Loads `${FINANCE_PROCESSED_PATH}/state/transform_source_registry.json` to decide which
+  representative source documents are already committed.
+- In the default incremental path, parses only never-committed representative
+  source documents. Modified or missing previously committed files are reported
+  as stale conditions and require a guarded full refresh to re-sync history.
+- Parses and normalizes raw transaction records.
+- Creates a pre-run backup snapshot of the current staged parquet under
+  `${FINANCE_PROCESSED_PATH}/backup/ingest/<run_id>/` and keeps the latest 10
+  ingest runs.
+- Writes staged data to `${FINANCE_PROCESSED_PATH}/state/ingest_staged_transactions.parquet`.
+- Writes a self-describing staged batch manifest to
+  `${FINANCE_PROCESSED_PATH}/state/ingest_staged_batch_manifest.json`.
+- Optionally writes ingest diagnostics to
+  `${FINANCE_PROCESSED_PATH}/state/ingest_summary.json` with
+  `--emit-ingest-summary`.
+
+#### `uv run transform`
+
+- Rebuilds canonical outputs from staged transactions without re-running ingest.
+- Useful after explicit staged-state changes or when `review-import --run-transform`
+  is not the desired path.
 
 ### Guarded full refresh
 
@@ -183,26 +216,10 @@ To inspect the current raw/staged/transformed pipeline state:
 uv run workflow-status
 ```
 
-This writes `${FINANCE_PROCESSED_PATH}/pipeline_state.json` and prints a compact
+This writes `${FINANCE_PROCESSED_PATH}/state/workflow_pipeline_state.json` and prints a compact
 health summary, including duplicate raw-source detection, staged-vs-transform
 timestamp drift, committed source-registry state, stale reasons, and
 full-refresh risk.
-
-## Code Map
-
-Main CLI entrypoints live in modules named after the commands:
-
-- `src/finance_tooling/commands/ingest.py`
-- `src/finance_tooling/commands/review_export.py`
-- `src/finance_tooling/commands/review_import.py`
-- `src/finance_tooling/commands/transform.py`
-- `src/finance_tooling/commands/update.py`
-
-Shared stage orchestration lives under:
-
-- `src/finance_tooling/workflow/ingest_stage.py`
-- `src/finance_tooling/workflow/transform_stage.py`
-- `src/finance_tooling/workflow/update_stage.py`
 
 ### Review command examples
 
@@ -296,42 +313,6 @@ Related docs and diagrams:
 - `docs/diagrams/categorization_review_hitl_flow.puml`
 - `docs/diagrams/categorization_review_import_guardrails.puml`
 
-## Development Commands
-
-```bash
-uv run ruff check .
-uv run ruff format .
-uv run ty check src/finance_tooling tests
-uv run pytest
-uv run pre-commit run --all-files
-```
-
-## Performance Check
-
-The packaged public CLI does not expose `perf-check`, but the internal command
-module is still available when you intentionally want an isolated full-corpus
-performance run.
-
-```bash
-STAMP="$(date +%Y%m%d-%H%M%S)"
-PERF_PROCESSED_PATH="/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed_perf/${STAMP}"
-
-FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
-FINANCE_FX_AUTO_FETCH=false \
-FINANCE_INGEST_WORKERS=4 \
-FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
-uv run python -m finance_tooling.perf_check
-```
-
-The run writes standard artifacts plus `performance_summary.json` under the
-isolated `FINANCE_PROCESSED_PATH`, including total runtime and per-stage timings
-(`ingest`, `hsbc_merge`, `enrichment`, `reporting`).
-Set `FINANCE_INGEST_WORKERS` to `>1` to enable multiprocessing during ingestion
-prep; default is `1`.
-Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
-`<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet` (or override path via
-`FINANCE_INGEST_TEXT_CACHE_PATH`) and speed up repeated runs.
-
 ## Statement Workflow and Configuration
 
 The workflow reads environment variables from `.env` in the repository root (if present),
@@ -344,7 +325,7 @@ export FINANCE_STATEMENTS_PATH="/path/to/statements"
 export FINANCE_PROCESSED_PATH="/path/to/processed"
 ```
 
-Optional overrides:
+Supported advanced overrides:
 
 ```bash
 export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
@@ -353,15 +334,9 @@ export FINANCE_EXPORT_CSV_PATH="/path/to/output/outputs/transform_transactions.c
 export FINANCE_EXPORT_JSON_PATH="/path/to/output/outputs/transform_transactions.json"
 export FINANCE_STAGED_TRANSACTIONS_PATH="/path/to/output/state/ingest_staged_transactions.parquet"
 export FINANCE_BASE_CURRENCY="EUR"
-export FINANCE_FX_CACHE_PATH="/path/to/output/state/workflow_fx_rates_history.parquet"
-export FINANCE_FX_AUTO_FETCH="true"
 export FINANCE_INGEST_WORKERS="1"
-export FINANCE_INGEST_TEXT_CACHE_ENABLED="false"
-export FINANCE_INGEST_TEXT_CACHE_PATH="/path/to/output/state/ingest_text_cache.parquet"
 export FINANCE_CATEGORY_RULES_PATH="/path/to/data/config/category_rules.yaml"
 export FINANCE_PROJECT_RULES_PATH="/path/to/data/config/project_rules.yaml"
-export FINANCE_BUDGET_TARGETS_PATH="/path/to/data/config/budget_targets.yaml"
-export FINANCE_PROJECT_OVERRIDES_PATH="/path/to/data/config/project_overrides.yaml"
 export FINANCE_TRANSACTION_OVERRIDES_PATH="/path/to/data/config/transaction_overrides.yaml"
 export FINANCE_REVIEW_STATE_PATH="/path/to/output/state/workflow_review_state.parquet"
 export FINANCE_REVIEW_EXPORT_DARK_SAFE="true"
@@ -369,8 +344,10 @@ export FINANCE_REVIEW_EXPORT_DARK_SAFE="true"
 uv run update
 ```
 
-`FINANCE_STATEMENTS_PATH` and `FINANCE_PROCESSED_PATH` are required. Per-file
-output env vars remain optional; when omitted, artifacts are written under
+Additional compatibility/internal overrides still exist for advanced users,
+including per-file artifact paths, JSON export toggles, FX cache settings, and
+text-cache settings. Most operators should leave those at their defaults and
+rely on the standard `outputs/` and `state/` layout under
 `FINANCE_PROCESSED_PATH`.
 
 Categorization is deterministic and rules-first. When no categorization env vars are
@@ -411,18 +388,81 @@ mismatches are emitted as warnings and included in transform-summary reconciliat
 - `processed/state/`
   - `ingest_staged_transactions.parquet`
   - `ingest_staged_batch_manifest.json`
+  - `ingest_summary.json` when `--emit-ingest-summary` is used
   - `transform_source_registry.json`
   - `workflow_source_inventory.json`
   - `workflow_pipeline_state.json`
   - `workflow_review_state.parquet`
   - `workflow_fx_rates_history.parquet`
   - `transform_completeness_report.json` when diagnostics are enabled
+- Compatibility-only optional export:
   - `transform_transactions.json` when JSON export is enabled
-  - `ingest_summary.json` when `--emit-ingest-summary` is used
 - Automatic backup run folders under `processed/backup/ingest`,
   `processed/backup/transform`, and `config/backup/transform`
 
-## Repository Layout
+## Developer Notes
+
+### Tech Stack
+
+- `uv` for environment and dependency management
+- `ruff` for linting and formatting
+- `ty` for static type analysis
+- `pre-commit` for local quality gates
+- `pytest` for automated tests
+
+### Code Map
+
+Main CLI entrypoints live in modules named after the commands:
+
+- `src/finance_tooling/commands/ingest.py`
+- `src/finance_tooling/commands/review_export.py`
+- `src/finance_tooling/commands/review_import.py`
+- `src/finance_tooling/commands/transform.py`
+- `src/finance_tooling/commands/update.py`
+
+Shared stage orchestration lives under:
+
+- `src/finance_tooling/workflow/ingest_stage.py`
+- `src/finance_tooling/workflow/transform_stage.py`
+- `src/finance_tooling/workflow/update_stage.py`
+
+### Development Commands
+
+```bash
+uv run ruff check .
+uv run ruff format .
+uv run ty check src/finance_tooling tests
+uv run pytest
+uv run pre-commit run --all-files
+```
+
+### Performance Check
+
+The packaged public CLI does not expose `perf-check`, but the internal command
+module is still available when you intentionally want an isolated full-corpus
+performance run.
+
+```bash
+STAMP="$(date +%Y%m%d-%H%M%S)"
+PERF_PROCESSED_PATH="/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/processed_perf/${STAMP}"
+
+FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
+FINANCE_FX_AUTO_FETCH=false \
+FINANCE_INGEST_WORKERS=4 \
+FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
+uv run python -m finance_tooling.perf_check
+```
+
+The run writes standard artifacts plus `performance_summary.json` under the
+isolated `FINANCE_PROCESSED_PATH`, including total runtime and per-stage timings
+(`ingest`, `hsbc_merge`, `enrichment`, `reporting`).
+Set `FINANCE_INGEST_WORKERS` to `>1` to enable multiprocessing during ingestion
+prep; default is `1`.
+Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
+`<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet` (or override path via
+`FINANCE_INGEST_TEXT_CACHE_PATH`) and speed up repeated runs.
+
+### Repository Layout
 
 ```text
 src/
@@ -430,7 +470,7 @@ src/
 tests/
 ```
 
-## Parser Conformance Fixtures
+### Parser Conformance Fixtures
 
 Parser conformance samples live under:
 
