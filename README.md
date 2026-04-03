@@ -22,6 +22,10 @@ canonical dataset.
 This tool's primary public API is its workflow CLI plus a small set of stable
 files under `processed/outputs/` and `processed/state/`.
 
+Normal workflow commands print concise summaries by default and avoid emitting
+artifact paths. Use `--verbose` when you want fuller metric breakdowns for
+troubleshooting.
+
 Recommended day-to-day commands:
 
 - `uv run update`
@@ -98,10 +102,10 @@ uv run review-import --dry-run
 uv run review-import
 ```
 
-- Apply and rebuild normalized outputs immediately:
+- Apply reviewed changes without rebuilding outputs:
 
 ```bash
-uv run review-import --run-transform
+uv run review-import --no-run-transform
 ```
 
 Detailed guides:
@@ -176,8 +180,8 @@ normal `update` flow.
 #### `uv run transform`
 
 - Rebuilds canonical outputs from staged transactions without re-running ingest.
-- Useful after explicit staged-state changes or when `review-import --run-transform`
-  is not the desired path.
+- Useful after explicit staged-state changes or when `review-import`
+  should not be the trigger for a rebuild.
 
 ### Guarded full refresh
 
@@ -236,14 +240,15 @@ uv run review-export \
 
 # edit transactions_review.xlsx (set category/subcategory, reviewed, notes)
 
-# defaults (review file from processed path, overrides from env or data-adjacent config)
+# defaults (review file from processed path, overrides from env or data-adjacent config,
+# then rebuild canonical outputs)
 uv run review-import
 
 # safe preview before writing
 uv run review-import --dry-run
 
-# apply import and rebuild normalized outputs
-uv run review-import --run-transform
+# apply import without rebuilding outputs
+uv run review-import --no-run-transform
 
 # explicit paths
 uv run review-import \

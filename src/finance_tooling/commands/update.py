@@ -18,6 +18,11 @@ from finance_tooling.workflow.update_stage import run_update
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     """Register update-specific CLI arguments."""
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed counters, backup details, and diagnostic paths.",
+    )
+    parser.add_argument(
         "--ingest-only",
         action="store_true",
         help="Run ingest stage only.",
@@ -71,10 +76,10 @@ def handle(args: argparse.Namespace) -> int:
     if args.full_refresh:
         preflight = build_full_refresh_preflight(settings=settings, command="update")
         if args.dry_run:
-            print_full_refresh_preflight(preflight)
+            print_full_refresh_preflight(preflight, verbose=bool(args.verbose))
             return 0
         if args.confirm_full_refresh != preflight.confirmation_token:
-            print_full_refresh_preflight(preflight)
+            print_full_refresh_preflight(preflight, verbose=bool(args.verbose))
             return 1
 
     try:
@@ -98,8 +103,8 @@ def handle(args: argparse.Namespace) -> int:
         return 1
 
     if isinstance(result, IngestExecutionResult):
-        return print_ingest_result(result)
-    return print_workflow_result(result)
+        return print_ingest_result(result, verbose=bool(args.verbose))
+    return print_workflow_result(result, verbose=bool(args.verbose))
 
 
 def main(argv: list[str] | None = None) -> int:

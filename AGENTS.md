@@ -177,6 +177,19 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-04-03 - codex
+- Branch: `codex/clean-command-output`
+- Completed:
+  - Changed `review-import` so successful non-dry-run imports run `transform` by default, with `--no-run-transform` as the opt-out and `--dry-run` remaining preview-only.
+  - Updated the README, categorization review workflow doc, and CLI coverage to match the new default behavior.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/commands/review_import.py tests/test_cli_dispatch.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_cli_dispatch.py`: pass
+- Open items:
+  - The broader command-output cleanup on this branch is still waiting to be packaged into a focused PR.
+- Next action:
+  - Package the command-output cleanup, including the new `review-import` default, into a focused PR.
+
+### 2026-04-03 - codex
 - Branch: `main`
 - Completed:
   - Tightened the public workflow contract around the CLI, making `update`, `review-export`, `review-import`, and `workflow-status` the clearly recommended user path while marking `ingest` and `transform` as advanced stage-level commands.
@@ -202,15 +215,3 @@ Success target for the 2026 validation campaign:
   - The dashboard still has its own interactive browser-side projection layer for net-worth and housing visuals; if more planning logic moves into the canonical engine, keep the static page in sync.
 - Next action:
   - Review the draft PR and decide whether the dashboard should keep per-child education controls or collapse them into a different UX with explicit approximation.
-
-### 2026-03-28 - codex
-- Branch: `main`
-- Completed:
-  - Cleaned stale repo-instruction and workflow-doc references to legacy output names such as `transactions_normalized.csv` and generic `run_summary.json`.
-  - Updated next-agent guidance to reflect the current CLI surface, current output/state artifact names, and the presence of planning/reporting workspace material in the repo.
-- Checks:
-  - documentation/instruction cleanup only: not run
-- Open items:
-  - `README.md` and category-rule workflow docs still need periodic drift checks as internal helper commands and optional planning features evolve.
-- Next action:
-  - Continue the 2026 review cycle using `transform_transactions.csv` and `transform_run_summary.json` as the live checkpoints.

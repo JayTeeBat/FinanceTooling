@@ -135,7 +135,7 @@ def handle(args: argparse.Namespace) -> int:
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Review export error: {exc}")
         return 1
-    print(f"Exported {exported} review rows to {output_path}")
+    print(f"Review export: {exported} rows")
     return 0
 
 

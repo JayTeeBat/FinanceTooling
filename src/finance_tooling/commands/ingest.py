@@ -13,6 +13,11 @@ from finance_tooling.workflow.ingest_stage import run_ingest
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     """Register ingest-specific CLI arguments."""
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed counters, backup details, and diagnostic paths.",
+    )
+    parser.add_argument(
         "--full-refresh",
         action="store_true",
         help="Reparse the full representative source corpus instead of only new files.",
@@ -54,10 +59,10 @@ def handle(args: argparse.Namespace) -> int:
     if args.full_refresh:
         preflight = build_full_refresh_preflight(settings=settings, command="ingest")
         if args.dry_run:
-            print_full_refresh_preflight(preflight)
+            print_full_refresh_preflight(preflight, verbose=bool(args.verbose))
             return 0
         if args.confirm_full_refresh != preflight.confirmation_token:
-            print_full_refresh_preflight(preflight)
+            print_full_refresh_preflight(preflight, verbose=bool(args.verbose))
             return 1
 
     try:
@@ -72,7 +77,7 @@ def handle(args: argparse.Namespace) -> int:
     except (RuntimeError, ValueError) as exc:
         print(f"Ingest error: {exc}")
         return 1
-    return print_ingest_result(result)
+    return print_ingest_result(result, verbose=bool(args.verbose))
 
 
 def main(argv: list[str] | None = None) -> int:

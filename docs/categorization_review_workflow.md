@@ -135,10 +135,10 @@ Default safety behavior:
 uv run transform
 ```
 
-Or apply import and rebuild outputs in one step:
+Or just apply the import directly, which now rebuilds outputs by default:
 
 ```bash
-uv run review-import --run-transform
+uv run review-import
 ```
 
 ### 6. Optional: direct editing outside workbook review
@@ -200,7 +200,8 @@ Review file must include:
 - `--backup-path`: custom backup destination (overrides the default config
   `backup/` folder).
 - `--transaction-overrides-path`: optional explicit transaction-override target.
-- `--run-transform`: import and immediately run `transform`.
+- `--run-transform/--no-run-transform`: run `transform` after import
+  (enabled by default).
 
 ## Rendering Diagrams
 
