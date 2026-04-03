@@ -71,6 +71,7 @@ class IngestExecutionResult:
     ingest_text_cache_hits: int
     ingest_text_cache_misses: int
     ingest_text_cache_write_count: int
+    newly_covered_months: tuple[str, ...] = ()
     ingest_summary_path: Path | None = None
     run_mode: str = "incremental"
     files_selected_for_processing: int = 0
@@ -133,6 +134,7 @@ def run_ingest(
                 ),
                 "files_failed": 0,
                 "transactions_parsed": 0,
+                "newly_covered_months": [],
                 "staged_transactions_path": str(existing_staged_path),
                 "staged_batch_manifest_path": str(existing_manifest_path),
                 "hsbc_csv_files_scanned": 0,
@@ -188,6 +190,7 @@ def run_ingest(
             ingest_text_cache_hits=0,
             ingest_text_cache_misses=0,
             ingest_text_cache_write_count=0,
+            newly_covered_months=(),
             ingest_summary_path=ingest_summary_path,
             run_mode="incremental",
             files_selected_for_processing=0,
@@ -330,6 +333,9 @@ def run_ingest(
             "duplicate_raw_file_count": ingest.duplicate_raw_file_count,
             "files_failed": ingest.files_failed,
             "transactions_parsed": len(hsbc_merge.transactions),
+            "newly_covered_months": sorted(
+                {tx.booking_date.strftime("%Y-%m") for tx in hsbc_merge.transactions}
+            ),
             "staged_transactions_path": str(staging.path),
             "staged_batch_manifest_path": str(staged_manifest_path),
             "hsbc_csv_files_scanned": ingest.hsbc_csv_files_scanned,
@@ -391,6 +397,9 @@ def run_ingest(
         ingest_text_cache_hits=ingest.text_cache_hits,
         ingest_text_cache_misses=ingest.text_cache_misses,
         ingest_text_cache_write_count=ingest.text_cache_write_count,
+        newly_covered_months=tuple(
+            sorted({tx.booking_date.strftime("%Y-%m") for tx in hsbc_merge.transactions})
+        ),
         ingest_summary_path=ingest_summary_path,
         run_mode=ingest.run_mode,
         files_selected_for_processing=ingest.files_selected_for_processing,

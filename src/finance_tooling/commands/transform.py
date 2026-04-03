@@ -13,6 +13,11 @@ from finance_tooling.workflow.transform_stage import run_transform
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     """Register transform-specific CLI arguments."""
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed counters, backup details, and diagnostic paths.",
+    )
+    parser.add_argument(
         "--input-staged-path",
         type=Path,
         default=None,
@@ -34,7 +39,7 @@ def handle(args: argparse.Namespace) -> int:
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Transform error: {exc}")
         return 1
-    return print_workflow_result(result)
+    return print_workflow_result(result, verbose=bool(args.verbose))
 
 
 def main(argv: list[str] | None = None) -> int:

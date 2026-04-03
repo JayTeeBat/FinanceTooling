@@ -10,10 +10,15 @@ from finance_tooling.workflow_status import PipelineFinding, build_pipeline_stat
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     """Register workflow-status-specific CLI arguments."""
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show fuller raw/staged/registry detail in the health snapshot.",
+    )
     parser.set_defaults(command="workflow-status", handler=handle)
 
 
-def handle(_args: argparse.Namespace) -> int:
+def handle(args: argparse.Namespace) -> int:
     """Execute the workflow-status command from parsed CLI arguments."""
     try:
         settings = load_settings_from_env()
@@ -22,7 +27,7 @@ def handle(_args: argparse.Namespace) -> int:
         return 1
 
     try:
-        payload, output_path = build_pipeline_state(settings)
+        payload, _output_path = build_pipeline_state(settings)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Workflow status error: {exc}")
         return 1
@@ -64,34 +69,38 @@ def handle(_args: argparse.Namespace) -> int:
         f"{raw_state['ignored_duplicate_file_count']} ignored duplicates"
     )
     print(
-        "Committed registry: "
-        f"{committed_state['committed_source_count']} documents, "
-        f"last run mode={committed_state['last_run_mode']}, "
-        f"last full refresh={committed_state['last_full_refresh_at']}"
-    )
-    print(
         "Staged batch: "
         f"exists={staged_state['exists']}, "
-        f"manifest={staged_state['manifest_exists']}, "
         f"run mode={staged_state['run_mode']}, "
         f"selected files={staged_state['files_selected_for_processing']}"
     )
     print(
-        "Master parquet: "
+        "Canonical data: "
         f"{master_state['total_rows']} rows "
         f"({master_state['booking_date_min']} -> {master_state['booking_date_max']})"
     )
-    print(f"Run summary present: {transformed_state['summary_exists']}")
     print(
         "Drift state: "
         f"stale={drift_state['dataset_stale']}, "
         f"full refresh risk={drift_state['full_refresh_risk']}"
     )
+    if args.verbose:
+        print(
+            "Committed registry: "
+            f"{committed_state['committed_source_count']} documents, "
+            f"last run mode={committed_state['last_run_mode']}, "
+            f"last full refresh={committed_state['last_full_refresh_at']}"
+        )
+        print(
+            "Staged manifest: "
+            f"present={staged_state['manifest_exists']}, "
+            f"summary_present={transformed_state['summary_exists']}"
+        )
     if findings:
-        print("Findings:")
+        print(f"Findings: {len(findings)}")
         for finding in findings:
             print(f"- [{finding['severity']}] {finding['code']}: {finding['message']}")
-    print(f"Pipeline state: {output_path}")
+    print("Pipeline state: updated")
     return 0
 
 

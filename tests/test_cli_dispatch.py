@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 from finance_tooling.__main__ import _build_parser, main
 from finance_tooling.backup import BackupRunResult
 from finance_tooling.models import WorkflowResult
+from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.review_import import ReviewImportResult
 from finance_tooling.transaction_overrides import TransactionOverrideStore
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
@@ -181,6 +183,9 @@ def test_ingest_full_refresh_runs_with_confirmation(monkeypatch, tmp_path: Path,
 
     assert exit_code == 0
     assert "Run mode: full_refresh" in stdio.out
+    assert "Statements: 0 preexisting, 0 new" in stdio.out
+    assert "New coverage months: none" in stdio.out
+    assert "New transactions: 1" in stdio.out
 
 
 def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -233,7 +238,8 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     assert captured["include_categorized"] is False
     assert captured["review_state_path"] == processed_dir / "review_state.parquet"
     assert captured["dark_safe"] is True
-    assert "Exported 4 review rows" in stdio.out
+    assert "Review export: 4 rows" in stdio.out
+    assert str(captured["output_path"]) not in stdio.out
 
 
 def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None:
@@ -325,7 +331,8 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert captured["max_abs_amount"] is None
     assert captured["only_unreviewed"] is True
     assert captured["dark_safe"] is False
-    assert "Exported 1 review rows" in stdio.out
+    assert "Review export: 1 rows" in stdio.out
+    assert "transactions_review.csv" not in stdio.out
 
 
 def test_review_export_reports_error_for_mixed_amount_filter_types(
@@ -405,6 +412,7 @@ def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     assert captured["transaction_overrides_path"] == transaction_overrides_path
     assert captured["review_state_path"] == processed_dir / "review_state.parquet"
     assert captured["dry_run"] is True
+    assert "Review import: read 2 rows" in stdio.out
     assert "Dry run: no override file was written." in stdio.out
 
 
@@ -443,12 +451,134 @@ def test_review_import_infers_data_adjacent_paths_from_review_path(
     )
 
 
-def test_review_import_rejects_transform_with_dry_run(capsys) -> None:
-    exit_code = main(["review-import", "--dry-run", "--run-transform"])
+def test_review_import_dry_run_skips_transform(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    review_path = processed_dir / "transactions_review.xlsx"
+    review_path.write_text("", encoding="utf-8")
+    transaction_overrides_path = tmp_path / "config" / "transaction_overrides.yaml"
+    transaction_overrides_path.parent.mkdir(parents=True)
+    transaction_overrides_path.write_text("entries: []\n", encoding="utf-8")
+    settings = SimpleNamespace(
+        processed_path=processed_dir,
+        transaction_overrides_path=transaction_overrides_path,
+        review_state_path=processed_dir / "review_state.parquet",
+    )
+    captured: dict[str, object] = {}
+
+    def _import(**kwargs: object) -> ReviewImportResult:
+        captured.update(kwargs)
+        return ReviewImportResult(rows_read=1)
+
+    def _transform(_settings: object) -> object:
+        raise AssertionError("transform should not run during dry-run import")
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.import_review_into_overrides", _import
+    )
+    monkeypatch.setattr("finance_tooling.commands.review_import.run_transform", _transform)
+
+    exit_code = main(["review-import", "--dry-run"])
     stdio = capsys.readouterr()
 
-    assert exit_code == 1
-    assert "--run-transform cannot be used together with --dry-run" in stdio.out
+    assert exit_code == 0
+    assert captured["dry_run"] is True
+    assert "Dry run: no override file was written." in stdio.out
+
+
+def test_review_import_runs_transform_by_default(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    review_path = processed_dir / "transactions_review.xlsx"
+    review_path.write_text("", encoding="utf-8")
+    transaction_overrides_path = tmp_path / "config" / "transaction_overrides.yaml"
+    transaction_overrides_path.parent.mkdir(parents=True)
+    transaction_overrides_path.write_text("entries: []\n", encoding="utf-8")
+    settings = SimpleNamespace(
+        processed_path=processed_dir,
+        transaction_overrides_path=transaction_overrides_path,
+        review_state_path=processed_dir / "review_state.parquet",
+    )
+    transform_called: list[object] = []
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.import_review_into_overrides",
+        lambda **kwargs: ReviewImportResult(rows_read=1),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.load_settings_from_env",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.print_workflow_result",
+        lambda workflow_result, verbose=False: print("Transform: ok") or 0,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.run_transform",
+        lambda loaded_settings: transform_called.append(loaded_settings) or object(),
+    )
+
+    exit_code = main(["review-import"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert transform_called == [settings]
+    assert "Transform: ok" in stdio.out
+
+
+def test_review_import_can_skip_default_transform(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    review_path = processed_dir / "transactions_review.xlsx"
+    review_path.write_text("", encoding="utf-8")
+    transaction_overrides_path = tmp_path / "config" / "transaction_overrides.yaml"
+    transaction_overrides_path.parent.mkdir(parents=True)
+    transaction_overrides_path.write_text("entries: []\n", encoding="utf-8")
+    settings = SimpleNamespace(
+        processed_path=processed_dir,
+        transaction_overrides_path=transaction_overrides_path,
+        review_state_path=processed_dir / "review_state.parquet",
+    )
+
+    def _transform(_settings: object) -> object:
+        raise AssertionError("transform should not run with --no-run-transform")
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: settings,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.load_transaction_override_store",
+        lambda path: (TransactionOverrideStore(entries=()), []),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_import.import_review_into_overrides",
+        lambda **kwargs: ReviewImportResult(rows_read=1),
+    )
+    monkeypatch.setattr("finance_tooling.commands.review_import.run_transform", _transform)
+
+    exit_code = main(["review-import", "--no-run-transform"])
+    capsys.readouterr()
+
+    assert exit_code == 0
 
 
 def test_workflow_status_command_prints_summary(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -495,7 +625,9 @@ def test_workflow_status_command_prints_summary(monkeypatch, tmp_path: Path, cap
     assert exit_code == 0
     assert "Pipeline health: warn" in stdio.out
     assert "ignored duplicates" in stdio.out
-    assert "workflow_pipeline_state.json" in stdio.out
+    assert "Canonical data:" in stdio.out
+    assert "Pipeline state: updated" in stdio.out
+    assert "workflow_pipeline_state.json" not in stdio.out
 
 
 def test_ingest_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -545,6 +677,7 @@ def test_ingest_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsy
             ingest_text_cache_hits=0,
             ingest_text_cache_misses=0,
             ingest_text_cache_write_count=0,
+            newly_covered_months=(),
             backup_run=backup_run,
         ),
     )
@@ -553,8 +686,158 @@ def test_ingest_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsy
     stdio = capsys.readouterr()
 
     assert exit_code == 2
+    assert "Run mode: incremental" in stdio.out
+    assert "Statements: 0 preexisting, 0 new" in stdio.out
+    assert "New coverage months: none" in stdio.out
+    assert "Backup run:" not in stdio.out
+    assert str(backup_run.processed_backup_dir) not in stdio.out
+
+
+def test_ingest_command_verbose_prints_backup_summary(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    backup_run = BackupRunResult(
+        run_id="20260321T101530000000Z",
+        stage="ingest",
+        command="ingest",
+        created_at="2026-03-21T10:15:30+00:00",
+        processed_backup_dir=processed_dir / "backup" / "ingest" / "20260321T101530000000Z",
+        config_backup_dir=None,
+        manifest_paths=(),
+        copied_files=(),
+        skipped_missing_files=(),
+        pruned_run_ids=(),
+    )
+
+    monkeypatch.setattr("finance_tooling.commands.ingest.load_settings_from_env", lambda: object())
+    monkeypatch.setattr(
+        "finance_tooling.commands.ingest.run_ingest",
+        lambda _settings, emit_ingest_summary=False: IngestExecutionResult(
+            staged_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+            staged_batch_manifest_path=(
+                processed_dir / "state" / "ingest_staged_batch_manifest.json"
+            ),
+            ingest_summary_path=processed_dir / "state" / "ingest_summary.json",
+            files_scanned=0,
+            raw_files_discovered=0,
+            duplicate_raw_file_count=0,
+            files_failed=0,
+            transactions_parsed=0,
+            hsbc_csv_files_scanned=0,
+            parser_low_confidence_file_count=0,
+            warnings=(),
+            source_files=(),
+            selected_source_files=(),
+            validations=(),
+            parser_selection_diagnostics=(),
+            hsbc_merge_metrics={},
+            hsbc_period_parse_variant_match_count=0,
+            hsbc_boundary_metrics={},
+            hsbc_boundary_diagnostics=(),
+            hsbc_sign_metrics={},
+            hsbc_sign_diagnostics=(),
+            hsbc_selection_diagnostics=(),
+            ingest_parser_duration_seconds_by_parser={},
+            ingest_duration_seconds_by_bank={},
+            ingest_text_cache_enabled=False,
+            ingest_text_cache_hits=0,
+            ingest_text_cache_misses=0,
+            ingest_text_cache_write_count=0,
+            newly_covered_months=("2026-03",),
+            backup_run=backup_run,
+        ),
+    )
+
+    exit_code = main(["ingest", "--verbose"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 2
     assert "Backup run: 20260321T101530000000Z" in stdio.out
-    assert str(backup_run.processed_backup_dir) in stdio.out
+    assert str(backup_run.processed_backup_dir) not in stdio.out
+
+
+def test_ingest_command_summarizes_reconciliation_and_new_months(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+
+    monkeypatch.setattr("finance_tooling.commands.ingest.load_settings_from_env", lambda: object())
+    monkeypatch.setattr(
+        "finance_tooling.commands.ingest.run_ingest",
+        lambda _settings, emit_ingest_summary=False: IngestExecutionResult(
+            staged_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+            files_scanned=3,
+            raw_files_discovered=3,
+            duplicate_raw_file_count=0,
+            files_failed=0,
+            transactions_parsed=12,
+            hsbc_csv_files_scanned=0,
+            parser_low_confidence_file_count=0,
+            warnings=(),
+            source_files=(),
+            selected_source_files=(),
+            validations=(
+                StatementValidation(
+                    source_file=Path("a.pdf"),
+                    bank="hsbc",
+                    parser="hsbc",
+                    statement_type="statement",
+                    opening_balance=Decimal("100"),
+                    closing_balance=Decimal("80"),
+                    transaction_sum=Decimal("-20"),
+                    expected_closing_balance=Decimal("80"),
+                    difference=Decimal("0"),
+                    status="pass",
+                    reason=None,
+                    severity="info",
+                ),
+                StatementValidation(
+                    source_file=Path("b.pdf"),
+                    bank="hsbc",
+                    parser="hsbc",
+                    statement_type="statement",
+                    opening_balance=Decimal("100"),
+                    closing_balance=Decimal("70"),
+                    transaction_sum=Decimal("-20"),
+                    expected_closing_balance=Decimal("80"),
+                    difference=Decimal("10"),
+                    status="fail",
+                    reason="mismatch",
+                    severity="warning",
+                ),
+            ),
+            parser_selection_diagnostics=(),
+            hsbc_merge_metrics={},
+            hsbc_period_parse_variant_match_count=0,
+            hsbc_boundary_metrics={},
+            hsbc_boundary_diagnostics=(),
+            hsbc_sign_metrics={},
+            hsbc_sign_diagnostics=(),
+            hsbc_selection_diagnostics=(),
+            ingest_parser_duration_seconds_by_parser={},
+            ingest_duration_seconds_by_bank={},
+            ingest_text_cache_enabled=False,
+            ingest_text_cache_hits=0,
+            ingest_text_cache_misses=0,
+            ingest_text_cache_write_count=0,
+            newly_covered_months=("2026-01", "2026-02"),
+            run_mode="incremental",
+            files_selected_for_processing=2,
+            files_skipped_already_committed=5,
+        ),
+    )
+
+    exit_code = main(["ingest"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Run mode: incremental" in stdio.out
+    assert "Statements: 5 preexisting, 2 new" in stdio.out
+    assert "New coverage months: 2026-01, 2026-02" in stdio.out
+    assert "New transactions: 12" in stdio.out
+    assert "Reconciliation: 1 pass, 1 fail, 0 uncheckable" in stdio.out
+    assert "Failure reasons: mismatch x1; abs EUR gap 10.00" in stdio.out
 
 
 def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -612,8 +895,77 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
     stdio = capsys.readouterr()
 
     assert exit_code == 0
+    assert "Transactions: 1 total" in stdio.out
+    assert "Categorized coverage: 1 transactions (100.00%), EUR 1.00 (100.00%)" in stdio.out
+    assert "Newly categorized: n/a" in stdio.out
+    assert "Backup run:" not in stdio.out
+    assert "Categorization coverage by transaction count:" not in stdio.out
+    assert "transactions_master.parquet" not in stdio.out
+
+
+def test_transform_command_verbose_prints_backup_and_detailed_metrics(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    config_dir = tmp_path / "config"
+    backup_run = BackupRunResult(
+        run_id="20260321T101530000000Z",
+        stage="transform",
+        command="transform",
+        created_at="2026-03-21T10:15:30+00:00",
+        processed_backup_dir=processed_dir / "backup" / "transform" / "20260321T101530000000Z",
+        config_backup_dir=config_dir / "backup" / "transform" / "20260321T101530000000Z",
+        manifest_paths=(),
+        copied_files=(),
+        skipped_missing_files=(),
+        pruned_run_ids=(),
+    )
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.transform.load_settings_from_env", lambda: object()
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.transform.run_transform",
+        lambda _settings, staged_path=None: WorkflowResult(
+            dashboard_path=processed_dir / "finance_dashboard.html",
+            parquet_path=processed_dir / "transactions_master.parquet",
+            csv_path=processed_dir / "transactions_normalized.csv",
+            json_path=processed_dir / "transactions_normalized.json",
+            summary_path=processed_dir / "run_summary.json",
+            completeness_path=processed_dir / "completeness_report.json",
+            files_scanned=1,
+            files_failed=0,
+            transactions_parsed=1,
+            new_rows=1,
+            total_rows=1,
+            completeness_status="pass",
+            completeness_coverage_ratio=1.0,
+            missing_source_file_count=0,
+            reconciliation_checkable_file_count=0,
+            reconciliation_fail_count=0,
+            reconciliation_uncheckable_file_count=0,
+            reconciliation_pass_ratio=None,
+            categorized_count=1,
+            uncategorized_count=0,
+            categorized_amount_eur_abs=1.0,
+            uncategorized_amount_eur_abs=0.0,
+            categorized_amount_eur_abs_ratio=1.0,
+            uncategorized_amount_eur_abs_ratio=0.0,
+            categorized_count_delta=1,
+            uncategorized_count_delta=-1,
+            categorized_amount_eur_abs_delta=1.0,
+            uncategorized_amount_eur_abs_delta=-1.0,
+            backup_run=backup_run,
+        ),
+    )
+
+    exit_code = main(["transform", "--verbose"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
     assert "Backup run: 20260321T101530000000Z" in stdio.out
-    assert str(backup_run.config_backup_dir) in stdio.out
+    assert str(backup_run.config_backup_dir) not in stdio.out
     assert (
         "Categorization coverage by transaction count: "
         "100.00% categorized / 0.00% uncategorized"

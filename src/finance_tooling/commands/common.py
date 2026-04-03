@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.backup import BackupRunResult
@@ -12,6 +13,7 @@ from finance_tooling.config import (
     load_settings_from_env,
 )
 from finance_tooling.models import WorkflowResult
+from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.workflow.incremental_state import FullRefreshPreflight
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 
@@ -144,16 +146,96 @@ def resolve_review_import_paths(
 
 
 def print_backup_run(result: BackupRunResult) -> None:
-    """Print a concise summary of an automatic backup run."""
+    """Print backup metadata without filesystem paths."""
     print(f"Backup run: {result.run_id} ({result.stage} via {result.command})")
-    if result.processed_backup_dir is not None:
-        print(f"Backup processed dir: {result.processed_backup_dir}")
-    if result.config_backup_dir is not None:
-        print(f"Backup config dir: {result.config_backup_dir}")
     print(f"Backup copied files: {len(result.copied_files)}")
     print(f"Backup missing files skipped: {len(result.skipped_missing_files)}")
     if result.pruned_run_ids:
         print(f"Backup pruned runs: {', '.join(result.pruned_run_ids)}")
+
+
+def print_selection_summary(
+    *,
+    run_mode: str,
+    files_selected_for_processing: int,
+    files_skipped_already_committed: int,
+    files_skipped_modified_existing: int,
+    files_missing_since_last_commit: int,
+    dataset_stale: bool,
+    stale_reasons: tuple[str, ...] | list[str],
+) -> None:
+    """Print a compact selection and stale-state summary."""
+    print(
+        "Selection: "
+        f"mode={run_mode}, "
+        f"selected={files_selected_for_processing}, "
+        f"already_committed={files_skipped_already_committed}, "
+        f"modified={files_skipped_modified_existing}, "
+        f"missing={files_missing_since_last_commit}"
+    )
+    if dataset_stale:
+        print(f"Drift: stale ({', '.join(stale_reasons)})")
+    else:
+        print("Drift: clean")
+
+
+def _format_reason_counts(reasons: list[str]) -> str:
+    counts: dict[str, int] = {}
+    for reason in reasons:
+        counts[reason] = counts.get(reason, 0) + 1
+    return ", ".join(f"{reason} x{count}" for reason, count in sorted(counts.items()))
+
+
+def _print_reconciliation_summary(
+    validations: tuple[StatementValidation, ...], *, verbose: bool
+) -> None:
+    """Print concise reconciliation results for newly ingested statements."""
+    statement_validations = [
+        validation for validation in validations if validation.statement_type == "statement"
+    ]
+    if not statement_validations:
+        print("Reconciliation: no new statement validations")
+        return
+
+    pass_count = sum(1 for validation in statement_validations if validation.status == "pass")
+    fail_validations = [
+        validation for validation in statement_validations if validation.status == "fail"
+    ]
+    fail_count = len(fail_validations)
+    uncheckable_count = sum(
+        1 for validation in statement_validations if validation.status == "uncheckable"
+    )
+
+    print(
+        "Reconciliation: "
+        f"{pass_count} pass, {fail_count} fail, {uncheckable_count} uncheckable"
+    )
+    if not fail_validations:
+        return
+
+    reasons = [
+        validation.reason or "unknown"
+        for validation in fail_validations
+    ]
+    differences = [
+        abs(validation.difference)
+        for validation in fail_validations
+        if validation.difference is not None
+    ]
+    detail = f"Failure reasons: {_format_reason_counts(reasons)}"
+    if differences:
+        total_gap = sum(differences, start=Decimal("0"))
+        detail += f"; abs EUR gap {total_gap:.2f}"
+    print(detail)
+    if verbose:
+        for validation in fail_validations:
+            if validation.difference is None:
+                print(f"- fail: {validation.reason or 'unknown'}")
+            else:
+                print(
+                    f"- fail: {validation.reason or 'unknown'} "
+                    f"(abs EUR gap {abs(validation.difference):.2f})"
+                )
 
 
 def print_incremental_run_metadata(
@@ -166,7 +248,7 @@ def print_incremental_run_metadata(
     dataset_stale: bool,
     stale_reasons: tuple[str, ...] | list[str],
 ) -> None:
-    """Print run-mode and stale-state metadata for pipeline stages."""
+    """Print detailed run-mode and stale-state metadata for pipeline stages."""
     print(f"Run mode: {run_mode}")
     print(f"Files selected for processing: {files_selected_for_processing}")
     print(f"Files skipped already committed: {files_skipped_already_committed}")
@@ -177,33 +259,36 @@ def print_incremental_run_metadata(
         print(f"Stale reasons: {', '.join(stale_reasons)}")
 
 
-def print_full_refresh_preflight(preflight: FullRefreshPreflight) -> None:
+def print_full_refresh_preflight(preflight: FullRefreshPreflight, *, verbose: bool = False) -> None:
     """Print the destructive-impact summary for a guarded full refresh."""
     print("FULL REFRESH WARNING")
-    print("This can remove canonical data for source files no longer present in raw inputs.")
-    print("This can reclassify historical transactions under current config.")
-    print("Use --dry-run first to inspect impact before executing.")
-    print("Automatic backups will still be created before any mutation.")
     print(f"Full refresh risk: {preflight.full_refresh_risk}")
-    print(f"Committed source documents: {preflight.committed_source_count}")
-    print(f"Raw files discovered: {preflight.raw_file_count}")
-    print(f"Unique source documents: {preflight.unique_document_count}")
-    print(f"Modified committed files: {preflight.modified_committed_count}")
-    print(f"Missing committed files: {preflight.missing_committed_count}")
-    print(f"Config drift since last full refresh: {preflight.config_drift}")
-    print(f"Estimated reprocessed canonical rows: {preflight.estimated_reprocessed_row_count}")
-    print(f"Estimated pruned canonical rows: {preflight.estimated_pruned_row_count}")
+    print(
+        "Impact: "
+        f"{preflight.raw_file_count} raw files, "
+        f"{preflight.committed_source_count} committed documents, "
+        f"{preflight.estimated_reprocessed_row_count} rows to rebuild, "
+        f"{preflight.estimated_pruned_row_count} rows to prune"
+    )
     if preflight.stale_reasons:
         print(f"Risk reasons: {', '.join(preflight.stale_reasons)}")
-    print(f"Processed backup root: {preflight.processed_backup_root}")
-    print(f"Config backup root: {preflight.config_backup_root}")
+    if verbose:
+        print("This can remove canonical data for source files no longer present in raw inputs.")
+        print("This can reclassify historical transactions under current config.")
+        print("Use --dry-run first to inspect impact before executing.")
+        print("Automatic backups will still be created before any mutation.")
+        print(f"Raw files discovered: {preflight.raw_file_count}")
+        print(f"Unique source documents: {preflight.unique_document_count}")
+        print(f"Modified committed files: {preflight.modified_committed_count}")
+        print(f"Missing committed files: {preflight.missing_committed_count}")
+        print(f"Config drift since last full refresh: {preflight.config_drift}")
     print(
         "To proceed, rerun with: "
         f"--full-refresh --confirm-full-refresh {preflight.confirmation_token}"
     )
 
 
-def print_workflow_result(result: WorkflowResult) -> int:
+def print_workflow_result(result: WorkflowResult, *, verbose: bool = False) -> int:
     """Print workflow result summary and return process exit code."""
     total_categorization_count = result.categorized_count + result.uncategorized_count
     categorized_count_ratio = (
@@ -215,82 +300,98 @@ def print_workflow_result(result: WorkflowResult) -> int:
         else 0.0
     )
 
-    print(f"Scanned files: {result.files_scanned}")
-    print_incremental_run_metadata(
-        run_mode=result.run_mode,
-        files_selected_for_processing=result.files_selected_for_processing,
-        files_skipped_already_committed=result.files_skipped_already_committed,
-        files_skipped_modified_existing=result.files_skipped_modified_existing,
-        files_missing_since_last_commit=result.files_missing_since_last_commit,
-        dataset_stale=result.dataset_stale,
-        stale_reasons=result.stale_reasons,
-    )
-    print(f"Failed files: {result.files_failed}")
-    print(f"Parsed transactions: {result.transactions_parsed}")
-    print(f"Inserted rows: {result.new_rows}")
-    print(f"Total rows in parquet: {result.total_rows}")
+    print(f"Transactions: {result.total_rows} total")
     print(
-        "Completeness: "
-        f"{result.completeness_status} "
-        f"(coverage={result.completeness_coverage_ratio:.3f}, "
-        f"missing_files={result.missing_source_file_count})"
+        "Categorized coverage: "
+        f"{result.categorized_count} transactions "
+        f"({categorized_count_ratio * 100.0:.2f}%), "
+        f"EUR {result.categorized_amount_eur_abs:.2f} "
+        f"({result.categorized_amount_eur_abs_ratio * 100.0:.2f}%)"
     )
-    pass_ratio = (
-        f"{result.reconciliation_pass_ratio:.3f}"
-        if result.reconciliation_pass_ratio is not None
-        else "n/a"
-    )
-    print(
-        "Reconciliation: "
-        f"{result.reconciliation_fail_count} failed / "
-        f"{result.reconciliation_checkable_file_count} checkable, "
-        f"{result.reconciliation_uncheckable_file_count} info "
-        f"(pass_ratio={pass_ratio})"
-    )
-    print(
-        "Categorization: "
-        f"{result.categorized_count} categorized / "
-        f"{result.uncategorized_count} uncategorized "
-        f"(abs EUR categorized={result.categorized_amount_eur_abs:.2f}, "
-        f"uncategorized={result.uncategorized_amount_eur_abs:.2f})"
-    )
-    print(
-        "Categorization coverage by transaction count: "
-        f"{categorized_count_ratio * 100.0:.2f}% categorized / "
-        f"{uncategorized_count_ratio * 100.0:.2f}% uncategorized"
-    )
-    print(
-        "Categorization coverage by absolute EUR amount: "
-        f"{result.categorized_amount_eur_abs_ratio * 100.0:.2f}% categorized / "
-        f"{result.uncategorized_amount_eur_abs_ratio * 100.0:.2f}% uncategorized"
-    )
-    if (
-        result.categorized_count_delta is None
-        or result.uncategorized_count_delta is None
-        or result.categorized_amount_eur_abs_delta is None
-        or result.uncategorized_amount_eur_abs_delta is None
-    ):
-        print("Delta since last run: n/a")
+    if result.categorized_count_delta is None or result.categorized_amount_eur_abs_delta is None:
+        print("Newly categorized: n/a")
     else:
         print(
-            "Delta since last run: "
-            f"categorized {result.categorized_count_delta:+d}, "
-            f"uncategorized {result.uncategorized_count_delta:+d}"
+            "Newly categorized: "
+            f"{result.categorized_count_delta:+d} transactions, "
+            f"EUR {result.categorized_amount_eur_abs_delta:+.2f}"
+        )
+    if verbose:
+        print_selection_summary(
+            run_mode=result.run_mode,
+            files_selected_for_processing=result.files_selected_for_processing,
+            files_skipped_already_committed=result.files_skipped_already_committed,
+            files_skipped_modified_existing=result.files_skipped_modified_existing,
+            files_missing_since_last_commit=result.files_missing_since_last_commit,
+            dataset_stale=result.dataset_stale,
+            stale_reasons=result.stale_reasons,
+        )
+        print(f"Scanned files: {result.files_scanned}")
+        print_incremental_run_metadata(
+            run_mode=result.run_mode,
+            files_selected_for_processing=result.files_selected_for_processing,
+            files_skipped_already_committed=result.files_skipped_already_committed,
+            files_skipped_modified_existing=result.files_skipped_modified_existing,
+            files_missing_since_last_commit=result.files_missing_since_last_commit,
+            dataset_stale=result.dataset_stale,
+            stale_reasons=result.stale_reasons,
+        )
+        print(f"Failed files: {result.files_failed}")
+        print(
+            "Completeness: "
+            f"{result.completeness_status} "
+            f"(coverage={result.completeness_coverage_ratio:.3f}, "
+            f"missing_files={result.missing_source_file_count})"
+        )
+        pass_ratio = (
+            f"{result.reconciliation_pass_ratio:.3f}"
+            if result.reconciliation_pass_ratio is not None
+            else "n/a"
         )
         print(
-            "Delta abs EUR: "
-            f"categorized {result.categorized_amount_eur_abs_delta:+.2f}, "
-            f"uncategorized {result.uncategorized_amount_eur_abs_delta:+.2f}"
+            "Reconciliation: "
+            f"{result.reconciliation_fail_count} failed / "
+            f"{result.reconciliation_checkable_file_count} checkable, "
+            f"{result.reconciliation_uncheckable_file_count} info "
+            f"(pass_ratio={pass_ratio})"
         )
-    print(f"Dashboard: {result.dashboard_path}")
-    print(f"Parquet: {result.parquet_path}")
-    print(f"CSV export: {result.csv_path}")
-    if result.json_path.exists():
-        print(f"JSON export: {result.json_path}")
-    print(f"Summary: {result.summary_path}")
-    print(f"Completeness report: {result.completeness_path}")
-    if result.backup_run is not None:
-        print_backup_run(result.backup_run)
+        print(
+            "Categorization: "
+            f"{result.categorized_count} categorized / "
+            f"{result.uncategorized_count} uncategorized "
+            f"(abs EUR categorized={result.categorized_amount_eur_abs:.2f}, "
+            f"uncategorized={result.uncategorized_amount_eur_abs:.2f})"
+        )
+        print(
+            "Categorization coverage by transaction count: "
+            f"{categorized_count_ratio * 100.0:.2f}% categorized / "
+            f"{uncategorized_count_ratio * 100.0:.2f}% uncategorized"
+        )
+        print(
+            "Categorization coverage by absolute EUR amount: "
+            f"{result.categorized_amount_eur_abs_ratio * 100.0:.2f}% categorized / "
+            f"{result.uncategorized_amount_eur_abs_ratio * 100.0:.2f}% uncategorized"
+        )
+        if (
+            result.categorized_count_delta is not None
+            and result.uncategorized_count_delta is not None
+        ):
+            print(
+                "Delta since last run: "
+                f"categorized {result.categorized_count_delta:+d}, "
+                f"uncategorized {result.uncategorized_count_delta:+d}"
+            )
+        if (
+            result.categorized_amount_eur_abs_delta is not None
+            and result.uncategorized_amount_eur_abs_delta is not None
+        ):
+            print(
+                "Delta abs EUR: "
+                f"categorized {result.categorized_amount_eur_abs_delta:+.2f}, "
+                f"uncategorized {result.uncategorized_amount_eur_abs_delta:+.2f}"
+            )
+        if result.backup_run is not None:
+            print_backup_run(result.backup_run)
 
     if result.warnings:
         print("Warnings:")
@@ -302,31 +403,56 @@ def print_workflow_result(result: WorkflowResult) -> int:
     return 0
 
 
-def print_ingest_result(result: IngestExecutionResult) -> int:
+def print_ingest_result(result: IngestExecutionResult, *, verbose: bool = False) -> int:
     """Print ingest stage summary and return process exit code."""
-    print(f"Scanned files: {result.files_scanned}")
-    print_incremental_run_metadata(
-        run_mode=result.run_mode,
-        files_selected_for_processing=result.files_selected_for_processing,
-        files_skipped_already_committed=result.files_skipped_already_committed,
-        files_skipped_modified_existing=result.files_skipped_modified_existing,
-        files_missing_since_last_commit=result.files_missing_since_last_commit,
-        dataset_stale=result.dataset_stale,
-        stale_reasons=result.stale_reasons,
+    print(f"Run mode: {result.run_mode}")
+    print(
+        "Statements: "
+        f"{result.files_skipped_already_committed} preexisting, "
+        f"{result.files_selected_for_processing} new"
     )
-    print(f"Raw files discovered: {result.raw_files_discovered}")
-    print(f"Ignored duplicate raw files: {result.duplicate_raw_file_count}")
-    print(f"Failed files: {result.files_failed}")
-    print(f"Staged transactions: {result.transactions_parsed}")
-    print(f"Staged parquet: {result.staged_path}")
-    if result.staged_batch_manifest_path is not None:
-        print(f"Staged batch manifest: {result.staged_batch_manifest_path}")
-    if result.ingest_summary_path is not None:
-        print(f"Ingest summary: {result.ingest_summary_path}")
-    print(f"HSBC CSV files scanned: {result.hsbc_csv_files_scanned}")
-    print(f"Parser low-confidence files: {result.parser_low_confidence_file_count}")
-    if result.backup_run is not None:
-        print_backup_run(result.backup_run)
+    if result.newly_covered_months:
+        print(f"New coverage months: {', '.join(result.newly_covered_months)}")
+    else:
+        print("New coverage months: none")
+    print(f"New transactions: {result.transactions_parsed}")
+    _print_reconciliation_summary(result.validations, verbose=verbose)
+    if result.dataset_stale:
+        print(f"Drift: {', '.join(result.stale_reasons)}")
+    elif verbose:
+        print("Drift: clean")
+    if verbose:
+        print_selection_summary(
+            run_mode=result.run_mode,
+            files_selected_for_processing=result.files_selected_for_processing,
+            files_skipped_already_committed=result.files_skipped_already_committed,
+            files_skipped_modified_existing=result.files_skipped_modified_existing,
+            files_missing_since_last_commit=result.files_missing_since_last_commit,
+            dataset_stale=result.dataset_stale,
+            stale_reasons=result.stale_reasons,
+        )
+        print(
+            "Sources: "
+            f"{result.raw_files_discovered} discovered, "
+            f"{result.duplicate_raw_file_count} ignored duplicates, "
+            f"{result.files_failed} failed"
+        )
+        print(f"Scanned files: {result.files_scanned}")
+        print_incremental_run_metadata(
+            run_mode=result.run_mode,
+            files_selected_for_processing=result.files_selected_for_processing,
+            files_skipped_already_committed=result.files_skipped_already_committed,
+            files_skipped_modified_existing=result.files_skipped_modified_existing,
+            files_missing_since_last_commit=result.files_missing_since_last_commit,
+            dataset_stale=result.dataset_stale,
+            stale_reasons=result.stale_reasons,
+        )
+        print(f"HSBC CSV files scanned: {result.hsbc_csv_files_scanned}")
+        print(f"Parser low-confidence files: {result.parser_low_confidence_file_count}")
+        if result.ingest_summary_path is not None:
+            print("Ingest summary: written")
+        if result.backup_run is not None:
+            print_backup_run(result.backup_run)
 
     if result.warnings:
         print("Warnings:")
