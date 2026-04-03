@@ -177,6 +177,19 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-04-03 - codex
+- Branch: `codex/fix-rule-drift-monitoring`
+- Completed:
+  - Narrowed full-refresh drift monitoring so only `category_rules.yaml` and `project_rules.yaml` count as stale-history config drift, while override files still participate in transform freshness.
+  - Added compatibility logic so registries written under the old wider fingerprint scheme reconcile against the saved full-refresh config backup instead of falsely flagging override churn as rule drift.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/workflow/incremental_state.py src/finance_tooling/workflow_status.py src/finance_tooling/workflow/ingest.py tests/test_workflow_status.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_workflow_status.py`: pass
+- Open items:
+  - Refreshing the persisted `workflow_pipeline_state.json` still depends on the processed mount being writable to `workflow-status`.
+- Next action:
+  - Publish the focused drift-monitoring fix as a draft PR and refresh the saved workflow-status snapshot once the processed mount is writable.
+
+### 2026-04-03 - codex
 - Branch: `codex/clean-command-output`
 - Completed:
   - Changed `review-import` so successful non-dry-run imports run `transform` by default, with `--no-run-transform` as the opt-out and `--dry-run` remaining preview-only.
@@ -201,17 +214,3 @@ Success target for the 2026 validation campaign:
   - The env-var surface is still broader than the minimal public contract; low-level per-file overrides and cache toggles remain supported but are intentionally de-emphasized rather than removed.
 - Next action:
   - Decide whether to follow this contract pass with a smaller compatibility/deprecation pass for low-level env/path overrides and optional JSON export behavior.
-
-### 2026-03-29 - codex
-- Branch: `codex/fix-hypothesis-dashboard-calculations`
-- Completed:
-  - Corrected the planning hypothesis dashboard baseline math so retirement timing uses the planner's age-based horizon, house timing uses the exact target-date horizon, and education uses per-child target/return assumptions instead of flattening to one shared input.
-  - Added a regression test that compares the dashboard baseline calculations against `build_planning_summary`, and regenerated `planning/household_finance_360/15_hypothesis_playground.html`.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/planning_dashboard.py tests/test_planning_dashboard.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check src/finance_tooling/planning_dashboard.py tests/test_planning_dashboard.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_planning_dashboard.py tests/test_planning.py tests/test_planning_doe.py`: pass
-- Open items:
-  - The dashboard still has its own interactive browser-side projection layer for net-worth and housing visuals; if more planning logic moves into the canonical engine, keep the static page in sync.
-- Next action:
-  - Review the draft PR and decide whether the dashboard should keep per-child education controls or collapse them into a different UX with explicit approximation.

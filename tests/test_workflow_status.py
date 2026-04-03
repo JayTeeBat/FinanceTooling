@@ -11,6 +11,8 @@ from finance_tooling.config import Settings
 from finance_tooling.source_inventory import build_source_inventory
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
+    compute_rule_config_fingerprint,
+    compute_transform_input_fingerprint,
     source_registry_path,
     update_source_registry,
     write_source_registry,
@@ -125,3 +127,154 @@ def test_bootstrap_incremental_registry_does_not_report_config_drift(tmp_path: P
     assert payload["drift_state"]["dataset_stale"] is False
     assert payload["drift_state"]["full_refresh_risk"] == "low"
     assert payload["committed_state"]["config_drift_since_last_full_refresh"] is False
+
+
+def test_transaction_override_changes_do_not_report_config_drift(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    source = settings.input_path / "statement.pdf"
+    source.write_bytes(b"content")
+    settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_overrides_path.write_text(
+        "version: 1\nrules: []\noverrides: []\n",
+        encoding="utf-8",
+    )
+    settings.transaction_overrides_path.write_text("version: 1\noverrides: []\n", encoding="utf-8")
+
+    inventory = build_source_inventory([source])
+    selection_plan = build_incremental_selection_plan(
+        settings=settings,
+        run_mode="incremental",
+        current_inventory=inventory,
+        registry=None,
+    )
+    registry = update_source_registry(
+        existing=None,
+        selection_plan=selection_plan,
+        processed_source_files=[source],
+        validations=[],
+        transactions=[],
+    )
+    write_source_registry(source_registry_path(settings), registry)
+
+    settings.transaction_overrides_path.write_text(
+        "version: 1\noverrides:\n- transaction_id: tx-1\n  category: Groceries\n",
+        encoding="utf-8",
+    )
+
+    payload, _ = build_pipeline_state(settings)
+
+    assert payload["drift_state"]["dataset_stale"] is False
+    assert payload["committed_state"]["config_drift_since_last_full_refresh"] is False
+    assert not any(
+        item["code"] == "config_changed_since_last_full_refresh"
+        for item in payload["findings"]
+    )
+
+
+def test_rule_changes_report_config_drift(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    source = settings.input_path / "statement.pdf"
+    source.write_bytes(b"content")
+    settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+
+    inventory = build_source_inventory([source])
+    selection_plan = build_incremental_selection_plan(
+        settings=settings,
+        run_mode="full_refresh",
+        current_inventory=inventory,
+        registry=None,
+    )
+    registry = update_source_registry(
+        existing=None,
+        selection_plan=selection_plan,
+        processed_source_files=[source],
+        validations=[],
+        transactions=[],
+    )
+    write_source_registry(source_registry_path(settings), registry)
+
+    assert (
+        registry.last_full_refresh_config_fingerprint
+        == compute_rule_config_fingerprint(settings)
+    )
+
+    settings.category_rules_path.write_text(
+        "version: 1\nrules:\n- id: groceries\n  category: Groceries\n",
+        encoding="utf-8",
+    )
+
+    payload, _ = build_pipeline_state(settings)
+
+    assert payload["drift_state"]["dataset_stale"] is True
+    assert payload["committed_state"]["config_drift_since_last_full_refresh"] is True
+    assert any(
+        item["code"] == "config_changed_since_last_full_refresh"
+        for item in payload["findings"]
+    )
+
+
+def test_legacy_full_refresh_fingerprint_ignores_override_only_drift(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    source = settings.input_path / "statement.pdf"
+    source.write_bytes(b"content")
+    settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.project_overrides_path.write_text(
+        "version: 1\nrules: []\noverrides: []\n",
+        encoding="utf-8",
+    )
+    settings.transaction_overrides_path.write_text("version: 1\noverrides: []\n", encoding="utf-8")
+
+    inventory = build_source_inventory([source])
+    selection_plan = build_incremental_selection_plan(
+        settings=settings,
+        run_mode="full_refresh",
+        current_inventory=inventory,
+        registry=None,
+    )
+    registry = update_source_registry(
+        existing=None,
+        selection_plan=selection_plan,
+        processed_source_files=[source],
+        validations=[],
+        transactions=[],
+    )
+
+    last_full_refresh_at = registry.last_full_refresh_at
+    assert last_full_refresh_at is not None
+    run_id = "20260321T120000000000Z"
+    registry = registry.__class__(
+        generated_at=registry.generated_at,
+        last_run_mode=registry.last_run_mode,
+        last_full_refresh_at="2026-03-21T12:00:00+00:00",
+        last_full_refresh_config_fingerprint=compute_transform_input_fingerprint(settings),
+        entries=registry.entries,
+    )
+    write_source_registry(source_registry_path(settings), registry)
+
+    backup_dir = settings.category_rules_path.parent / "backup" / "transform" / run_id
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    (backup_dir / settings.category_rules_path.name).write_text(
+        settings.category_rules_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (backup_dir / settings.project_rules_path.name).write_text(
+        settings.project_rules_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    settings.transaction_overrides_path.write_text(
+        "version: 1\noverrides:\n- transaction_id: tx-1\n  category: Groceries\n",
+        encoding="utf-8",
+    )
+
+    payload, _ = build_pipeline_state(settings)
+
+    assert payload["drift_state"]["dataset_stale"] is False
+    assert payload["committed_state"]["config_drift_since_last_full_refresh"] is False
+    assert not any(
+        item["code"] == "config_changed_since_last_full_refresh"
+        for item in payload["findings"]
+    )

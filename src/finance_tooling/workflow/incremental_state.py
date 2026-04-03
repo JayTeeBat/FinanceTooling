@@ -220,21 +220,147 @@ def _deserialize_validation(payload: dict[str, object] | None) -> StatementValid
     )
 
 
-def compute_config_fingerprint(settings: Settings) -> str:
-    """Compute a fingerprint over the config files that affect historical output."""
+def _compute_paths_fingerprint(paths: tuple[Path, ...]) -> str:
+    """Compute a fingerprint over an ordered set of paths."""
+    return _compute_labeled_paths_fingerprint(tuple((str(path), path) for path in paths))
+
+
+def _compute_labeled_paths_fingerprint(items: tuple[tuple[str, Path], ...]) -> str:
+    """Compute a fingerprint over ordered labels plus file contents."""
     digest = hashlib.sha256()
-    for path in (
-        settings.category_rules_path,
-        settings.project_rules_path,
-        settings.project_overrides_path,
-        settings.transaction_overrides_path,
-    ):
-        digest.update(str(path).encode("utf-8"))
+    for label, path in items:
+        digest.update(label.encode("utf-8"))
         if path.exists():
             digest.update(path.read_bytes())
         else:
             digest.update(b"<missing>")
     return digest.hexdigest()
+
+
+def compute_rule_config_fingerprint(settings: Settings) -> str:
+    """Fingerprint rule files that determine whether a full refresh is needed."""
+    return _compute_paths_fingerprint(
+        (
+            settings.category_rules_path,
+            settings.project_rules_path,
+        )
+    )
+
+
+def compute_transform_input_fingerprint(settings: Settings) -> str:
+    """Fingerprint transform-affecting config inputs for output cache freshness."""
+    return _compute_paths_fingerprint(
+        (
+            settings.category_rules_path,
+            settings.project_rules_path,
+            settings.project_overrides_path,
+            settings.transaction_overrides_path,
+        )
+    )
+
+
+def compute_config_fingerprint(settings: Settings) -> str:
+    """Backward-compatible alias for transform input fingerprinting."""
+    return compute_transform_input_fingerprint(settings)
+
+
+def _run_id_from_timestamp(timestamp: str) -> str | None:
+    """Convert an ISO timestamp into the stage-backup run-id format."""
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return None
+    return parsed.astimezone(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def _datetime_from_run_id(run_id: str) -> datetime | None:
+    """Parse a stage-backup run-id into a UTC datetime."""
+    try:
+        return datetime.strptime(run_id, "%Y%m%dT%H%M%S%fZ").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _last_full_refresh_rule_fingerprint_from_backup(
+    settings: Settings,
+    *,
+    last_full_refresh_at: str | None,
+) -> str | None:
+    """Load the last full-refresh rule fingerprint from the saved config backup when present."""
+    if last_full_refresh_at is None:
+        return None
+    try:
+        target_timestamp = datetime.fromisoformat(last_full_refresh_at).astimezone(UTC)
+    except ValueError:
+        return None
+    backup_root = settings.category_rules_path.parent / "backup" / "transform"
+    candidate_dirs: list[tuple[datetime, Path]] = []
+    if backup_root.exists():
+        for child in backup_root.iterdir():
+            if not child.is_dir():
+                continue
+            manifest_path = child / "backup_manifest.json"
+            created_at: datetime | None = None
+            if manifest_path.exists():
+                try:
+                    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    raw_created_at = payload.get("created_at")
+                    if isinstance(raw_created_at, str):
+                        created_at = datetime.fromisoformat(raw_created_at).astimezone(UTC)
+                except (OSError, ValueError, json.JSONDecodeError):
+                    created_at = None
+            if created_at is None:
+                created_at = _datetime_from_run_id(child.name)
+            if created_at is not None and created_at <= target_timestamp:
+                candidate_dirs.append((created_at, child))
+
+    if candidate_dirs:
+        _created_at, backup_dir = max(candidate_dirs, key=lambda item: item[0])
+    else:
+        run_id = _run_id_from_timestamp(last_full_refresh_at)
+        if run_id is None:
+            return None
+        backup_dir = backup_root / run_id
+
+    category_rules_path = backup_dir / settings.category_rules_path.name
+    project_rules_path = backup_dir / settings.project_rules_path.name
+    if not category_rules_path.exists() and not project_rules_path.exists():
+        return None
+    return _compute_labeled_paths_fingerprint(
+        (
+            (str(settings.category_rules_path), category_rules_path),
+            (str(settings.project_rules_path), project_rules_path),
+        )
+    )
+
+
+def has_rule_config_drift_since_last_full_refresh(
+    settings: Settings,
+    registry: SourceRegistrySnapshot | None,
+) -> bool:
+    """Return whether category/project rules changed since the last full refresh.
+
+    Supports registries written before the rule-only fingerprint split by falling
+    back to the saved full-refresh config backup when available.
+    """
+    if (
+        registry is None
+        or registry.last_full_refresh_config_fingerprint is None
+        or registry.last_full_refresh_at is None
+    ):
+        return False
+
+    current_rule_fingerprint = compute_rule_config_fingerprint(settings)
+    if registry.last_full_refresh_config_fingerprint == current_rule_fingerprint:
+        return False
+
+    backup_rule_fingerprint = _last_full_refresh_rule_fingerprint_from_backup(
+        settings,
+        last_full_refresh_at=registry.last_full_refresh_at,
+    )
+    if backup_rule_fingerprint is None:
+        return True
+    return backup_rule_fingerprint != current_rule_fingerprint
 
 
 def load_source_registry(path: Path) -> SourceRegistrySnapshot | None:
@@ -342,17 +468,14 @@ def build_incremental_selection_plan(
     registry: SourceRegistrySnapshot | None,
 ) -> IncrementalSelectionPlan:
     """Select source files for default incremental or full-refresh ingest."""
-    config_fingerprint = compute_config_fingerprint(settings)
+    config_fingerprint = compute_rule_config_fingerprint(settings)
+    has_config_drift = has_rule_config_drift_since_last_full_refresh(settings, registry)
     representative_entries = tuple(
         entry for entry in current_inventory.entries if entry.is_representative
     )
     if run_mode == "full_refresh":
         stale_reasons: list[str] = []
-        if (
-            registry is not None
-            and registry.last_full_refresh_config_fingerprint is not None
-            and registry.last_full_refresh_config_fingerprint != config_fingerprint
-        ):
+        if has_config_drift:
             stale_reasons.append("config_changed_since_last_full_refresh")
         return IncrementalSelectionPlan(
             run_mode=run_mode,
@@ -404,10 +527,7 @@ def build_incremental_selection_plan(
         stale_reasons.append("raw_source_modified_since_commit")
     if missing_committed_entries:
         stale_reasons.append("raw_source_missing_since_commit")
-    if (
-        registry.last_full_refresh_config_fingerprint is not None
-        and registry.last_full_refresh_config_fingerprint != config_fingerprint
-    ):
+    if has_config_drift:
         stale_reasons.append("config_changed_since_last_full_refresh")
 
     return IncrementalSelectionPlan(
