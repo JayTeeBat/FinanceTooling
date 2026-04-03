@@ -20,7 +20,7 @@ from finance_tooling.source_inventory import (
 )
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
-    compute_config_fingerprint,
+    has_rule_config_drift_since_last_full_refresh,
     load_source_registry,
     load_staged_batch_manifest,
     resolve_staged_batch_manifest_path,
@@ -183,7 +183,7 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
         current_inventory=current_inventory,
         registry=registry,
     )
-    config_fingerprint = compute_config_fingerprint(settings)
+    has_config_drift = has_rule_config_drift_since_last_full_refresh(settings, registry)
     current_representatives = _inventory_representatives(current_inventory)
     previous_representatives = (
         _inventory_representatives(previous_inventory) if previous_inventory is not None else {}
@@ -265,17 +265,13 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
                 ),
             }
         )
-    if (
-        registry is not None
-        and registry.last_full_refresh_config_fingerprint is not None
-        and registry.last_full_refresh_config_fingerprint != config_fingerprint
-    ):
+    if has_config_drift:
         findings.append(
             {
                 "severity": "warning",
                 "code": "config_changed_since_last_full_refresh",
                 "message": (
-                    "Categorization or project config changed since the last full refresh; "
+                    "Category or project rules changed since the last full refresh; "
                     "historical rows may be stale."
                 ),
             }
@@ -366,9 +362,7 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
                 registry.last_full_refresh_at if registry is not None else None
             ),
             "config_drift_since_last_full_refresh": (
-                registry is not None
-                and registry.last_full_refresh_config_fingerprint is not None
-                and registry.last_full_refresh_config_fingerprint != config_fingerprint
+                has_config_drift
             ),
         },
         "drift_state": {

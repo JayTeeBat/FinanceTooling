@@ -439,7 +439,8 @@ def ingest_statements(
             )
         elif stale_reason == "config_changed_since_last_full_refresh":
             warnings.append(
-                "Config drift detected since the last full refresh; historical rows may be stale "
+                "Category or project rules changed since the last full refresh; "
+                "historical rows may be stale "
                 "until --full-refresh."
             )
     prepared_cache_hits: list[_PreparedStatement] = []
