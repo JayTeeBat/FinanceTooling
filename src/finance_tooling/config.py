@@ -57,6 +57,7 @@ TRANSFORM_SUMMARY_FILENAME = "transform_run_summary.json"
 # Diagnostics and internal workflow state.
 TRANSFORM_COMPLETENESS_FILENAME = "transform_completeness_report.json"
 TRANSFORM_DASHBOARD_FILENAME = "transform_dashboard.html"
+HOUSEHOLD_HEALTHCHECK_FILENAME = "household_healthcheck.html"
 TRANSFORM_SOURCE_REGISTRY_FILENAME = "transform_source_registry.json"
 WORKFLOW_REVIEW_STATE_FILENAME = "workflow_review_state.parquet"
 WORKFLOW_FX_CACHE_FILENAME = "workflow_fx_rates_history.parquet"

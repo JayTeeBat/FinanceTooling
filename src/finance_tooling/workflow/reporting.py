@@ -14,8 +14,9 @@ from pandas import DataFrame
 from finance_tooling.backup import BackupRunResult
 from finance_tooling.classify import ClassificationDiagnostics, normalize_description
 from finance_tooling.completeness import build_completeness_report_from_dataframe
-from finance_tooling.config import Settings, state_root_path
+from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings, state_root_path
 from finance_tooling.dashboard import render_dashboard_html
+from finance_tooling.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.store import (
@@ -294,6 +295,7 @@ def persist_and_report(
     backup_run: BackupRunResult | None = None,
     upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
     render_dashboard_html_fn: Callable[..., Path] = render_dashboard_html,
+    render_household_healthcheck_html_fn: Callable[..., Path] = render_household_healthcheck_html,
 ) -> tuple[WorkflowResult, SummaryPayload]:
     """Persist artifacts and return final workflow result plus summary payload."""
     upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
@@ -347,6 +349,11 @@ def persist_and_report(
         project_rules_path=settings.project_rules_path,
         budget_targets_path=settings.budget_targets_path,
     )
+    household_healthcheck_path = render_household_healthcheck_html_fn(
+        dataframe,
+        settings.output_path.parent / HOUSEHOLD_HEALTHCHECK_FILENAME,
+        base_currency=settings.base_currency,
+    )
     _remove_if_exists(settings.output_path.parent / "legacy_identity_collision_candidates.csv")
 
     (
@@ -373,6 +380,7 @@ def persist_and_report(
         "total_rows": upsert.total_rows,
         "parquet_path": str(upsert.parquet_path),
         "dashboard_path": str(dashboard_path),
+        "household_healthcheck_path": str(household_healthcheck_path),
         "completeness_report_path": str(settings.completeness_json_path),
         "completeness_status": completeness_status,
         "file_coverage_ratio": completeness_coverage_ratio,
@@ -547,6 +555,7 @@ def persist_and_report(
         files_missing_since_last_commit=files_missing_since_last_commit,
         dataset_stale=dataset_stale,
         stale_reasons=tuple(stale_reasons or []),
+        household_healthcheck_path=household_healthcheck_path,
     )
 
     return result, summary_payload

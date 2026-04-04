@@ -86,6 +86,7 @@ class SummaryPayload(TypedDict):
     total_rows: int
     parquet_path: str
     dashboard_path: str
+    household_healthcheck_path: str
     completeness_report_path: str
     completeness_status: str
     file_coverage_ratio: float

@@ -205,6 +205,9 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert completeness_payload["status"] == "fail"
 
     summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
+    assert summary_payload["household_healthcheck_path"] == str(
+        settings.output_path.parent / "household_healthcheck.html"
+    )
     assert summary_payload["completeness_report_path"] == str(settings.completeness_json_path)
     assert summary_payload["completeness_status"] == "fail"
     assert summary_payload["missing_source_file_count"] == 1
@@ -218,6 +221,9 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["hsbc_boundary_table_start_count"] == 0
     assert summary_payload["hsbc_boundary_table_end_count"] == 0
     assert summary_payload["hsbc_boundary_rows_seen_in_table"] == 0
+    assert result.household_healthcheck_path == (
+        settings.output_path.parent / "household_healthcheck.html"
+    )
     assert summary_payload["hsbc_boundary_rows_rejected_outside_table"] == 0
     assert summary_payload["hsbc_boundary_rows_rejected_after_table"] == 0
     assert summary_payload["hsbc_boundary_transition_anomaly_count"] == 0

@@ -13,8 +13,9 @@ from typing import cast
 from tqdm import tqdm
 
 from finance_tooling.backup import create_stage_backup_run
-from finance_tooling.config import Settings
+from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
 from finance_tooling.dashboard import render_dashboard_html
+from finance_tooling.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.models import WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.review_state import apply_review_state
@@ -195,6 +196,14 @@ def _workflow_result_from_summary(
         files_missing_since_last_commit=files_missing_since_last_commit,
         dataset_stale=dataset_stale,
         stale_reasons=stale_reasons,
+        household_healthcheck_path=Path(
+            str(
+                summary_payload.get(
+                    "household_healthcheck_path",
+                    settings.output_path.parent / HOUSEHOLD_HEALTHCHECK_FILENAME,
+                )
+            )
+        ),
     )
 
 
@@ -639,6 +648,7 @@ def run_transform(
         backup_run=backup_run,
         upsert_transactions_fn=upsert_transactions,
         render_dashboard_html_fn=render_dashboard_html,
+        render_household_healthcheck_html_fn=render_household_healthcheck_html,
     )
     progress.update()
     progress.set_postfix_str("update state")
