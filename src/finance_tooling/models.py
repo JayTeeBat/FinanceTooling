@@ -110,3 +110,4 @@ class WorkflowResult:
     files_missing_since_last_commit: int = 0
     dataset_stale: bool = False
     stale_reasons: tuple[str, ...] = ()
+    household_healthcheck_path: Path | None = None

@@ -40,6 +40,7 @@ Advanced/recovery commands:
 
 Stable operator-facing outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
 
+- `household_healthcheck.html`
 - `transform_transactions.parquet`
 - `transform_transactions.csv`
 - `transform_run_summary.json`
@@ -127,8 +128,9 @@ Detailed guides:
   categorization/project configs under `${FINANCE_STATEMENTS_PATH}/../config/backup/transform/<run_id>/`.
   The latest 10 transform runs are retained.
 - Writes canonical outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
-  `transform_transactions.parquet`, `transform_transactions.csv`,
-  `transform_run_summary.json`, and `transform_dashboard.html`.
+  `household_healthcheck.html`, `transform_transactions.parquet`,
+  `transform_transactions.csv`, `transform_run_summary.json`, and
+  `transform_dashboard.html`.
 - Writes optional diagnostics under `${FINANCE_PROCESSED_PATH}/state/`,
   including `transform_completeness_report.json` and, when explicitly enabled
   for compatibility, `transform_transactions.json`.
@@ -147,6 +149,7 @@ Detailed guides:
 
 Dashboard output:
 - `${FINANCE_PROCESSED_PATH}/outputs/transform_dashboard.html`
+- `${FINANCE_PROCESSED_PATH}/outputs/household_healthcheck.html`
 - Open it in a browser after `transform` or `update`.
 
 ### Advanced and recovery commands
@@ -386,6 +389,7 @@ mismatches are emitted as warnings and included in transform-summary reconciliat
 ## Outputs
 
 - `processed/outputs/`
+  - `household_healthcheck.html`
   - `transform_dashboard.html`
   - `transform_transactions.parquet`
   - `transform_transactions.csv`
