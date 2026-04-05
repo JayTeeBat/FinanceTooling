@@ -28,6 +28,11 @@ CANONICAL_TRANSACTION_COLUMNS = (
     "category_source",
     "category_rule_id",
     "cashflow_type",
+    "from_account_ref",
+    "to_account_ref",
+    "from_account_type",
+    "to_account_type",
+    "account_inference_source",
     "project",
     "project_tags",
     "project_source",
@@ -60,6 +65,11 @@ class SupportsCanonicalization(Protocol):
     category_source: str | None
     category_rule_id: str | None
     cashflow_type: str | None
+    from_account_ref: str | None
+    to_account_ref: str | None
+    from_account_type: str | None
+    to_account_type: str | None
+    account_inference_source: str | None
     project: str | None
     project_tags: tuple[str, ...]
     project_source: str | None
@@ -92,6 +102,11 @@ class CanonicalTransaction:
     category_source: str | None
     category_rule_id: str | None
     cashflow_type: str | None
+    from_account_ref: str | None
+    to_account_ref: str | None
+    from_account_type: str | None
+    to_account_type: str | None
+    account_inference_source: str | None
     project: str | None
     project_tags: tuple[str, ...]
     project_source: str | None
@@ -169,6 +184,11 @@ def canonical_transaction_from_enriched(
         category_source=transaction.category_source,
         category_rule_id=transaction.category_rule_id,
         cashflow_type=transaction.cashflow_type,
+        from_account_ref=transaction.from_account_ref,
+        to_account_ref=transaction.to_account_ref,
+        from_account_type=transaction.from_account_type,
+        to_account_type=transaction.to_account_type,
+        account_inference_source=transaction.account_inference_source,
         project=transaction.project,
         project_tags=transaction.project_tags,
         project_source=transaction.project_source,
@@ -205,6 +225,11 @@ def canonical_dataframe_from_transactions(
             "category_source": tx.category_source,
             "category_rule_id": tx.category_rule_id,
             "cashflow_type": tx.cashflow_type,
+            "from_account_ref": tx.from_account_ref,
+            "to_account_ref": tx.to_account_ref,
+            "from_account_type": tx.from_account_type,
+            "to_account_type": tx.to_account_type,
+            "account_inference_source": tx.account_inference_source,
             "project": tx.project,
             "project_tags": _serialize_project_tags(tx.project_tags),
             "project_source": tx.project_source,
@@ -284,6 +309,11 @@ def canonical_transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Canon
                 ),
                 category_rule_id=_optional_str(row.get("category_rule_id")),
                 cashflow_type=_optional_str(row.get("cashflow_type")),
+                from_account_ref=_optional_str(row.get("from_account_ref")),
+                to_account_ref=_optional_str(row.get("to_account_ref")),
+                from_account_type=_optional_str(row.get("from_account_type")),
+                to_account_type=_optional_str(row.get("to_account_type")),
+                account_inference_source=_optional_str(row.get("account_inference_source")),
                 project=_optional_str(row.get("project")),
                 project_tags=_deserialize_project_tags(row.get("project_tags")),
                 project_source=_optional_str(row.get("project_source")),

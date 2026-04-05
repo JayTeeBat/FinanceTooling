@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from finance_tooling.account_inference import load_account_inference_config
 from finance_tooling.classify import (
     build_classification_diagnostics,
     classify_transactions_with_diagnostics,
@@ -94,9 +95,13 @@ def enrich_transactions(transactions: list[Transaction], settings: Settings) -> 
     transaction_overrides, transaction_override_warnings = load_transaction_override_store(
         settings.transaction_overrides_path
     )
+    account_inference_config, account_inference_warnings = load_account_inference_config(
+        settings.account_rules_path
+    )
     warnings.extend(category_rule_warnings)
     warnings.extend(project_warnings)
     warnings.extend(transaction_override_warnings)
+    warnings.extend(account_inference_warnings)
 
     classified, _classification_diagnostics = classify_transactions_with_diagnostics(
         transactions,
@@ -120,6 +125,8 @@ def enrich_transactions(transactions: list[Transaction], settings: Settings) -> 
         classification_diagnostics=classification_diagnostics,
         classification_rules=category_rules,
         transaction_override_store=transaction_overrides,
+        account_inference_config=account_inference_config,
+        account_inference_warnings=account_inference_warnings,
         manual_category_carry_forward_applied_count=carry_forward.diagnostics.applied_count,
         manual_category_carry_forward_ambiguous_skipped_count=(
             carry_forward.diagnostics.ambiguous_skipped_count

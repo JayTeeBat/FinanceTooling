@@ -104,6 +104,49 @@ def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
     ]
 
 
+def _build_account_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
+    if dataframe.empty or (
+        "from_account_type" not in dataframe.columns and "to_account_type" not in dataframe.columns
+    ):
+        return []
+
+    from_type = (
+        dataframe.get("from_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    to_type = (
+        dataframe.get("to_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    unknown_mask = from_type.isin(("", "unknown")) | to_type.isin(("", "unknown"))
+    unknown_count = int(unknown_mask.sum())
+    if unknown_count == 0:
+        return []
+
+    source_series = (
+        dataframe.get(
+            "account_inference_source", pd.Series("", index=dataframe.index, dtype="object")
+        )
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .replace("", "unknown")
+    )
+    source_counts = {
+        str(index): int(value)
+        for index, value in source_series.loc[unknown_mask].value_counts().items()
+    }
+    summary = ", ".join(f"{key}={value}" for key, value in sorted(source_counts.items()))
+    transaction_word = "transaction" if unknown_count == 1 else "transactions"
+    return [f"Account boundary unresolved for {unknown_count} {transaction_word}; sources: {summary}"]
+
+
 def _load_projecting(path: Path | None) -> tuple[ProjectConfig, list[str]]:
     if path is None:
         return ProjectConfig(fallback_project="Unassigned", rules=(), overrides=()), []
@@ -147,6 +190,7 @@ def _build_dashboard_payload(
             *project_warnings,
             *budget_warnings,
             *_build_cashflow_diagnostic_warnings(projected),
+            *_build_account_diagnostic_warnings(projected),
         ],
     }
     return payload

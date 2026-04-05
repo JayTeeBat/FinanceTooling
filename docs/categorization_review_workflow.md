@@ -91,6 +91,11 @@ Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
   - Reusable defaults come from category taxonomy in `category_rules.yaml`.
   - Rare transaction-level exceptions can be edited directly in
     `transaction_overrides.yaml`.
+- account-boundary fields are also intentionally not part of the review workbook
+  in v1.
+  - Reusable internal/counterparty inference comes from `account_rules.yaml`.
+  - Rare transaction-level account-side exceptions can be edited directly in
+    `transaction_overrides.yaml`.
 - `existing_project_tags` is informational; do not edit.
 - `reviewed` is persisted separately and also projected into
   `outputs/transform_transactions.csv` after `transform`.
