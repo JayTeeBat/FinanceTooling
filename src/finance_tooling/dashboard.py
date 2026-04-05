@@ -955,6 +955,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.amountEur === null || tx.neutralTransfer) {
             continue;
           }
+          const isIncome = tx.category.toLowerCase() === "income";
+          if (tx.amountEur > 0 && !isIncome) {
+            continue;
+          }
           if (tx.amountEur < 0 && tx.trackedSavings) {
             continue;
           }
@@ -1308,14 +1312,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.amountEur === null) {
             continue;
           }
+          const isIncome = tx.category.toLowerCase() === "income";
           if (tx.neutralTransfer) {
             transfers += Math.abs(tx.amountEur);
             continue;
           }
-          if (tx.amountEur >= 0) {
+          if (tx.amountEur > 0 && isIncome) {
             income += tx.amountEur;
             net += tx.amountEur;
-          } else if (!tx.trackedSavings) {
+          } else if (tx.amountEur < 0 && !tx.trackedSavings) {
             expense += Math.abs(tx.amountEur);
             net += tx.amountEur;
           }

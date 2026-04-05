@@ -241,3 +241,58 @@ def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path
     assert transactions[2]["category"] == "Income"
     assert transactions[2]["project"] == "Unassigned"
     assert transactions[2]["amount_eur"] == 1000.5
+
+
+def test_render_dashboard_html_cashflow_income_uses_income_category_only(tmp_path: Path) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "booking_date": "2025-01-05",
+                "description": "Salary",
+                "amount_native": 1000.0,
+                "amount_eur": 1000.0,
+                "category": "Income",
+                "bank": "HSBC",
+                "account_label": None,
+            },
+            {
+                "booking_date": "2025-02-10",
+                "description": "Refund",
+                "amount_native": 80.0,
+                "amount_eur": 80.0,
+                "category": "Shopping",
+                "bank": "HSBC",
+                "account_label": None,
+            },
+            {
+                "booking_date": "2025-03-12",
+                "description": "Groceries",
+                "amount_native": -200.0,
+                "amount_eur": -200.0,
+                "category": "Groceries",
+                "bank": "HSBC",
+                "account_label": None,
+            },
+        ]
+    )
+
+    destination = tmp_path / "dashboard.html"
+    render_dashboard_html(
+        frame,
+        destination,
+        base_currency="EUR",
+        files_scanned=1,
+        files_failed=0,
+        new_rows=3,
+        project_rules_path=None,
+        budget_targets_path=None,
+    )
+
+    payload = _extract_payload(destination.read_text(encoding="utf-8"))
+    cashflow_yoy = cast(dict[str, object], payload["cashflow_yoy"])
+    years = cast(list[dict[str, object]], cashflow_yoy["years"])
+
+    assert years[0]["year"] == 2025
+    assert years[0]["income"] == 1000.0
+    assert years[0]["expenses"] == 200.0
+    assert years[0]["net_cashflow"] == 800.0

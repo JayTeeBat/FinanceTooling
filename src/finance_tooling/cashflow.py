@@ -141,7 +141,8 @@ def _period_metrics(rows: pd.DataFrame) -> dict[str, float | None]:
             "cashflow_margin": None,
         }
 
-    inflows = (rows["amount_eur"] > 0) & ~rows["neutral_transfer"]
+    income_categories = rows["category"].astype("string").str.strip().str.casefold().eq("income")
+    inflows = (rows["amount_eur"] > 0) & income_categories & ~rows["neutral_transfer"]
     expenses = (rows["amount_eur"] < 0) & ~rows["neutral_transfer"] & ~rows["tracked_savings"]
     income_total = float(rows.loc[inflows, "amount_eur"].sum())
     expense_total = float((-rows.loc[expenses, "amount_eur"]).sum())
