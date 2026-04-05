@@ -9,36 +9,6 @@ from pathlib import Path
 
 from finance_tooling.backup import BackupRunResult
 
-CANONICAL_TRANSACTION_COLUMNS = [
-    "transaction_id",
-    "booking_date",
-    "description",
-    "source_record_index",
-    "amount_native",
-    "currency",
-    "fx_rate_to_eur",
-    "fx_rate_date",
-    "fx_source",
-    "amount_eur",
-    "category",
-    "subcategory",
-    "category_confidence",
-    "category_source",
-    "category_rule_id",
-    "cashflow_type",
-    "project",
-    "project_tags",
-    "project_source",
-    "reviewed",
-    "bank",
-    "account_label",
-    "source_document_id",
-    "source_file",
-    "source_file_mtime",
-    "parser",
-    "ingested_at",
-]
-
 
 @dataclass(frozen=True)
 class Transaction:

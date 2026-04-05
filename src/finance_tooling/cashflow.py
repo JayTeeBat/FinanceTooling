@@ -8,9 +8,12 @@ from typing import cast
 
 import pandas as pd
 
+from finance_tooling.canonical import (
+    CANONICAL_TRANSACTION_COLUMNS,
+    canonical_transactions_from_dataframe,
+    ensure_canonical_dataframe_schema,
+)
 from finance_tooling.classify import ClassificationRules, resolve_taxonomy_cashflow_type
-from finance_tooling.models import CANONICAL_TRANSACTION_COLUMNS
-from finance_tooling.store import transactions_from_dataframe
 from finance_tooling.transaction_overrides import (
     TransactionOverrideStore,
     iter_matching_override_entries,
@@ -87,12 +90,10 @@ def resolve_cashflow_types_for_dataframe(
             unknown_categories=[],
         )
 
-    normalized_frame = dataframe.copy()
-    for column in CANONICAL_TRANSACTION_COLUMNS:
-        if column not in normalized_frame.columns:
-            normalized_frame[column] = None
-
-    transactions = transactions_from_dataframe(normalized_frame[CANONICAL_TRANSACTION_COLUMNS])
+    normalized_frame = ensure_canonical_dataframe_schema(dataframe)
+    transactions = canonical_transactions_from_dataframe(
+        normalized_frame[list(CANONICAL_TRANSACTION_COLUMNS)]
+    )
     resolved_types: list[str] = []
     for tx in transactions:
         resolved_type = resolve_taxonomy_cashflow_type(tx.category, rules=classification_rules)
