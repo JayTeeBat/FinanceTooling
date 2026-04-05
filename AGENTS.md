@@ -176,6 +176,20 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-04-05 - codex
+- Branch: `main`
+- Completed:
+  - Split finance reporting from operational diagnostics so `transform_run_summary.json` now stays finance-focused while `workflow_pipeline_state.json` exposes parser, reconciliation, HSBC, and stale-state diagnostics.
+  - Added a shared YoY cashflow aggregation layer and surfaced the resulting annual and YTD cashflow metrics in `transform_dashboard.html` and the finance summary payload.
+  - Updated metrics/perf consumers, README output-contract docs, and focused tests to match the new boundary.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/cashflow.py src/finance_tooling/dashboard.py src/finance_tooling/household_healthcheck.py src/finance_tooling/metrics_log.py src/finance_tooling/perf_check.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/types.py src/finance_tooling/workflow_status.py tests/test_dashboard.py tests/test_perf_check.py tests/test_workflow_stages.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_dashboard.py tests/test_metrics_log.py tests/test_perf_check.py tests/test_workflow_status.py tests/test_workflow_stages.py`: pass
+- Open items:
+  - `household_healthcheck.html` remains as a secondary compatibility dashboard and still overlaps somewhat with the primary finance dashboard.
+- Next action:
+  - Decide whether to keep `household_healthcheck.html` long-term or formally deprecate it after the finance dashboard settles.
+
 ### 2026-04-03 - codex
 - Branch: `codex/fix-rule-drift-monitoring`
 - Completed:
@@ -201,16 +215,3 @@ Success target for the 2026 validation campaign:
   - The broader command-output cleanup on this branch is still waiting to be packaged into a focused PR.
 - Next action:
   - Package the command-output cleanup, including the new `review-import` default, into a focused PR.
-
-### 2026-04-03 - codex
-- Branch: `main`
-- Completed:
-  - Tightened the public workflow contract around the CLI, making `update`, `review-export`, `review-import`, and `workflow-status` the clearly recommended user path while marking `ingest` and `transform` as advanced stage-level commands.
-  - Aligned config comments, README/docs, and tests around the `processed/outputs/` vs `processed/state/` split, including documenting `transform_transactions.json` as compatibility-only and fixing the workflow-status snapshot path to `state/workflow_pipeline_state.json`.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/config.py src/finance_tooling/__main__.py src/finance_tooling/commands/common.py src/finance_tooling/commands/ingest.py src/finance_tooling/commands/transform.py src/finance_tooling/commands/update.py src/finance_tooling/commands/workflow_status.py tests/test_config.py tests/test_cli_dispatch.py tests/test_workflow_status.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_config.py tests/test_cli_dispatch.py tests/test_workflow_status.py`: pass
-- Open items:
-  - The env-var surface is still broader than the minimal public contract; low-level per-file overrides and cache toggles remain supported but are intentionally de-emphasized rather than removed.
-- Next action:
-  - Decide whether to follow this contract pass with a smaller compatibility/deprecation pass for low-level env/path overrides and optional JSON export behavior.

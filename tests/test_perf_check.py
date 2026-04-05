@@ -212,7 +212,7 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
         "reporting": 1.25,
     }
     assert '"files_scanned": 1' in payload
-    assert '"parser_low_confidence_file_count": 2' in payload
+    assert '"parser_low_confidence_file_count": 0' in payload
     assert '"uncategorized_ratio": 0.1' in payload
     assert '"ingest_parser_duration_seconds_by_parser"' in payload
     assert '"ingest_duration_seconds_by_bank"' in payload

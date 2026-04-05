@@ -86,6 +86,16 @@ def _summary_float(payload: Mapping[str, object], key: str) -> float:
     return 0.0
 
 
+def _load_json(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def _required_transform_outputs(settings: Settings) -> tuple[Path, ...]:
     outputs = [
         settings.master_parquet_path,
@@ -144,6 +154,13 @@ def _workflow_result_from_summary(
     dataset_stale: bool,
     stale_reasons: tuple[str, ...],
 ) -> WorkflowResult:
+    completeness_payload = _load_json(settings.completeness_json_path) or {}
+    completeness_status = str(completeness_payload.get("status", "pass"))
+    completeness_coverage_ratio = _summary_float(completeness_payload, "file_coverage_ratio")
+    missing_source_file_count = _summary_int(completeness_payload, "missing_source_file_count")
+    reconciliation = completeness_payload.get("statement_reconciliation", {})
+    if not isinstance(reconciliation, dict):
+        reconciliation = {}
     return WorkflowResult(
         dashboard_path=settings.output_path,
         parquet_path=settings.master_parquet_path,
@@ -156,21 +173,17 @@ def _workflow_result_from_summary(
         transactions_parsed=transactions_parsed,
         new_rows=new_rows,
         total_rows=_summary_int(summary_payload, "total_rows"),
-        completeness_status=str(summary_payload.get("completeness_status", "pass")),
-        completeness_coverage_ratio=_summary_float(summary_payload, "file_coverage_ratio"),
-        missing_source_file_count=_summary_int(summary_payload, "missing_source_file_count"),
+        completeness_status=completeness_status,
+        completeness_coverage_ratio=completeness_coverage_ratio,
+        missing_source_file_count=missing_source_file_count,
         reconciliation_checkable_file_count=_summary_int(
-            summary_payload, "statement_reconciliation_checkable_file_count"
+            reconciliation, "checkable_file_count"
         ),
-        reconciliation_fail_count=_summary_int(
-            summary_payload, "statement_reconciliation_fail_count"
-        ),
+        reconciliation_fail_count=_summary_int(reconciliation, "fail_count"),
         reconciliation_uncheckable_file_count=_summary_int(
-            summary_payload, "statement_reconciliation_uncheckable_file_count"
+            reconciliation, "uncheckable_file_count"
         ),
-        reconciliation_pass_ratio=cast(
-            float | None, summary_payload.get("statement_reconciliation_pass_ratio")
-        ),
+        reconciliation_pass_ratio=cast(float | None, reconciliation.get("pass_ratio")),
         categorized_count=_summary_int(summary_payload, "categorized_count"),
         uncategorized_count=_summary_int(summary_payload, "uncategorized_count"),
         categorized_amount_eur_abs=_summary_float(summary_payload, "categorized_amount_eur_abs"),

@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from finance_tooling.budgeting import BudgetConfig, budget_targets_to_rows, load_budget_config
+from finance_tooling.cashflow import build_cashflow_rows_frame, build_cashflow_yoy_summary
 from finance_tooling.projecting import (
     ProjectConfig,
     assign_projects_to_dataframe,
@@ -25,37 +26,48 @@ def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: 
 def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     if dataframe.empty:
         return pd.DataFrame(
-            columns=["booking_date", "category", "project", "amount_eur", "is_transfer"]
+            columns=[
+                "booking_date",
+                "category",
+                "project",
+                "amount_eur",
+                "is_transfer",
+                "tracked_savings",
+                "neutral_transfer",
+            ]
         )
 
-    working = dataframe.reindex(
-        columns=["booking_date", "category", "project", "amount_eur"]
-    ).copy()
-
-    booking_dates = pd.to_datetime(working["booking_date"], errors="coerce")
-    working["booking_date"] = booking_dates.dt.strftime("%Y-%m-%d")
-    working = working.loc[working["booking_date"].notna()].copy()
+    working = build_cashflow_rows_frame(dataframe)
     if working.empty:
         return pd.DataFrame(
-            columns=["booking_date", "category", "project", "amount_eur", "is_transfer"]
+            columns=[
+                "booking_date",
+                "category",
+                "project",
+                "amount_eur",
+                "is_transfer",
+                "tracked_savings",
+                "neutral_transfer",
+            ]
         )
 
-    working["category"] = _normalized_string_series(
-        working,
-        "category",
-        default="Uncategorized",
-    )
-    working["project"] = _normalized_string_series(
-        working,
-        "project",
-        default="Unassigned",
-    )
+    working["project"] = _normalized_string_series(working, "project", default="Unassigned")
     amounts = pd.to_numeric(working["amount_eur"], errors="coerce")
     working["amount_eur"] = amounts.astype(object)
     working.loc[amounts.isna(), "amount_eur"] = None
     working["is_transfer"] = working["category"].str.casefold().eq("transfers")
 
-    return working.sort_values("booking_date", kind="stable", ignore_index=True)
+    return working[
+        [
+            "booking_date",
+            "category",
+            "project",
+            "amount_eur",
+            "is_transfer",
+            "tracked_savings",
+            "neutral_transfer",
+        ]
+    ].sort_values("booking_date", kind="stable", ignore_index=True)
 
 
 def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
@@ -101,6 +113,7 @@ def _build_dashboard_payload(
         },
         "transactions": _build_transaction_rows(projected),
         "budget_targets": budget_targets_to_rows(budget_config),
+        "cashflow_yoy": build_cashflow_yoy_summary(projected),
         "warnings": [*project_warnings, *budget_warnings],
     }
     return payload
@@ -386,6 +399,48 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       font-size: 13px;
       padding: 8px 0;
     }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .cashflow-grid {
+      grid-template-columns: minmax(620px, 1.8fr) minmax(280px, 1fr);
+      align-items: start;
+    }
+    .summary-card {
+      display: grid;
+      gap: 10px;
+    }
+    .cashflow-table table {
+      min-width: 0;
+    }
+    .summary-note {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .metric-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .metric-line span:first-child {
+      color: var(--muted);
+    }
+    .delta-positive {
+      color: var(--positive);
+      font-weight: 600;
+    }
+    .delta-negative {
+      color: var(--negative);
+      font-weight: 600;
+    }
+    .delta-neutral {
+      color: var(--muted);
+      font-weight: 600;
+    }
     @media (max-width: 720px) {
       .shell {
         padding: 12px;
@@ -397,6 +452,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         min-width: 640px;
       }
     }
+    @media (max-width: 980px) {
+      .cashflow-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -405,6 +465,30 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       <h1>Interactive Finance Dashboard</h1>
       <p id="generated-at">Generated -</p>
       <div class="meta-line" id="run-meta"></div>
+    </section>
+
+    <section class="card">
+      <h2>Year-over-Year Cashflow</h2>
+      <p class="summary-note">Full-year rows include completed calendar years only. The current year appears separately as YTD and this section does not change with the time-window filters below.</p>
+      <div class="summary-grid cashflow-grid" style="margin-top: 10px;">
+        <article class="summary-card">
+          <div class="table-wrap cashflow-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>Income</th>
+                  <th>Expenses</th>
+                  <th>Net Cashflow</th>
+                  <th>Margin</th>
+                </tr>
+              </thead>
+              <tbody id="cashflow-yoy-body"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="summary-card" id="cashflow-ytd-card"></article>
+      </div>
     </section>
 
     <section class="card">
@@ -524,7 +608,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function parsePayload() {
         const node = document.getElementById("dashboard-data");
         if (!node) {
-          return { meta: {}, transactions: [], budget_targets: [], warnings: [] };
+          return { meta: {}, transactions: [], budget_targets: [], cashflow_yoy: {}, warnings: [] };
         }
         try {
           const parsed = JSON.parse(node.textContent || "{}");
@@ -532,11 +616,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             meta: parsed.meta || {},
             transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
             budget_targets: Array.isArray(parsed.budget_targets) ? parsed.budget_targets : [],
+            cashflow_yoy: parsed.cashflow_yoy || {},
             warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
           };
         } catch (error) {
           console.error("Failed to parse embedded dashboard payload", error);
-          return { meta: {}, transactions: [], budget_targets: [], warnings: ["Invalid payload"] };
+          return {
+            meta: {},
+            transactions: [],
+            budget_targets: [],
+            cashflow_yoy: {},
+            warnings: ["Invalid payload"],
+          };
         }
       }
 
@@ -643,6 +734,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               : "Unassigned",
             amountEur: toNumber(item.amount_eur),
             isTransfer: Boolean(item.is_transfer) || (typeof item.category === "string" && item.category.trim().toLowerCase() === "transfers"),
+            trackedSavings: Boolean(item.tracked_savings),
+            neutralTransfer: Boolean(item.neutral_transfer),
           };
         })
         .filter((item) => item !== null);
@@ -675,6 +768,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       const yoyChart = document.getElementById("yoy-chart");
       const budgetVarianceChart = document.getElementById("budget-variance-chart");
       const budgetTableBody = document.getElementById("budget-table-body");
+      const cashflowYoyBody = document.getElementById("cashflow-yoy-body");
+      const cashflowYtdCard = document.getElementById("cashflow-ytd-card");
 
       const minDate = transactions.length > 0 ? transactions[0].bookingDate : formatDate(new Date());
       const maxDate = transactions.length > 0 ? transactions[transactions.length - 1].bookingDate : formatDate(new Date());
@@ -709,6 +804,26 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           nextEnd = maxDate;
         }
         return { startDate: nextStart, endDate: nextEnd };
+      }
+
+      function normalizeCustomFullYearRange(startDate, endDate) {
+        if (windowSelect.value !== "custom") {
+          return { startDate, endDate };
+        }
+        const startMatch = /^(\\d{4})-01-01$/.exec(startDate);
+        const endMatch = /^(\\d{4})-01-01$/.exec(endDate);
+        if (!startMatch || !endMatch) {
+          return { startDate, endDate };
+        }
+        const startYear = Number(startMatch[1]);
+        const endYear = Number(endMatch[1]);
+        if (!Number.isFinite(startYear) || !Number.isFinite(endYear) || endYear !== startYear + 1) {
+          return { startDate, endDate };
+        }
+        return {
+          startDate,
+          endDate: String(startYear) + "-12-31",
+        };
       }
 
       function rangeForLastMonths(monthCount) {
@@ -837,7 +952,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateMonthlyNet(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.isTransfer) {
+          if (tx.amountEur === null) {
+            continue;
+          }
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isIncome = normalizedCategory === "income";
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isIncome && !isExpenseCategory) {
             continue;
           }
           const existing = totals.get(tx.month) || 0;
@@ -852,13 +975,22 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (tx.amountEur === null) {
+            continue;
+          }
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
-          totals.set(tx.category, existing + Math.abs(tx.amountEur));
+          totals.set(tx.category, existing - tx.amountEur);
         }
-        const rows = Array.from(totals.entries()).map(([category, value]) => ({ category, value }));
+        const rows = Array.from(totals.entries())
+          .map(([category, value]) => ({ category, value }))
+          .filter((row) => row.value > 0);
         rows.sort((left, right) => right.value - left.value || left.category.localeCompare(right.category));
         return rows.slice(0, 12);
       }
@@ -866,7 +998,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function collectYears(filtered) {
         const years = new Set();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (tx.amountEur === null) {
+            continue;
+          }
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
             continue;
           }
           years.add(Number(tx.bookingDate.slice(0, 4)));
@@ -896,7 +1035,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const current = new Array(12).fill(0);
         const previous = new Array(12).fill(0);
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (tx.amountEur === null) {
+            continue;
+          }
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
             continue;
           }
           const year = Number(tx.bookingDate.slice(0, 4));
@@ -904,28 +1050,37 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (month < 0 || month > 11) {
             continue;
           }
-          const spend = Math.abs(tx.amountEur);
+          const spend = -tx.amountEur;
           if (year === selectedYear) {
             current[month] += spend;
           } else if (year === selectedYear - 1) {
             previous[month] += spend;
           }
         }
-        return monthNames.map((label, index) => ({
-          month: label,
-          current: current[index],
-          previous: previous[index],
-        }));
+        return monthNames
+          .map((label, index) => ({
+            month: label,
+            current: current[index],
+            previous: previous[index],
+          }))
+          .filter((row) => row.current > 0 || row.previous > 0);
       }
 
       function buildBudgetRows(filtered, state) {
         const categoryActual = new Map();
         const projectActual = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (tx.amountEur === null) {
             continue;
           }
-          const spend = Math.abs(tx.amountEur);
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
+            continue;
+          }
+          const spend = -tx.amountEur;
           const categoryKey = tx.month + "||" + tx.category.toLowerCase();
           categoryActual.set(categoryKey, (categoryActual.get(categoryKey) || 0) + spend);
           const projectKey = tx.month + "||" + tx.category.toLowerCase() + "||" + tx.project.toLowerCase();
@@ -980,6 +1135,79 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         if (node) {
           node.textContent = value;
         }
+      }
+
+      function formatPercent(value) {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          return "-";
+        }
+        return (value * 100).toFixed(1) + "%";
+      }
+
+      function renderCashflowYoy() {
+        const yearlyRows = Array.isArray(payload.cashflow_yoy && payload.cashflow_yoy.years)
+          ? payload.cashflow_yoy.years
+          : [];
+        if (!yearlyRows.length) {
+          cashflowYoyBody.innerHTML =
+            "<tr><td colspan=\\"5\\"><span class=\\"empty\\">Not enough completed years to show year-over-year cashflow yet.</span></td></tr>";
+        } else {
+          cashflowYoyBody.innerHTML = yearlyRows
+            .map((row) => {
+              const netValue = toNumber(row.net_cashflow) || 0;
+              const netClass = netValue > 0 ? "delta-positive" : (netValue < 0 ? "delta-negative" : "delta-neutral");
+              return (
+                "<tr>" +
+                  "<td>" + escapeHtml(String(row.year || "-")) + "</td>" +
+                  "<td>" + escapeHtml(money.format(toNumber(row.income) || 0)) + "</td>" +
+                  "<td>" + escapeHtml(money.format(toNumber(row.expenses) || 0)) + "</td>" +
+                  "<td class=\\"" + netClass + "\\">" +
+                    escapeHtml(money.format(netValue)) +
+                  "</td>" +
+                  "<td>" + escapeHtml(formatPercent(toNumber(row.cashflow_margin))) + "</td>" +
+                "</tr>"
+              );
+            })
+            .join("");
+        }
+
+        const ytd = payload.cashflow_yoy && typeof payload.cashflow_yoy.current_ytd === "object"
+          ? payload.cashflow_yoy.current_ytd
+          : null;
+        if (!ytd || !ytd.current || !ytd.prior || !ytd.delta) {
+          cashflowYtdCard.innerHTML =
+            "<h2>Current YTD</h2><p class=\\"empty\\">No current-year YTD comparison is available yet.</p>";
+          return;
+        }
+
+        const netDelta = toNumber(ytd.delta.net_cashflow);
+        const deltaClass = netDelta === null
+          ? "delta-neutral"
+          : (netDelta > 0 ? "delta-positive" : (netDelta < 0 ? "delta-negative" : "delta-neutral"));
+        cashflowYtdCard.innerHTML =
+          "<h2>" + escapeHtml(String(ytd.label || "Current YTD")) + "</h2>" +
+          "<p class=\\"summary-note\\">" +
+            escapeHtml(String(ytd.current_period_start || "")) +
+            " to " +
+            escapeHtml(String(ytd.current_period_end || "")) +
+          "</p>" +
+          "<div class=\\"metric-line\\"><span>Income</span><strong>" +
+            escapeHtml(money.format(toNumber(ytd.current.income) || 0)) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>Expenses</span><strong>" +
+            escapeHtml(money.format(toNumber(ytd.current.expenses) || 0)) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>Net cashflow</span><strong>" +
+            escapeHtml(money.format(toNumber(ytd.current.net_cashflow) || 0)) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>Margin</span><strong>" +
+            escapeHtml(formatPercent(toNumber(ytd.current.cashflow_margin))) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>vs prior YTD</span><strong class=\\"" + deltaClass + "\\">" +
+            escapeHtml(money.format(netDelta || 0)) +
+            " / " +
+            escapeHtml(formatPercent(toNumber(ytd.delta.cashflow_margin))) +
+            "</strong></div>";
       }
 
       function renderBarRows(container, rows, formatValue, classForValue) {
@@ -1077,6 +1305,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           state.endDate = state.startDate;
           endInput.value = state.endDate;
         }
+        const normalizedRange = normalizeCustomFullYearRange(state.startDate, state.endDate);
+        state.startDate = normalizedRange.startDate;
+        state.endDate = normalizedRange.endDate;
+        if (startInput.value !== state.startDate) {
+          startInput.value = state.startDate;
+        }
+        if (endInput.value !== state.endDate) {
+          endInput.value = state.endDate;
+        }
 
         const filtered = filterTransactions(state);
         const categoryProjectFiltered = filterByCategoryProject(state);
@@ -1088,15 +1325,21 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.amountEur === null) {
             continue;
           }
-          if (tx.isTransfer) {
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isIncome = normalizedCategory === "income";
+          const isTransfer = normalizedCategory === "transfers";
+          const isNonPersonal = normalizedCategory === "non personal transactions";
+          const isExpenseCategory = !isIncome && !isTransfer && !isNonPersonal;
+          if (isTransfer) {
             transfers += Math.abs(tx.amountEur);
             continue;
           }
-          net += tx.amountEur;
-          if (tx.amountEur >= 0) {
+          if (isIncome) {
             income += tx.amountEur;
-          } else {
-            expense += Math.abs(tx.amountEur);
+            net += tx.amountEur;
+          } else if (isExpenseCategory) {
+            expense -= tx.amountEur;
+            net += tx.amountEur;
           }
         }
 
@@ -1217,6 +1460,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
       renderMeta();
       renderWarnings();
+      renderCashflowYoy();
       initializeFilters();
       refreshDashboard();
     })();

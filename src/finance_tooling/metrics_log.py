@@ -131,11 +131,26 @@ def _pct(numerator: float, denominator: float) -> float:
     return (numerator / denominator) * 100.0
 
 
+def _load_completeness_payload(summary_path: Path, payload: dict[str, object]) -> dict[str, object]:
+    completeness_path_raw = payload.get("completeness_report_path")
+    candidate = (
+        Path(completeness_path_raw)
+        if isinstance(completeness_path_raw, str) and completeness_path_raw
+        else summary_path.parent.parent / "state" / "transform_completeness_report.json"
+    )
+    try:
+        completeness_payload = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return completeness_payload if isinstance(completeness_payload, dict) else {}
+
+
 def build_snapshot(
     summary_path: Path, *, commit: str | None, branch: str | None
 ) -> MetricsSnapshot:
     """Build a metrics snapshot from a workflow run summary."""
     payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    completeness_payload = _load_completeness_payload(summary_path, payload)
 
     files_scanned = _to_int(payload.get("files_scanned"))
     files_failed = _to_int(payload.get("files_failed"))
@@ -146,10 +161,21 @@ def build_snapshot(
     uncategorized_amount_eur_abs = _to_float(
         payload.get("uncategorized_amount_eur_abs"), default=0.0
     )
-    total_amount_eur_abs = _to_float(payload.get("total_amount_eur_abs"), default=0.0)
+    total_income_eur = _to_float(
+        payload.get("total_income_eur", payload.get("total_amount_eur_abs")),
+        default=0.0,
+    )
 
-    file_coverage_ratio = _to_float(payload.get("file_coverage_ratio"), default=0.0)
-    reconciliation_pass_ratio_raw = payload.get("statement_reconciliation_pass_ratio")
+    file_coverage_ratio = _to_float(
+        completeness_payload.get("file_coverage_ratio", payload.get("file_coverage_ratio")),
+        default=0.0,
+    )
+    reconciliation = completeness_payload.get("statement_reconciliation", {})
+    if not isinstance(reconciliation, dict):
+        reconciliation = {}
+    reconciliation_pass_ratio_raw = reconciliation.get(
+        "pass_ratio", payload.get("statement_reconciliation_pass_ratio")
+    )
     reconciliation_pass_ratio = (
         None if reconciliation_pass_ratio_raw is None else _to_float(reconciliation_pass_ratio_raw)
     )
@@ -176,11 +202,11 @@ def build_snapshot(
         categorized_amount_eur_abs=round(categorized_amount_eur_abs, 4),
         uncategorized_amount_eur_abs=round(uncategorized_amount_eur_abs, 4),
         categorized_amount_eur_abs_pct=round(
-            _pct(categorized_amount_eur_abs, total_amount_eur_abs),
+            _pct(categorized_amount_eur_abs, total_income_eur),
             4,
         ),
         uncategorized_amount_eur_abs_pct=round(
-            _pct(uncategorized_amount_eur_abs, total_amount_eur_abs), 4
+            _pct(uncategorized_amount_eur_abs, total_income_eur), 4
         ),
     )
 
@@ -266,7 +292,7 @@ def build_bank_snapshots(
             raw_metric.get("uncategorized_amount_eur_abs"),
             default=0.0,
         )
-        total_amount = categorized_amount_eur_abs + uncategorized_amount_eur_abs
+        income_amount_eur = _to_float(raw_metric.get("income_amount_eur"), default=0.0)
         snapshots.append(
             BankMetricsSnapshot(
                 generated_at=generated_at,
@@ -295,14 +321,14 @@ def build_bank_snapshots(
                 categorized_amount_eur_abs_pct=round(
                     _to_float(
                         raw_metric.get("categorized_amount_eur_abs_ratio"),
-                        default=_pct(categorized_amount_eur_abs, total_amount),
+                        default=_pct(categorized_amount_eur_abs, income_amount_eur),
                     ),
                     4,
                 ),
                 uncategorized_amount_eur_abs_pct=round(
                     _to_float(
                         raw_metric.get("uncategorized_amount_eur_abs_ratio"),
-                        default=_pct(uncategorized_amount_eur_abs, total_amount),
+                        default=_pct(uncategorized_amount_eur_abs, income_amount_eur),
                     ),
                     4,
                 ),

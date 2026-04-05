@@ -237,16 +237,14 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         "summary_path": str(workflow_result.summary_path),
         "completeness_path": str(workflow_result.completeness_path),
         "statement_reconciliation_fail_count": workflow_result.reconciliation_fail_count,
-        "parser_low_confidence_file_count": summary_payload["parser_low_confidence_file_count"],
+        "parser_low_confidence_file_count": ingest.parser_low_confidence_file_count,
         "uncategorized_ratio": summary_payload["uncategorized_ratio"],
-        "ingest_parser_duration_seconds_by_parser": summary_payload[
-            "ingest_parser_duration_seconds_by_parser"
-        ],
-        "ingest_duration_seconds_by_bank": summary_payload["ingest_duration_seconds_by_bank"],
-        "ingest_text_cache_enabled": summary_payload["ingest_text_cache_enabled"],
-        "ingest_text_cache_hits": summary_payload["ingest_text_cache_hits"],
-        "ingest_text_cache_misses": summary_payload["ingest_text_cache_misses"],
-        "ingest_text_cache_write_count": summary_payload["ingest_text_cache_write_count"],
+        "ingest_parser_duration_seconds_by_parser": ingest.parser_duration_seconds_by_parser,
+        "ingest_duration_seconds_by_bank": ingest.duration_seconds_by_bank,
+        "ingest_text_cache_enabled": ingest.text_cache_enabled,
+        "ingest_text_cache_hits": ingest.text_cache_hits,
+        "ingest_text_cache_misses": ingest.text_cache_misses,
+        "ingest_text_cache_write_count": ingest.text_cache_write_count,
     }
     performance_summary_path = (
         state_root_path(settings) / WORKFLOW_PERFORMANCE_SUMMARY_FILENAME

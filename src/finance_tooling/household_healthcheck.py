@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from finance_tooling.cashflow import build_cashflow_rows_frame
 from finance_tooling.classify import normalize_description
 
-_EXCLUDED_CATEGORIES = frozenset({"Non Personal Transactions"})
 _ESSENTIAL_CATEGORIES = frozenset(
     {
         "Housing",
@@ -25,17 +25,6 @@ _ESSENTIAL_CATEGORIES = frozenset(
         "Memberships",
     }
 )
-_TRACKED_SAVINGS_CATEGORIES = frozenset({"Retirement", "House"})
-_TRACKED_SAVINGS_TRANSFER_SUBCATEGORIES = frozenset(
-    {
-        "savings transfer",
-        "transfer / savings",
-        "savings",
-        "investment",
-        "transfer / investment",
-    }
-)
-_TRACKED_SAVINGS_KEYWORDS = frozenset({"retirement", "education", "house", "emergency"})
 
 
 def _serialize_payload(payload: dict[str, object]) -> str:
@@ -43,55 +32,8 @@ def _serialize_payload(payload: dict[str, object]) -> str:
     return serialized.replace("</", "<\\/")
 
 
-def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: str) -> pd.Series:
-    values = dataframe.get(column, pd.Series("", index=dataframe.index, dtype="object"))
-    return values.astype("string").fillna("").str.strip().replace("", default)
-
-
-def _contains_keyword(value: str) -> bool:
-    normalized = value.strip().casefold()
-    return any(keyword in normalized for keyword in _TRACKED_SAVINGS_KEYWORDS)
-
-
-def _project_tags_series(dataframe: pd.DataFrame) -> pd.Series:
-    raw = dataframe.get("project_tags", pd.Series("", index=dataframe.index, dtype="object"))
-
-    def _normalize(value: object) -> str:
-        if value is None or (isinstance(value, float) and pd.isna(value)):
-            return ""
-        if isinstance(value, str):
-            return value
-        if isinstance(value, (list, tuple, set, frozenset)):
-            parts = [str(item).strip() for item in value if str(item).strip()]
-            return ",".join(parts)
-        return str(value)
-
-    return raw.map(_normalize).astype("string").fillna("")
-
-
 def _build_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
-    if dataframe.empty:
-        return pd.DataFrame(
-            columns=[
-                "booking_date",
-                "month",
-                "amount_eur",
-                "category",
-                "description",
-                "project",
-                "subcategory",
-                "tracked_savings",
-                "neutral_transfer",
-                "essential",
-                "uncategorized",
-                "housing",
-            ]
-        )
-
-    working = dataframe.copy()
-    booking_dates = pd.to_datetime(working.get("booking_date"), errors="coerce")
-    working["booking_date"] = booking_dates.dt.strftime("%Y-%m-%d")
-    working = working.loc[working["booking_date"].notna()].copy()
+    working = build_cashflow_rows_frame(dataframe)
     if working.empty:
         return pd.DataFrame(
             columns=[
@@ -110,31 +52,8 @@ def _build_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             ]
         )
 
-    working["month"] = working["booking_date"].str.slice(0, 7)
-    working["category"] = _normalized_string_series(working, "category", default="Uncategorized")
-    working["project"] = _normalized_string_series(working, "project", default="")
-    working["subcategory"] = _normalized_string_series(working, "subcategory", default="")
-    working["description"] = _normalized_string_series(working, "description", default="unknown")
-    working["amount_eur"] = pd.to_numeric(working.get("amount_eur"), errors="coerce").fillna(0.0)
-    working = working.loc[~working["category"].isin(_EXCLUDED_CATEGORIES)].copy()
-
-    project_tags = _project_tags_series(working)
     category_casefold = working["category"].str.casefold()
-    subcategory_casefold = working["subcategory"].str.casefold()
-    project_casefold = working["project"].str.casefold()
-    tags_casefold = project_tags.str.casefold()
     amount_is_outflow = working["amount_eur"] < 0
-    tracked_savings = amount_is_outflow & (
-        working["category"].isin(_TRACKED_SAVINGS_CATEGORIES)
-        | (
-            category_casefold.eq("transfers")
-            & subcategory_casefold.isin(_TRACKED_SAVINGS_TRANSFER_SUBCATEGORIES)
-        )
-        | project_casefold.map(_contains_keyword)
-        | tags_casefold.map(_contains_keyword)
-    )
-    working["tracked_savings"] = tracked_savings
-    working["neutral_transfer"] = category_casefold.eq("transfers") & ~tracked_savings
     working["essential"] = amount_is_outflow & working["category"].isin(_ESSENTIAL_CATEGORIES)
     working["uncategorized"] = category_casefold.eq("uncategorized")
     working["housing"] = amount_is_outflow & category_casefold.eq("housing")
