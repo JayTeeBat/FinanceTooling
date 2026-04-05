@@ -78,6 +78,32 @@ def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
     return rows_frame.to_dict(orient="records")
 
 
+def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
+    rows_frame = build_cashflow_rows_frame(dataframe)
+    if rows_frame.empty or "cashflow_type" not in rows_frame.columns:
+        return []
+
+    unknown_mask = rows_frame["cashflow_type"].astype("string").str.casefold().eq("unknown")
+    unknown_count = int(unknown_mask.sum())
+    if unknown_count == 0:
+        return []
+
+    unknown_categories = sorted(
+        {
+            str(category).strip() or "Uncategorized"
+            for category in rows_frame.loc[unknown_mask, "category"].astype("string").fillna("")
+        }
+    )
+    preview_categories = unknown_categories[:5]
+    if len(unknown_categories) > 5:
+        preview_categories.append(f"+{len(unknown_categories) - 5} more")
+    category_list = ", ".join(preview_categories)
+    transaction_word = "transaction" if unknown_count == 1 else "transactions"
+    return [
+        f"Cashflow type unresolved for {unknown_count} {transaction_word} across: {category_list}"
+    ]
+
+
 def _load_projecting(path: Path | None) -> tuple[ProjectConfig, list[str]]:
     if path is None:
         return ProjectConfig(fallback_project="Unassigned", rules=(), overrides=()), []
@@ -117,7 +143,11 @@ def _build_dashboard_payload(
         "transactions": _build_transaction_rows(projected),
         "budget_targets": budget_targets_to_rows(budget_config),
         "cashflow_yoy": build_cashflow_yoy_summary(projected),
-        "warnings": [*project_warnings, *budget_warnings],
+        "warnings": [
+            *project_warnings,
+            *budget_warnings,
+            *_build_cashflow_diagnostic_warnings(projected),
+        ],
     }
     return payload
 
@@ -598,7 +628,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     </section>
 
     <section class="warning-box" id="warning-box">
-      <strong>Configuration warnings</strong>
+      <strong>Diagnostics</strong>
       <ul id="warning-list"></ul>
     </section>
   </div>

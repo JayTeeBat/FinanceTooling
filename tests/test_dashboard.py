@@ -172,6 +172,41 @@ def test_render_dashboard_html_includes_config_warnings_when_loading_fails(tmp_p
     assert len(warnings) == 2
 
 
+def test_render_dashboard_html_includes_cashflow_type_warning_when_unknown_present(
+    tmp_path: Path,
+) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "booking_date": "2026-01-03",
+                "description": "Mystery income",
+                "amount_native": 20.0,
+                "amount_eur": 20.0,
+                "category": "Uncategorized",
+                "cashflow_type": "unknown",
+                "bank": "HSBC",
+                "account_label": None,
+            }
+        ]
+    )
+
+    destination = tmp_path / "dashboard.html"
+    render_dashboard_html(
+        frame,
+        destination,
+        base_currency="EUR",
+        files_scanned=1,
+        files_failed=0,
+        new_rows=1,
+    )
+
+    payload = _extract_payload(destination.read_text(encoding="utf-8"))
+    warnings = cast(list[str], payload["warnings"])
+    assert len(warnings) == 1
+    assert "Cashflow type unresolved for 1 transaction" in warnings[0]
+    assert "Uncategorized" in warnings[0]
+
+
 def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path: Path) -> None:
     frame = pd.DataFrame(
         [
