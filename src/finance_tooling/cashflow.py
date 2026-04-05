@@ -141,11 +141,13 @@ def _period_metrics(rows: pd.DataFrame) -> dict[str, float | None]:
             "cashflow_margin": None,
         }
 
-    income_categories = rows["category"].astype("string").str.strip().str.casefold().eq("income")
-    inflows = (rows["amount_eur"] > 0) & income_categories & ~rows["neutral_transfer"]
-    expenses = (rows["amount_eur"] < 0) & ~rows["neutral_transfer"] & ~rows["tracked_savings"]
+    category_casefold = rows["category"].astype("string").str.strip().str.casefold()
+    inflows = category_casefold.eq("income")
+    expense_categories = ~category_casefold.isin(
+        frozenset({"income", "transfers", "non personal transactions"})
+    )
     income_total = float(rows.loc[inflows, "amount_eur"].sum())
-    expense_total = float((-rows.loc[expenses, "amount_eur"]).sum())
+    expense_total = float((-rows.loc[expense_categories, "amount_eur"]).sum())
     net_cashflow = income_total - expense_total
     return {
         "income": round(income_total, 2),

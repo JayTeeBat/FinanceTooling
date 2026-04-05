@@ -952,14 +952,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateMonthlyNet(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.neutralTransfer) {
+          if (tx.amountEur === null) {
             continue;
           }
-          const isIncome = tx.category.toLowerCase() === "income";
-          if (tx.amountEur > 0 && !isIncome) {
-            continue;
-          }
-          if (tx.amountEur < 0 && tx.trackedSavings) {
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isIncome = normalizedCategory === "income";
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isIncome && !isExpenseCategory) {
             continue;
           }
           const existing = totals.get(tx.month) || 0;
@@ -974,18 +975,22 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (
-            tx.amountEur === null ||
-            tx.amountEur >= 0 ||
-            tx.neutralTransfer ||
-            tx.trackedSavings
-          ) {
+          if (tx.amountEur === null) {
+            continue;
+          }
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
-          totals.set(tx.category, existing + Math.abs(tx.amountEur));
+          totals.set(tx.category, existing - tx.amountEur);
         }
-        const rows = Array.from(totals.entries()).map(([category, value]) => ({ category, value }));
+        const rows = Array.from(totals.entries())
+          .map(([category, value]) => ({ category, value }))
+          .filter((row) => row.value > 0);
         rows.sort((left, right) => right.value - left.value || left.category.localeCompare(right.category));
         return rows.slice(0, 12);
       }
@@ -993,12 +998,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function collectYears(filtered) {
         const years = new Set();
         for (const tx of filtered) {
-          if (
-            tx.amountEur === null ||
-            tx.amountEur >= 0 ||
-            tx.neutralTransfer ||
-            tx.trackedSavings
-          ) {
+          if (tx.amountEur === null) {
+            continue;
+          }
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
             continue;
           }
           years.add(Number(tx.bookingDate.slice(0, 4)));
@@ -1028,12 +1035,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const current = new Array(12).fill(0);
         const previous = new Array(12).fill(0);
         for (const tx of filtered) {
-          if (
-            tx.amountEur === null ||
-            tx.amountEur >= 0 ||
-            tx.neutralTransfer ||
-            tx.trackedSavings
-          ) {
+          if (tx.amountEur === null) {
+            continue;
+          }
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
             continue;
           }
           const year = Number(tx.bookingDate.slice(0, 4));
@@ -1041,33 +1050,37 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (month < 0 || month > 11) {
             continue;
           }
-          const spend = Math.abs(tx.amountEur);
+          const spend = -tx.amountEur;
           if (year === selectedYear) {
             current[month] += spend;
           } else if (year === selectedYear - 1) {
             previous[month] += spend;
           }
         }
-        return monthNames.map((label, index) => ({
-          month: label,
-          current: current[index],
-          previous: previous[index],
-        }));
+        return monthNames
+          .map((label, index) => ({
+            month: label,
+            current: current[index],
+            previous: previous[index],
+          }))
+          .filter((row) => row.current > 0 || row.previous > 0);
       }
 
       function buildBudgetRows(filtered, state) {
         const categoryActual = new Map();
         const projectActual = new Map();
         for (const tx of filtered) {
-          if (
-            tx.amountEur === null ||
-            tx.amountEur >= 0 ||
-            tx.neutralTransfer ||
-            tx.trackedSavings
-          ) {
+          if (tx.amountEur === null) {
             continue;
           }
-          const spend = Math.abs(tx.amountEur);
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
+            normalizedCategory
+          );
+          if (!isExpenseCategory) {
+            continue;
+          }
+          const spend = -tx.amountEur;
           const categoryKey = tx.month + "||" + tx.category.toLowerCase();
           categoryActual.set(categoryKey, (categoryActual.get(categoryKey) || 0) + spend);
           const projectKey = tx.month + "||" + tx.category.toLowerCase() + "||" + tx.project.toLowerCase();
@@ -1312,16 +1325,20 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.amountEur === null) {
             continue;
           }
-          const isIncome = tx.category.toLowerCase() === "income";
-          if (tx.neutralTransfer) {
+          const normalizedCategory = tx.category.trim().toLowerCase();
+          const isIncome = normalizedCategory === "income";
+          const isTransfer = normalizedCategory === "transfers";
+          const isNonPersonal = normalizedCategory === "non personal transactions";
+          const isExpenseCategory = !isIncome && !isTransfer && !isNonPersonal;
+          if (isTransfer) {
             transfers += Math.abs(tx.amountEur);
             continue;
           }
-          if (tx.amountEur > 0 && isIncome) {
+          if (isIncome) {
             income += tx.amountEur;
             net += tx.amountEur;
-          } else if (tx.amountEur < 0 && !tx.trackedSavings) {
-            expense += Math.abs(tx.amountEur);
+          } else if (isExpenseCategory) {
+            expense -= tx.amountEur;
             net += tx.amountEur;
           }
         }

@@ -294,5 +294,5 @@ def test_render_dashboard_html_cashflow_income_uses_income_category_only(tmp_pat
 
     assert years[0]["year"] == 2025
     assert years[0]["income"] == 1000.0
-    assert years[0]["expenses"] == 200.0
-    assert years[0]["net_cashflow"] == 800.0
+    assert years[0]["expenses"] == 120.0
+    assert years[0]["net_cashflow"] == 880.0
