@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import cast
 
 import pandas as pd
 
-_EXCLUDED_CATEGORIES = frozenset({"Non Personal Transactions"})
+from finance_tooling.classify import ClassificationRules, resolve_taxonomy_cashflow_type
+from finance_tooling.models import CANONICAL_TRANSACTION_COLUMNS
+from finance_tooling.store import transactions_from_dataframe
+from finance_tooling.transaction_overrides import (
+    TransactionOverrideStore,
+    iter_matching_override_entries,
+)
+
+_VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
 _TRACKED_SAVINGS_CATEGORIES = frozenset({"Retirement", "House"})
 _TRACKED_SAVINGS_TRANSFER_SUBCATEGORIES = frozenset(
     {
@@ -21,9 +30,24 @@ _TRACKED_SAVINGS_TRANSFER_SUBCATEGORIES = frozenset(
 _TRACKED_SAVINGS_KEYWORDS = frozenset({"retirement", "education", "house", "emergency"})
 
 
+@dataclass(frozen=True)
+class CashflowResolutionResult:
+    """Resolved cashflow semantics for a dataframe."""
+
+    dataframe: pd.DataFrame
+    unknown_count: int
+    unknown_categories: list[str]
+
+
 def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: str) -> pd.Series:
     values = dataframe.get(column, pd.Series("", index=dataframe.index, dtype="object"))
     return values.astype("string").fillna("").str.strip().replace("", default)
+
+
+def _normalize_cashflow_type_series(dataframe: pd.DataFrame) -> pd.Series:
+    values = dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+    normalized = values.astype("string").fillna("").str.strip().str.casefold()
+    return normalized.where(normalized.isin(_VALID_CASHFLOW_TYPES), "unknown")
 
 
 def _contains_keyword(value: str) -> bool:
@@ -47,6 +71,58 @@ def _project_tags_series(dataframe: pd.DataFrame) -> pd.Series:
     return raw.map(_normalize).astype("string").fillna("")
 
 
+def resolve_cashflow_types_for_dataframe(
+    dataframe: pd.DataFrame,
+    *,
+    classification_rules: ClassificationRules,
+    transaction_override_store: TransactionOverrideStore,
+) -> CashflowResolutionResult:
+    """Backfill or resolve cashflow_type for every canonical row."""
+    if dataframe.empty:
+        resolved = dataframe.copy()
+        resolved["cashflow_type"] = pd.Series(dtype="object")
+        return CashflowResolutionResult(
+            dataframe=resolved,
+            unknown_count=0,
+            unknown_categories=[],
+        )
+
+    normalized_frame = dataframe.copy()
+    for column in CANONICAL_TRANSACTION_COLUMNS:
+        if column not in normalized_frame.columns:
+            normalized_frame[column] = None
+
+    transactions = transactions_from_dataframe(normalized_frame[CANONICAL_TRANSACTION_COLUMNS])
+    resolved_types: list[str] = []
+    for tx in transactions:
+        resolved_type = resolve_taxonomy_cashflow_type(tx.category, rules=classification_rules)
+        for entry in iter_matching_override_entries(tx, transaction_override_store):
+            if entry.set_cashflow_type and entry.cashflow_type is not None:
+                resolved_type = cast(str, entry.cashflow_type)
+        resolved_types.append(resolved_type or "unknown")
+
+    resolved = normalized_frame.copy()
+    resolved["cashflow_type"] = resolved_types
+    normalized = _normalize_cashflow_type_series(resolved)
+    unknown_categories = sorted(
+        {
+            str(category).strip() or "Uncategorized"
+            for category, cashflow_type in zip(
+                resolved.get("category", pd.Series("", index=resolved.index, dtype="object")),
+                normalized,
+                strict=False,
+            )
+            if cashflow_type == "unknown"
+        }
+    )
+    resolved["cashflow_type"] = normalized.astype(object)
+    return CashflowResolutionResult(
+        dataframe=resolved,
+        unknown_count=int((normalized == "unknown").sum()),
+        unknown_categories=unknown_categories,
+    )
+
+
 def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Normalize canonical transaction rows for cashflow reporting."""
     if dataframe.empty:
@@ -61,6 +137,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "description",
                 "project",
                 "subcategory",
+                "cashflow_type",
                 "tracked_savings",
                 "neutral_transfer",
             ]
@@ -83,6 +160,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "description",
                 "project",
                 "subcategory",
+                "cashflow_type",
                 "tracked_savings",
                 "neutral_transfer",
             ]
@@ -94,9 +172,8 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     working["project"] = _normalized_string_series(working, "project", default="")
     working["subcategory"] = _normalized_string_series(working, "subcategory", default="")
     working["description"] = _normalized_string_series(working, "description", default="unknown")
+    working["cashflow_type"] = _normalize_cashflow_type_series(working)
     working["amount_eur"] = pd.to_numeric(working.get("amount_eur"), errors="coerce").fillna(0.0)
-    working = working.loc[~working["category"].isin(_EXCLUDED_CATEGORIES)].copy()
-
     project_tags = _project_tags_series(working)
     category_casefold = working["category"].str.casefold()
     subcategory_casefold = working["subcategory"].str.casefold()
@@ -113,7 +190,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
         | tags_casefold.map(_contains_keyword)
     )
     working["tracked_savings"] = tracked_savings
-    working["neutral_transfer"] = category_casefold.eq("transfers") & ~tracked_savings
+    working["neutral_transfer"] = working["cashflow_type"].eq("transfer")
 
     return working[
         [
@@ -126,6 +203,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             "description",
             "project",
             "subcategory",
+            "cashflow_type",
             "tracked_savings",
             "neutral_transfer",
         ]
@@ -141,13 +219,9 @@ def _period_metrics(rows: pd.DataFrame) -> dict[str, float | None]:
             "cashflow_margin": None,
         }
 
-    category_casefold = rows["category"].astype("string").str.strip().str.casefold()
-    inflows = category_casefold.eq("income")
-    expense_categories = ~category_casefold.isin(
-        frozenset({"income", "transfers", "non personal transactions"})
-    )
-    income_total = float(rows.loc[inflows, "amount_eur"].sum())
-    expense_total = float((-rows.loc[expense_categories, "amount_eur"]).sum())
+    cashflow_type = _normalize_cashflow_type_series(rows)
+    income_total = float(rows.loc[cashflow_type.eq("in"), "amount_eur"].sum())
+    expense_total = float((-rows.loc[cashflow_type.eq("out"), "amount_eur"]).sum())
     net_cashflow = income_total - expense_total
     return {
         "income": round(income_total, 2),

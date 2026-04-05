@@ -44,6 +44,7 @@ def _build_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "description",
                 "project",
                 "subcategory",
+                "cashflow_type",
                 "tracked_savings",
                 "neutral_transfer",
                 "essential",
@@ -67,6 +68,7 @@ def _build_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             "description",
             "project",
             "subcategory",
+            "cashflow_type",
             "tracked_savings",
             "neutral_transfer",
             "essential",
@@ -183,9 +185,10 @@ def _build_window_payload(
             ],
         }
 
-    outflows = window_rows["amount_eur"] < 0
-    neutral_transfer_mask = window_rows["neutral_transfer"]
-    inflows = (window_rows["amount_eur"] > 0) & ~neutral_transfer_mask
+    cashflow_type = window_rows["cashflow_type"].astype("string").str.casefold()
+    outflows = cashflow_type.eq("out")
+    neutral_transfer_mask = cashflow_type.eq("transfer")
+    inflows = cashflow_type.eq("in")
     tracked_savings_mask = window_rows["tracked_savings"]
     consumption_mask = outflows & ~tracked_savings_mask & ~neutral_transfer_mask
     essential_mask = window_rows["essential"] & ~tracked_savings_mask

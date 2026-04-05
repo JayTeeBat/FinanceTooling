@@ -9,10 +9,11 @@ from typing import TypedDict
 
 import pandas as pd
 
-from finance_tooling.classify import ClassificationDiagnostics
+from finance_tooling.classify import ClassificationDiagnostics, ClassificationRules
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.store import UpsertResult
+from finance_tooling.transaction_overrides import TransactionOverrideStore
 
 
 class ParserCandidate(TypedDict):
@@ -112,6 +113,8 @@ class SummaryPayload(TypedDict):
     project_overrides_path: str
     transaction_overrides_path: str
     review_state_path: str
+    cashflow_type_unknown_count: int
+    cashflow_type_unknown_categories: list[str]
     cashflow_yoy: dict[str, object]
 
 
@@ -173,6 +176,8 @@ class EnrichmentResult:
     transactions: list[Transaction]
     warnings: list[str]
     classification_diagnostics: ClassificationDiagnostics
+    classification_rules: ClassificationRules
+    transaction_override_store: TransactionOverrideStore
     manual_category_carry_forward_applied_count: int
     manual_category_carry_forward_ambiguous_skipped_count: int
     manual_category_carry_forward_unmatched_count: int

@@ -11,7 +11,7 @@ from typing import cast
 
 import yaml
 
-from finance_tooling.classify import normalize_description
+from finance_tooling.classify import _normalize_cashflow_type, normalize_description
 from finance_tooling.models import Transaction
 from finance_tooling.store import compute_transaction_id
 
@@ -36,6 +36,8 @@ class TransactionOverrideEntry:
     set_project: bool
     project_tags: tuple[str, ...]
     set_project_tags: bool
+    cashflow_type: str | None = None
+    set_cashflow_type: bool = False
 
     def matches(
         self,
@@ -220,13 +222,17 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
 
     set_category = "category" in raw_override
     set_subcategory = "subcategory" in raw_override
+    set_cashflow_type = "cashflow_type" in raw_override
     set_project = "project" in raw_override
     set_project_tags = "project_tags" in raw_override
-    if not any((set_category, set_subcategory, set_project, set_project_tags)):
+    if not any((set_category, set_subcategory, set_cashflow_type, set_project, set_project_tags)):
         return None
 
     category_value = _optional_str(raw_override.get("category")) if set_category else None
     subcategory_value = _optional_str(raw_override.get("subcategory")) if set_subcategory else None
+    cashflow_type_value = (
+        _normalize_cashflow_type(raw_override.get("cashflow_type")) if set_cashflow_type else None
+    )
     project_value = _optional_str(raw_override.get("project")) if set_project else None
     project_tags = (
         _normalized_project_tags(raw_override.get("project_tags")) if set_project_tags else ()
@@ -245,6 +251,8 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
         set_category=set_category,
         subcategory=subcategory_value,
         set_subcategory=set_subcategory,
+        cashflow_type=cashflow_type_value,
+        set_cashflow_type=set_cashflow_type,
         project=project_value,
         set_project=set_project,
         project_tags=project_tags,
@@ -303,6 +311,12 @@ def merge_transaction_override_entries(
         merged = replace(merged, category=incoming.category, set_category=True)
     if incoming.set_subcategory:
         merged = replace(merged, subcategory=incoming.subcategory, set_subcategory=True)
+    if incoming.set_cashflow_type:
+        merged = replace(
+            merged,
+            cashflow_type=incoming.cashflow_type,
+            set_cashflow_type=True,
+        )
     if incoming.set_project:
         merged = replace(merged, project=incoming.project, set_project=True)
     if incoming.set_project_tags:
@@ -370,6 +384,8 @@ def write_transaction_override_store(path: Path, store: TransactionOverrideStore
             row["category"] = entry.category
         if entry.set_subcategory:
             row["subcategory"] = entry.subcategory
+        if entry.set_cashflow_type:
+            row["cashflow_type"] = entry.cashflow_type
         if entry.set_project:
             row["project"] = entry.project
         if entry.set_project_tags:
@@ -393,6 +409,34 @@ def write_transaction_override_store(path: Path, store: TransactionOverrideStore
     )
 
 
+def iter_matching_override_entries(
+    transaction: Transaction,
+    store: TransactionOverrideStore,
+) -> tuple[TransactionOverrideEntry, ...]:
+    """Return matching override entries for a transaction in application order."""
+    if not store.entries:
+        return ()
+    tx_id = compute_transaction_id(transaction)
+    fingerprint = normalize_description(transaction.description)
+    candidate_indexes = sorted(
+        set(store.entry_indexes_by_transaction_id.get(tx_id, ()))
+        | set(store.entry_indexes_by_fingerprint.get(fingerprint, ()))
+        | set(store.fallback_entry_indexes)
+    )
+    if not candidate_indexes:
+        candidate_indexes = list(range(len(store.entries)))
+    matches: list[TransactionOverrideEntry] = []
+    for entry_index in candidate_indexes:
+        entry = store.entries[entry_index]
+        if entry.matches(
+            transaction=transaction,
+            transaction_id=tx_id,
+            fingerprint=fingerprint,
+        ):
+            matches.append(entry)
+    return tuple(matches)
+
+
 def apply_transaction_overrides(
     transactions: list[Transaction],
     store: TransactionOverrideStore,
@@ -403,28 +447,14 @@ def apply_transaction_overrides(
 
     updated: list[Transaction] = []
     for tx in transactions:
-        tx_id = compute_transaction_id(tx)
-        fingerprint = normalize_description(tx.description)
         current = tx
-        candidate_indexes = sorted(
-            set(store.entry_indexes_by_transaction_id.get(tx_id, ()))
-            | set(store.entry_indexes_by_fingerprint.get(fingerprint, ()))
-            | set(store.fallback_entry_indexes)
-        )
-        for entry_index in candidate_indexes:
-            entry = store.entries[entry_index]
-            if not entry.matches(
-                transaction=current,
-                transaction_id=tx_id,
-                fingerprint=fingerprint,
-            ):
-                continue
-
+        for entry in iter_matching_override_entries(current, store):
             category = current.category
             subcategory = current.subcategory
             category_confidence = current.category_confidence
             category_source = current.category_source
             category_rule_id = current.category_rule_id
+            cashflow_type = current.cashflow_type
             project = current.project
             project_tags = current.project_tags
             project_source = current.project_source
@@ -440,6 +470,9 @@ def apply_transaction_overrides(
                 category_confidence = 1.0
                 category_source = "transaction_override"
                 category_rule_id = None
+
+            if entry.set_cashflow_type:
+                cashflow_type = entry.cashflow_type
 
             project_override_applied = False
             if entry.set_project:
@@ -460,6 +493,7 @@ def apply_transaction_overrides(
                 category_confidence=category_confidence,
                 category_source=category_source,
                 category_rule_id=category_rule_id,
+                cashflow_type=cashflow_type,
                 project=project,
                 project_tags=project_tags,
                 project_source=project_source,

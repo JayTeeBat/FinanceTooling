@@ -10,6 +10,7 @@ from finance_tooling.classify import (
     load_classification_rules,
     load_override_store,
     normalize_description,
+    resolve_taxonomy_cashflow_type,
 )
 from finance_tooling.models import Transaction
 
@@ -101,6 +102,11 @@ def test_load_classification_rules_supports_yaml_schema_aliases(tmp_path: Path) 
         "\n".join(
             [
                 "version: 1",
+                "taxonomy:",
+                "  Transfers:",
+                "    cashflow_type: transfer",
+                "    subcategories:",
+                "      - FX Exchange",
                 "rules:",
                 "  - id: transfers.fx.exchange_to_gbp",
                 "    priority: 200",
@@ -122,6 +128,7 @@ def test_load_classification_rules_supports_yaml_schema_aliases(tmp_path: Path) 
     assert rules.rules[0].rule_id == "transfers.fx.exchange_to_gbp"
     assert rules.rules[0].match_type == "contains"
     assert rules.rules[0].patterns == ("exchanged to gbp", "exchange to gbp")
+    assert resolve_taxonomy_cashflow_type("Transfers", rules=rules) == "transfer"
 
 
 def test_load_classification_rules_normalizes_contains_and_exact_patterns(tmp_path: Path) -> None:
@@ -184,3 +191,36 @@ def test_load_override_store_supports_yaml_for_migration_use(tmp_path: Path) -> 
     assert overrides.entries[0].subcategory == "Wallet Transfer"
     assert overrides.entries[0].bank == "REVOLUT"
     assert overrides.entries[0].hit_count == 2
+
+
+def test_resolve_taxonomy_cashflow_type_returns_none_when_missing() -> None:
+    assert resolve_taxonomy_cashflow_type("Shopping", rules=ClassificationRules(rules=())) is None
+
+
+def test_load_classification_rules_infers_cashflow_type_from_legacy_taxonomy_lists(
+    tmp_path: Path,
+) -> None:
+    rules_path = tmp_path / "category_rules.yaml"
+    rules_path.write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "taxonomy:",
+                "  Income:",
+                "    - Salary",
+                "  Transfers:",
+                "    - Bank Transfer",
+                "  Shopping:",
+                "    - General Retail",
+                "rules: []",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rules, warnings = load_classification_rules(rules_path)
+
+    assert warnings == []
+    assert resolve_taxonomy_cashflow_type("Income", rules=rules) == "in"
+    assert resolve_taxonomy_cashflow_type("Transfers", rules=rules) == "transfer"
+    assert resolve_taxonomy_cashflow_type("Shopping", rules=rules) == "out"

@@ -8,7 +8,7 @@ from typing import Any, cast
 import pandas as pd
 
 from finance_tooling.backup import BackupRunResult
-from finance_tooling.classify import ClassificationDiagnostics
+from finance_tooling.classify import ClassificationDiagnostics, ClassificationRules
 from finance_tooling.config import Settings
 from finance_tooling.extract import ExtractedPdfText
 from finance_tooling.models import Transaction, WorkflowResult
@@ -23,6 +23,7 @@ from finance_tooling.store import (
     compute_transaction_id,
     upsert_transactions,
 )
+from finance_tooling.transaction_overrides import TransactionOverrideStore
 from finance_tooling.workflow.incremental_state import (
     IncrementalSelectionPlan,
     RunMode,
@@ -38,7 +39,7 @@ from finance_tooling.workflow.ingest_stage import (
     run_ingest,
 )
 from finance_tooling.workflow.staging import write_staged_transactions
-from finance_tooling.workflow.transform_stage import run_transform
+from finance_tooling.workflow.transform_stage import load_cached_transform_result, run_transform
 from finance_tooling.workflow.types import EnrichmentResult, HsbcMergeResult, IngestResult
 from finance_tooling.workflow.update_stage import run_update, run_workflow
 from finance_tooling.workflow_status import build_pipeline_state
@@ -224,6 +225,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["reviewed_count"] == 0
     assert summary_payload["reviewed_ratio"] == 0.0
     assert summary_payload["category_source_counts"]["rule"] == 1
+    assert summary_payload["cashflow_type_unknown_count"] == 0
+    assert summary_payload["cashflow_type_unknown_categories"] == []
     assert summary_payload["cashflow_yoy"]["years"][0]["year"] == 2024
     assert summary_payload["cashflow_yoy"]["years"][0]["net_cashflow"] == 100.0
     assert summary_payload["cashflow_yoy"]["current_ytd"] is None
@@ -557,6 +560,8 @@ def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_pat
                 "transactions": [],
                 "warnings": [],
                 "classification_diagnostics": None,
+                "classification_rules": ClassificationRules(rules=()),
+                "transaction_override_store": TransactionOverrideStore(entries=()),
                 "manual_category_carry_forward_applied_count": 0,
                 "manual_category_carry_forward_ambiguous_skipped_count": 0,
                 "manual_category_carry_forward_unmatched_count": 0,
@@ -612,6 +617,66 @@ def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_pat
     assert result.uncategorized_count_delta == -3
     assert result.categorized_amount_eur_abs_delta == 30.0
     assert result.uncategorized_amount_eur_abs_delta == -30.0
+
+
+def test_load_cached_transform_result_invalidates_when_master_parquet_lacks_cashflow_type(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    _write_transform_manifest(settings, [])
+    settings.summary_json_path.write_text(
+        json.dumps(
+            {
+                "files_scanned": 0,
+                "files_failed": 0,
+                "total_rows": 0,
+                "categorized_count": 0,
+                "uncategorized_count": 0,
+                "categorized_amount_eur_abs": 0.0,
+                "uncategorized_amount_eur_abs": 0.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings.export_csv_path.write_text("transaction_id\n", encoding="utf-8")
+    settings.output_path.write_text("<html></html>", encoding="utf-8")
+    settings.completeness_json_path.write_text('{"status":"pass"}', encoding="utf-8")
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx-1",
+                "booking_date": "2024-05-06",
+                "description": "Salary",
+                "source_record_index": 0,
+                "amount_native": 100.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-06",
+                "fx_source": "BASE",
+                "amount_eur": 100.0,
+                "category": "Income",
+                "subcategory": "Salary",
+                "category_confidence": 1.0,
+                "category_source": "rule",
+                "category_rule_id": "income.salary",
+                "project": None,
+                "project_tags": None,
+                "project_source": None,
+                "reviewed": False,
+                "bank": "DummyBank",
+                "account_label": None,
+                "source_document_id": "doc-1",
+                "source_file": str(tmp_path / "statement.pdf"),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "ingested_at": "2026-04-06T00:00:00+00:00",
+            }
+        ]
+    ).to_parquet(settings.master_parquet_path, index=False)
+
+    cached = load_cached_transform_result(settings)
+
+    assert cached is None
 
 
 def test_parse_hsbc_statement_period_parses_inclusive_window() -> None:
@@ -991,7 +1056,39 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
         "categorized_amount_eur_abs_ratio": 1.0,
         "uncategorized_amount_eur_abs_ratio": 0.0,
     }
-    settings.master_parquet_path.write_text("parquet", encoding="utf-8")
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx-1",
+                "booking_date": "2024-05-06",
+                "description": "Salary",
+                "source_record_index": 0,
+                "amount_native": 100.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-06",
+                "fx_source": "BASE",
+                "amount_eur": 100.0,
+                "category": "Income",
+                "subcategory": "Salary",
+                "category_confidence": 1.0,
+                "category_source": "rule",
+                "category_rule_id": "income.salary",
+                "cashflow_type": "in",
+                "project": None,
+                "project_tags": None,
+                "project_source": None,
+                "reviewed": False,
+                "bank": "DummyBank",
+                "account_label": None,
+                "source_document_id": "doc-1",
+                "source_file": str(source_file),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "ingested_at": "2026-04-06T00:00:00+00:00",
+            }
+        ]
+    ).to_parquet(settings.master_parquet_path, index=False)
     settings.export_csv_path.write_text("csv", encoding="utf-8")
     settings.output_path.write_text("html", encoding="utf-8")
     settings.completeness_json_path.write_text("{}", encoding="utf-8")
@@ -1185,6 +1282,8 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
                 top_uncategorized_descriptions=[],
                 top_rules_by_hits=[],
             ),
+            classification_rules=ClassificationRules(rules=()),
+            transaction_override_store=TransactionOverrideStore(entries=()),
             manual_category_carry_forward_applied_count=0,
             manual_category_carry_forward_ambiguous_skipped_count=0,
             manual_category_carry_forward_unmatched_count=0,

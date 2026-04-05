@@ -1,11 +1,11 @@
-"""Transaction classification rules and override handling."""
+"""Transaction classification rules, taxonomy semantics, and override handling."""
 
 from __future__ import annotations
 
 import json
 import re
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal, cast
@@ -15,6 +15,21 @@ import yaml
 from finance_tooling.models import Transaction
 
 MatchType = Literal["contains", "exact", "regex"]
+CashflowType = Literal["in", "out", "transfer", "exclude"]
+_VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
+
+
+def _legacy_cashflow_type_for_category(category: str) -> CashflowType | None:
+    normalized = category.strip().casefold()
+    if normalized == "income":
+        return "in"
+    if normalized == "transfers":
+        return "transfer"
+    if normalized == "non personal transactions":
+        return "exclude"
+    if normalized:
+        return "out"
+    return None
 
 
 @dataclass(frozen=True)
@@ -38,6 +53,16 @@ class ClassificationRules:
     """Ordered rule set used by the categorizer."""
 
     rules: tuple[CategoryRule, ...]
+    taxonomy: dict[str, TaxonomyCategory] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class TaxonomyCategory:
+    """Structured taxonomy metadata for a category."""
+
+    name: str
+    subcategories: tuple[str, ...]
+    cashflow_type: CashflowType | None
 
 
 @dataclass(frozen=True)
@@ -151,7 +176,49 @@ def _default_rules() -> ClassificationRules:
                 account_labels=(),
             )
         )
-    return ClassificationRules(rules=tuple(rules))
+    default_taxonomy = {
+        "groceries": TaxonomyCategory(
+            name="Groceries",
+            subcategories=("General",),
+            cashflow_type="out",
+        ),
+        "dining": TaxonomyCategory(
+            name="Dining",
+            subcategories=("Restaurants",),
+            cashflow_type="out",
+        ),
+        "transport": TaxonomyCategory(
+            name="Transport",
+            subcategories=("Mobility",),
+            cashflow_type="out",
+        ),
+        "housing": TaxonomyCategory(
+            name="Housing",
+            subcategories=("Housing Costs",),
+            cashflow_type="out",
+        ),
+        "shopping": TaxonomyCategory(
+            name="Shopping",
+            subcategories=("General",),
+            cashflow_type="out",
+        ),
+        "income": TaxonomyCategory(
+            name="Income",
+            subcategories=("Salary", "Interest"),
+            cashflow_type="in",
+        ),
+        "fees": TaxonomyCategory(
+            name="Fees",
+            subcategories=("Bank Fees",),
+            cashflow_type="out",
+        ),
+        "transfers": TaxonomyCategory(
+            name="Transfers",
+            subcategories=("Internal/External",),
+            cashflow_type="transfer",
+        ),
+    }
+    return ClassificationRules(rules=tuple(rules), taxonomy=default_taxonomy)
 
 
 def _to_int(value: object, *, default: int) -> int:
@@ -176,6 +243,8 @@ def _parse_rules_payload(payload: object) -> ClassificationRules:
     raw_rules = payload_object.get("rules")
     if not isinstance(raw_rules, list):
         raise ValueError("rules payload must include a list field named 'rules'")
+
+    taxonomy = _parse_taxonomy(payload_object.get("taxonomy"))
 
     parsed: list[CategoryRule] = []
     for index, raw in enumerate(raw_rules):
@@ -242,7 +311,67 @@ def _parse_rules_payload(payload: object) -> ClassificationRules:
             )
         )
     sorted_rules = sorted(parsed, key=lambda rule: (-rule.priority, rule.rule_id))
-    return ClassificationRules(rules=tuple(sorted_rules))
+    return ClassificationRules(rules=tuple(sorted_rules), taxonomy=taxonomy)
+
+
+def _normalize_cashflow_type(value: object) -> CashflowType | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().casefold()
+    if normalized in _VALID_CASHFLOW_TYPES:
+        return cast(CashflowType, normalized)
+    return None
+
+
+def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
+    if not isinstance(raw_taxonomy, dict):
+        return {}
+
+    taxonomy: dict[str, TaxonomyCategory] = {}
+    for raw_category, raw_value in cast(dict[object, object], raw_taxonomy).items():
+        category = str(raw_category).strip()
+        if not category:
+            continue
+
+        subcategories: tuple[str, ...] = ()
+        cashflow_type: CashflowType | None = None
+        if isinstance(raw_value, list):
+            subcategories = tuple(str(item).strip() for item in raw_value if str(item).strip())
+            cashflow_type = _legacy_cashflow_type_for_category(category)
+        elif isinstance(raw_value, dict):
+            typed_value = cast(dict[str, object], raw_value)
+            raw_subcategories = typed_value.get("subcategories")
+            if isinstance(raw_subcategories, list):
+                subcategories = tuple(
+                    str(item).strip() for item in raw_subcategories if str(item).strip()
+                )
+            cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
+        else:
+            continue
+
+        taxonomy[category.casefold()] = TaxonomyCategory(
+            name=category,
+            subcategories=subcategories,
+            cashflow_type=cashflow_type,
+        )
+    return taxonomy
+
+
+def resolve_taxonomy_cashflow_type(
+    category: str | None,
+    *,
+    rules: ClassificationRules,
+) -> CashflowType | None:
+    """Resolve a category's cashflow type from taxonomy metadata."""
+    if category is None:
+        return None
+    normalized = category.strip().casefold()
+    if not normalized:
+        return None
+    entry = rules.taxonomy.get(normalized)
+    if entry is None:
+        return None
+    return entry.cashflow_type
 
 
 def _load_payload(path: Path) -> object:

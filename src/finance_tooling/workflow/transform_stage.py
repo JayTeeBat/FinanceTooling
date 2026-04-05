@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
+import pandas as pd
 from tqdm import tqdm
 
 from finance_tooling.backup import create_stage_backup_run
@@ -136,7 +137,13 @@ def _is_transform_output_current(
         default=-1,
     )
     earliest_output_mtime_ns = min(path.stat().st_mtime_ns for path in required_outputs)
-    return earliest_output_mtime_ns >= latest_input_mtime_ns
+    if earliest_output_mtime_ns < latest_input_mtime_ns:
+        return False
+    try:
+        canonical_columns = set(pd.read_parquet(settings.master_parquet_path).columns)
+    except Exception:
+        return False
+    return "cashflow_type" in canonical_columns
 
 
 def _workflow_result_from_summary(
@@ -659,6 +666,8 @@ def run_transform(
         dataset_stale=dataset_stale,
         stale_reasons=stale_reasons,
         backup_run=backup_run,
+        classification_rules=enrichment.classification_rules,
+        transaction_override_store=enrichment.transaction_override_store,
         upsert_transactions_fn=upsert_transactions,
         render_dashboard_html_fn=render_dashboard_html,
         render_household_healthcheck_html_fn=render_household_healthcheck_html,

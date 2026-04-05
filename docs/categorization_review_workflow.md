@@ -87,6 +87,10 @@ Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
   - `project_tags` is independent from category edits.
   - Leave blank to skip project tagging.
   - Requires `transaction_id`.
+- `cashflow_type` is intentionally not part of the review workbook in v1.
+  - Reusable defaults come from category taxonomy in `category_rules.yaml`.
+  - Rare transaction-level exceptions can be edited directly in
+    `transaction_overrides.yaml`.
 - `existing_project_tags` is informational; do not edit.
 - `reviewed` is persisted separately and also projected into
   `outputs/transform_transactions.csv` after `transform`.

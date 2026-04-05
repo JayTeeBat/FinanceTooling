@@ -109,6 +109,7 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "category_confidence": tx.category_confidence,
             "category_source": tx.category_source,
             "category_rule_id": tx.category_rule_id,
+            "cashflow_type": tx.cashflow_type,
             "project": tx.project,
             "project_tags": _serialize_project_tags(tx.project_tags),
             "project_source": tx.project_source,
@@ -195,6 +196,11 @@ def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
                     and not pd.isna(row["category_rule_id"])
                     else None
                 ),
+                cashflow_type=(
+                    str(row["cashflow_type"])
+                    if row.get("cashflow_type") is not None and not pd.isna(row["cashflow_type"])
+                    else None
+                ),
                 project=(
                     str(row["project"])
                     if row.get("project") is not None and not pd.isna(row["project"])
@@ -257,6 +263,15 @@ def _atomic_write_parquet(dataframe: pd.DataFrame, destination: Path) -> None:
     temp_path = destination.with_suffix(".tmp.parquet")
     dataframe.to_parquet(temp_path, index=False)
     temp_path.replace(destination)
+
+
+def write_canonical_dataframe(parquet_path: Path, dataframe: pd.DataFrame) -> None:
+    """Rewrite canonical parquet using the canonical column ordering."""
+    normalized = dataframe.copy()
+    for column in CANONICAL_TRANSACTION_COLUMNS:
+        if column not in normalized.columns:
+            normalized[column] = None
+    _atomic_write_parquet(normalized[CANONICAL_TRANSACTION_COLUMNS], parquet_path)
 
 
 def upsert_transactions(parquet_path: Path, transactions: list[Transaction]) -> UpsertResult:

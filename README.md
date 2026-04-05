@@ -146,11 +146,21 @@ includes finance KPIs such as categorization coverage, carry-forward
 diagnostics, and the year-over-year cashflow block used by the primary finance
 dashboard.
 
+Canonical transaction outputs now include `cashflow_type`, derived during
+`transform` from category taxonomy and optional transaction-level overrides.
+
 Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
-- `Income`: every transaction whose category is exactly `Income`
-- `Expense`: every transaction whose category is not `Income`, `Transfers`, or
-  `Non Personal Transactions`
-- `Net cashflow`: `Income - Expense`
+- `cashflow_type = in`: contributes to income
+- `cashflow_type = out`: contributes to expense
+- `cashflow_type = transfer`: excluded from income/expense/net
+- `cashflow_type = exclude`: ignored for personal cashflow reporting
+- `Net cashflow = Income - Expense`
+
+Practical policy:
+- refunds are not income; positive refund rows reduce expense
+- interest remains income
+- if a transaction-level exception is needed, set `cashflow_type` directly in
+  `transaction_overrides.yaml`
 
 Carry-forward diagnostics include:
 - `manual_category_carry_forward_applied_count`
