@@ -33,6 +33,7 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
                 "amount_native": -12.50,
                 "amount_eur": -12.50,
                 "category": "Transport",
+                "cashflow_type": "out",
                 "bank": "HSBC",
                 "account_label": None,
             },
@@ -42,6 +43,7 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
                 "amount_native": 1000.0,
                 "amount_eur": 1000.0,
                 "category": "Income",
+                "cashflow_type": "in",
                 "bank": "HSBC",
                 "account_label": None,
             },
@@ -51,6 +53,7 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
                 "amount_native": -300.0,
                 "amount_eur": -300.0,
                 "category": "Transfers",
+                "cashflow_type": "transfer",
                 "bank": "HSBC",
                 "account_label": None,
             },
@@ -140,6 +143,7 @@ def test_render_dashboard_html_includes_config_warnings_when_loading_fails(tmp_p
                 "amount_native": -20.0,
                 "amount_eur": -20.0,
                 "category": "Shopping",
+                "cashflow_type": "out",
                 "bank": "HSBC",
                 "account_label": None,
             }
@@ -168,6 +172,41 @@ def test_render_dashboard_html_includes_config_warnings_when_loading_fails(tmp_p
     assert len(warnings) == 2
 
 
+def test_render_dashboard_html_includes_cashflow_type_warning_when_unknown_present(
+    tmp_path: Path,
+) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "booking_date": "2026-01-03",
+                "description": "Mystery income",
+                "amount_native": 20.0,
+                "amount_eur": 20.0,
+                "category": "Uncategorized",
+                "cashflow_type": "unknown",
+                "bank": "HSBC",
+                "account_label": None,
+            }
+        ]
+    )
+
+    destination = tmp_path / "dashboard.html"
+    render_dashboard_html(
+        frame,
+        destination,
+        base_currency="EUR",
+        files_scanned=1,
+        files_failed=0,
+        new_rows=1,
+    )
+
+    payload = _extract_payload(destination.read_text(encoding="utf-8"))
+    warnings = cast(list[str], payload["warnings"])
+    assert len(warnings) == 1
+    assert "Cashflow type unresolved for 1 transaction" in warnings[0]
+    assert "Uncategorized" in warnings[0]
+
+
 def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path: Path) -> None:
     frame = pd.DataFrame(
         [
@@ -177,6 +216,7 @@ def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path
                 "amount_native": 1000.0,
                 "amount_eur": "1000.50",
                 "category": " Income ",
+                "cashflow_type": "in",
                 "project": "  ",
                 "bank": "HSBC",
                 "account_label": None,
@@ -187,6 +227,7 @@ def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path
                 "amount_native": -50.0,
                 "amount_eur": -50.0,
                 "category": "Transfers",
+                "cashflow_type": "transfer",
                 "project": "Savings",
                 "bank": "HSBC",
                 "account_label": None,
@@ -197,6 +238,7 @@ def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path
                 "amount_native": -5.0,
                 "amount_eur": None,
                 "category": "",
+                "cashflow_type": "unknown",
                 "project": None,
                 "bank": "HSBC",
                 "account_label": None,
@@ -207,6 +249,7 @@ def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path
                 "amount_native": -1.0,
                 "amount_eur": -1.0,
                 "category": "Shopping",
+                "cashflow_type": "out",
                 "project": "Errand",
                 "bank": "HSBC",
                 "account_label": None,
@@ -252,6 +295,7 @@ def test_render_dashboard_html_cashflow_income_uses_income_category_only(tmp_pat
                 "amount_native": 1000.0,
                 "amount_eur": 1000.0,
                 "category": "Income",
+                "cashflow_type": "in",
                 "bank": "HSBC",
                 "account_label": None,
             },
@@ -261,6 +305,7 @@ def test_render_dashboard_html_cashflow_income_uses_income_category_only(tmp_pat
                 "amount_native": 80.0,
                 "amount_eur": 80.0,
                 "category": "Shopping",
+                "cashflow_type": "out",
                 "bank": "HSBC",
                 "account_label": None,
             },
@@ -270,6 +315,7 @@ def test_render_dashboard_html_cashflow_income_uses_income_category_only(tmp_pat
                 "amount_native": -200.0,
                 "amount_eur": -200.0,
                 "category": "Groceries",
+                "cashflow_type": "out",
                 "bank": "HSBC",
                 "account_label": None,
             },

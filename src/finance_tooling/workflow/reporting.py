@@ -12,8 +12,15 @@ import pandas as pd
 from pandas import DataFrame
 
 from finance_tooling.backup import BackupRunResult
-from finance_tooling.cashflow import build_cashflow_yoy_summary
-from finance_tooling.classify import ClassificationDiagnostics, normalize_description
+from finance_tooling.cashflow import (
+    build_cashflow_yoy_summary,
+    resolve_cashflow_types_for_dataframe,
+)
+from finance_tooling.classify import (
+    ClassificationDiagnostics,
+    ClassificationRules,
+    normalize_description,
+)
 from finance_tooling.completeness import build_completeness_report_from_dataframe
 from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
 from finance_tooling.dashboard import render_dashboard_html
@@ -23,7 +30,9 @@ from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.store import (
     UpsertResult,
     upsert_transactions,
+    write_canonical_dataframe,
 )
+from finance_tooling.transaction_overrides import TransactionOverrideStore
 from finance_tooling.workflow.types import (
     HsbcBoundaryDiagnostic,
     HsbcSelectionDiagnostic,
@@ -173,7 +182,14 @@ def _build_category_metrics_from_dataframe(
         dataframe.get("amount_eur", pd.Series(0.0, index=dataframe.index)),
         errors="coerce",
     ).fillna(0.0)
-    income_mask = category_series.str.casefold().eq("income") & amount_series.gt(0)
+    cashflow_type_series = (
+        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    income_mask = cashflow_type_series.eq("in") & amount_series.gt(0)
     absolute_amount_series = amount_series.abs()
     uncategorized_mask = category_series.str.casefold().eq("uncategorized") | (
         category_source_series.str.casefold().eq("uncategorized")
@@ -299,13 +315,21 @@ def persist_and_report(
     dataset_stale: bool = False,
     stale_reasons: list[str] | None = None,
     backup_run: BackupRunResult | None = None,
+    classification_rules: ClassificationRules,
+    transaction_override_store: TransactionOverrideStore,
     upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
     render_dashboard_html_fn: Callable[..., Path] = render_dashboard_html,
     render_household_healthcheck_html_fn: Callable[..., Path] = render_household_healthcheck_html,
 ) -> tuple[WorkflowResult, SummaryPayload]:
     """Persist artifacts and return final workflow result plus summary payload."""
     upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
-    dataframe: DataFrame = upsert.dataframe
+    cashflow_resolution = resolve_cashflow_types_for_dataframe(
+        upsert.dataframe,
+        classification_rules=classification_rules,
+        transaction_override_store=transaction_override_store,
+    )
+    dataframe: DataFrame = cashflow_resolution.dataframe
+    write_canonical_dataframe(settings.master_parquet_path, dataframe)
     classification_diagnostics: ClassificationDiagnostics = (
         _build_classification_diagnostics_from_dataframe(dataframe)
     )
@@ -411,6 +435,8 @@ def persist_and_report(
         "project_overrides_path": str(settings.project_overrides_path),
         "transaction_overrides_path": str(settings.transaction_overrides_path),
         "review_state_path": str(settings.review_state_path),
+        "cashflow_type_unknown_count": cashflow_resolution.unknown_count,
+        "cashflow_type_unknown_categories": cashflow_resolution.unknown_categories,
         "cashflow_yoy": cashflow_yoy,
     }
     write_json(settings.summary_json_path, summary_payload)

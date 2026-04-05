@@ -108,6 +108,7 @@ def test_upsert_transactions_replaces_existing_row_and_preserves_ingested_at(
     assert second.dataframe.loc[0, "category"] == "House"
     assert second.dataframe.loc[0, "subcategory"] == "Cleaning"
     assert second.dataframe.loc[0, "category_source"] == "transaction_override"
+    assert "cashflow_type" in second.dataframe.columns
     assert second.dataframe.loc[0, "ingested_at"] == original_ingested_at
 
 

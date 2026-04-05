@@ -118,6 +118,8 @@ def enrich_transactions(transactions: list[Transaction], settings: Settings) -> 
         transactions=enriched,
         warnings=warnings,
         classification_diagnostics=classification_diagnostics,
+        classification_rules=category_rules,
+        transaction_override_store=transaction_overrides,
         manual_category_carry_forward_applied_count=carry_forward.diagnostics.applied_count,
         manual_category_carry_forward_ambiguous_skipped_count=(
             carry_forward.diagnostics.ambiguous_skipped_count

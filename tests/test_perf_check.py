@@ -4,10 +4,11 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.classify import ClassificationDiagnostics
+from finance_tooling.classify import ClassificationDiagnostics, ClassificationRules
 from finance_tooling.config import Settings
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.perf_check import assert_isolated_processed_path, run_perf_check
+from finance_tooling.transaction_overrides import TransactionOverrideStore
 from finance_tooling.workflow.types import EnrichmentResult, HsbcMergeResult, IngestResult
 
 
@@ -130,6 +131,8 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
             top_uncategorized_descriptions=[],
             top_rules_by_hits=[],
         ),
+        classification_rules=ClassificationRules(rules=()),
+        transaction_override_store=TransactionOverrideStore(entries=()),
         manual_category_carry_forward_applied_count=0,
         manual_category_carry_forward_ambiguous_skipped_count=0,
         manual_category_carry_forward_unmatched_count=1,

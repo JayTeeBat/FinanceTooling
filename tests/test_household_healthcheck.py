@@ -29,6 +29,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Salary",
                 "amount_eur": 5000.0,
                 "category": "Income",
+                "cashflow_type": "in",
                 "project": "",
                 "project_tags": "",
             },
@@ -37,6 +38,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Mortgage",
                 "amount_eur": -1500.0,
                 "category": "Housing",
+                "cashflow_type": "out",
                 "project": "",
                 "project_tags": "",
             },
@@ -45,6 +47,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Groceries",
                 "amount_eur": -800.0,
                 "category": "Groceries",
+                "cashflow_type": "out",
                 "project": "",
                 "project_tags": "",
             },
@@ -53,6 +56,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Cash withdrawal",
                 "amount_eur": -120.0,
                 "category": "Cash",
+                "cashflow_type": "out",
                 "project": "",
                 "project_tags": "",
             },
@@ -61,6 +65,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Retirement contribution",
                 "amount_eur": -500.0,
                 "category": "Retirement",
+                "cashflow_type": "out",
                 "project": "",
                 "project_tags": "",
             },
@@ -69,6 +74,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Transfer to wallet",
                 "amount_eur": -250.0,
                 "category": "Transfers",
+                "cashflow_type": "transfer",
                 "project": "",
                 "project_tags": "",
             },
@@ -77,6 +83,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Kid reserve",
                 "amount_eur": -300.0,
                 "category": "Shopping",
+                "cashflow_type": "out",
                 "project": "Education reserve",
                 "project_tags": "",
             },
@@ -85,6 +92,7 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
                 "description": "Mystery vendor",
                 "amount_eur": -200.0,
                 "category": "Uncategorized",
+                "cashflow_type": "unknown",
                 "project": "",
                 "project_tags": "",
             },
@@ -105,11 +113,11 @@ def test_render_household_healthcheck_html_builds_expected_window_metrics(tmp_pa
     status = cast(dict[str, str], last_3_months["status"])
 
     assert metrics["avg_monthly_inflow"] == 1666.67
-    assert metrics["avg_monthly_consumption_spend"] == 873.33
+    assert metrics["avg_monthly_consumption_spend"] == 806.67
     assert metrics["avg_monthly_tracked_savings"] == 266.67
-    assert metrics["avg_monthly_net_residual"] == 526.67
+    assert metrics["avg_monthly_net_residual"] == 593.33
     assert metrics["tracked_savings_rate"] == 0.16
-    assert metrics["essential_spending_ratio"] == 0.8779
+    assert metrics["essential_spending_ratio"] == 0.9504
     assert metrics["housing_cost_ratio"] == 0.3
     assert metrics["uncategorized_amount_ratio"] == 0.0238
     assert metrics["uncategorized_count_ratio"] == 0.1429
@@ -134,6 +142,7 @@ def test_render_household_healthcheck_html_uses_project_tags_for_savings_detecti
                 "description": "Salary",
                 "amount_eur": 3000.0,
                 "category": "Income",
+                "cashflow_type": "in",
                 "project": "",
                 "project_tags": "",
             },
@@ -142,6 +151,7 @@ def test_render_household_healthcheck_html_uses_project_tags_for_savings_detecti
                 "description": "Broker contribution",
                 "amount_eur": -450.0,
                 "category": "Shopping",
+                "cashflow_type": "out",
                 "project": "",
                 "project_tags": ("retirement", "long_term"),
             },
@@ -150,6 +160,7 @@ def test_render_household_healthcheck_html_uses_project_tags_for_savings_detecti
                 "description": "Weekend spending",
                 "amount_eur": -600.0,
                 "category": "Leisure",
+                "cashflow_type": "out",
                 "project": "",
                 "project_tags": "",
             },
@@ -178,6 +189,7 @@ def test_render_household_healthcheck_html_counts_transfer_savings_and_investmen
                 "description": "Salary",
                 "amount_eur": 4000.0,
                 "category": "Income",
+                "cashflow_type": "in",
                 "subcategory": "",
                 "project": "",
                 "project_tags": "",
@@ -187,6 +199,7 @@ def test_render_household_healthcheck_html_counts_transfer_savings_and_investmen
                 "description": "To savings",
                 "amount_eur": -300.0,
                 "category": "Transfers",
+                "cashflow_type": "transfer",
                 "subcategory": "Savings Transfer",
                 "project": "",
                 "project_tags": "",
@@ -196,6 +209,7 @@ def test_render_household_healthcheck_html_counts_transfer_savings_and_investmen
                 "description": "To broker",
                 "amount_eur": -450.0,
                 "category": "Transfers",
+                "cashflow_type": "transfer",
                 "subcategory": "Investment",
                 "project": "",
                 "project_tags": "",
@@ -205,6 +219,7 @@ def test_render_household_healthcheck_html_counts_transfer_savings_and_investmen
                 "description": "Internal transfer",
                 "amount_eur": -700.0,
                 "category": "Transfers",
+                "cashflow_type": "transfer",
                 "subcategory": "Bank Transfer",
                 "project": "",
                 "project_tags": "",
@@ -214,6 +229,7 @@ def test_render_household_healthcheck_html_counts_transfer_savings_and_investmen
                 "description": "Groceries",
                 "amount_eur": -600.0,
                 "category": "Groceries",
+                "cashflow_type": "out",
                 "subcategory": "Supermarket",
                 "project": "",
                 "project_tags": "",

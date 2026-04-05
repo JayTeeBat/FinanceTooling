@@ -5,34 +5,63 @@ defaults:
 
 taxonomy:
   Transfers:
-    - Savings Transfer
-    - FX Exchange
-    - Wallet Transfer
-    - Bank Transfer
+    cashflow_type: transfer
+    subcategories:
+      - Savings Transfer
+      - FX Exchange
+      - Wallet Transfer
+      - Bank Transfer
   Shopping:
-    - General Retail
-    - Marketplace
+    cashflow_type: out
+    subcategories:
+      - General Retail
+      - Marketplace
   Groceries:
-    - Supermarket
+    cashflow_type: out
+    subcategories:
+      - Supermarket
   Dining:
-    - Restaurants
+    cashflow_type: out
+    subcategories:
+      - Restaurants
   Fees:
-    - Bank Fees
+    cashflow_type: out
+    subcategories:
+      - Bank Fees
   Income:
-    - Salary
-    - Refunds & Interest
-    - Merchant Settlement
+    cashflow_type: in
+    subcategories:
+      - Salary
+      - Interest
+      - Merchant Settlement
+  Refunds:
+    cashflow_type: out
+    subcategories:
+      - Unmapped Refund
   Housing:
-    - Housing Costs
-    - Council Tax
+    cashflow_type: out
+    subcategories:
+      - Housing Costs
+      - Council Tax
   Transport:
-    - Mobility
+    cashflow_type: out
+    subcategories:
+      - Mobility
   Utilities:
-    - Telecom
+    cashflow_type: out
+    subcategories:
+      - Telecom
   Family:
-    - Childcare
+    cashflow_type: out
+    subcategories:
+      - Childcare
   Memberships:
-    - Charity & Membership
+    cashflow_type: out
+    subcategories:
+      - Charity & Membership
+  Non Personal Transactions:
+    cashflow_type: exclude
+    subcategories: []
 
 rules:
   - id: transfers.savings.to_gbp
@@ -231,11 +260,20 @@ rules:
       - payroll
       - bonus
 
-  - id: income.refunds
+  - id: income.interest
     priority: 95
     category: Income
-    subcategory: Refunds & Interest
+    subcategory: Interest
+    income_only: true
+    match: contains
+    patterns:
+      - interest
+
+  - id: refunds.generic
+    priority: 94
+    category: Refunds
+    subcategory: Unmapped Refund
+    income_only: true
     match: contains
     patterns:
       - refund
-      - interest

@@ -25,6 +25,7 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "category_confidence",
     "category_source",
     "category_rule_id",
+    "cashflow_type",
     "project",
     "project_tags",
     "project_source",
@@ -55,6 +56,7 @@ class Transaction:
     category_confidence: float | None = None
     category_source: str | None = None
     category_rule_id: str | None = None
+    cashflow_type: str | None = None
     project: str | None = None
     project_tags: tuple[str, ...] = ()
     project_source: str | None = None

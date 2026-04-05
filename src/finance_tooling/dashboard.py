@@ -31,6 +31,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "category",
                 "project",
                 "amount_eur",
+                "cashflow_type",
                 "is_transfer",
                 "tracked_savings",
                 "neutral_transfer",
@@ -45,6 +46,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "category",
                 "project",
                 "amount_eur",
+                "cashflow_type",
                 "is_transfer",
                 "tracked_savings",
                 "neutral_transfer",
@@ -63,6 +65,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             "category",
             "project",
             "amount_eur",
+            "cashflow_type",
             "is_transfer",
             "tracked_savings",
             "neutral_transfer",
@@ -73,6 +76,32 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
 def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
     rows_frame = _build_transaction_rows_frame(dataframe)
     return rows_frame.to_dict(orient="records")
+
+
+def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
+    rows_frame = build_cashflow_rows_frame(dataframe)
+    if rows_frame.empty or "cashflow_type" not in rows_frame.columns:
+        return []
+
+    unknown_mask = rows_frame["cashflow_type"].astype("string").str.casefold().eq("unknown")
+    unknown_count = int(unknown_mask.sum())
+    if unknown_count == 0:
+        return []
+
+    unknown_categories = sorted(
+        {
+            str(category).strip() or "Uncategorized"
+            for category in rows_frame.loc[unknown_mask, "category"].astype("string").fillna("")
+        }
+    )
+    preview_categories = unknown_categories[:5]
+    if len(unknown_categories) > 5:
+        preview_categories.append(f"+{len(unknown_categories) - 5} more")
+    category_list = ", ".join(preview_categories)
+    transaction_word = "transaction" if unknown_count == 1 else "transactions"
+    return [
+        f"Cashflow type unresolved for {unknown_count} {transaction_word} across: {category_list}"
+    ]
 
 
 def _load_projecting(path: Path | None) -> tuple[ProjectConfig, list[str]]:
@@ -114,7 +143,11 @@ def _build_dashboard_payload(
         "transactions": _build_transaction_rows(projected),
         "budget_targets": budget_targets_to_rows(budget_config),
         "cashflow_yoy": build_cashflow_yoy_summary(projected),
-        "warnings": [*project_warnings, *budget_warnings],
+        "warnings": [
+            *project_warnings,
+            *budget_warnings,
+            *_build_cashflow_diagnostic_warnings(projected),
+        ],
     }
     return payload
 
@@ -595,7 +628,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     </section>
 
     <section class="warning-box" id="warning-box">
-      <strong>Configuration warnings</strong>
+      <strong>Diagnostics</strong>
       <ul id="warning-list"></ul>
     </section>
   </div>
@@ -733,6 +766,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               ? item.project.trim()
               : "Unassigned",
             amountEur: toNumber(item.amount_eur),
+            cashflowType: typeof item.cashflow_type === "string" ? item.cashflow_type.trim().toLowerCase() : "unknown",
             isTransfer: Boolean(item.is_transfer) || (typeof item.category === "string" && item.category.trim().toLowerCase() === "transfers"),
             trackedSavings: Boolean(item.tracked_savings),
             neutralTransfer: Boolean(item.neutral_transfer),
@@ -952,15 +986,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateMonthlyNet(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null) {
-            continue;
-          }
-          const normalizedCategory = tx.category.trim().toLowerCase();
-          const isIncome = normalizedCategory === "income";
-          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
-            normalizedCategory
-          );
-          if (!isIncome && !isExpenseCategory) {
+          if (tx.amountEur === null || !["in", "out"].includes(tx.cashflowType)) {
             continue;
           }
           const existing = totals.get(tx.month) || 0;
@@ -975,14 +1001,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null) {
-            continue;
-          }
-          const normalizedCategory = tx.category.trim().toLowerCase();
-          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
-            normalizedCategory
-          );
-          if (!isExpenseCategory) {
+          if (tx.amountEur === null || tx.cashflowType !== "out") {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
@@ -998,14 +1017,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function collectYears(filtered) {
         const years = new Set();
         for (const tx of filtered) {
-          if (tx.amountEur === null) {
-            continue;
-          }
-          const normalizedCategory = tx.category.trim().toLowerCase();
-          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
-            normalizedCategory
-          );
-          if (!isExpenseCategory) {
+          if (tx.amountEur === null || tx.cashflowType !== "out") {
             continue;
           }
           years.add(Number(tx.bookingDate.slice(0, 4)));
@@ -1035,14 +1047,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const current = new Array(12).fill(0);
         const previous = new Array(12).fill(0);
         for (const tx of filtered) {
-          if (tx.amountEur === null) {
-            continue;
-          }
-          const normalizedCategory = tx.category.trim().toLowerCase();
-          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
-            normalizedCategory
-          );
-          if (!isExpenseCategory) {
+          if (tx.amountEur === null || tx.cashflowType !== "out") {
             continue;
           }
           const year = Number(tx.bookingDate.slice(0, 4));
@@ -1070,14 +1075,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const categoryActual = new Map();
         const projectActual = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null) {
-            continue;
-          }
-          const normalizedCategory = tx.category.trim().toLowerCase();
-          const isExpenseCategory = !["income", "transfers", "non personal transactions"].includes(
-            normalizedCategory
-          );
-          if (!isExpenseCategory) {
+          if (tx.amountEur === null || tx.cashflowType !== "out") {
             continue;
           }
           const spend = -tx.amountEur;
@@ -1325,19 +1323,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.amountEur === null) {
             continue;
           }
-          const normalizedCategory = tx.category.trim().toLowerCase();
-          const isIncome = normalizedCategory === "income";
-          const isTransfer = normalizedCategory === "transfers";
-          const isNonPersonal = normalizedCategory === "non personal transactions";
-          const isExpenseCategory = !isIncome && !isTransfer && !isNonPersonal;
-          if (isTransfer) {
+          if (tx.cashflowType === "transfer") {
             transfers += Math.abs(tx.amountEur);
             continue;
           }
-          if (isIncome) {
+          if (tx.cashflowType === "in") {
             income += tx.amountEur;
             net += tx.amountEur;
-          } else if (isExpenseCategory) {
+          } else if (tx.cashflowType === "out") {
             expense -= tx.amountEur;
             net += tx.amountEur;
           }
