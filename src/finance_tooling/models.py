@@ -57,6 +57,11 @@ class Transaction:
     category_source: str | None = None
     category_rule_id: str | None = None
     cashflow_type: str | None = None
+    from_account_ref: str | None = None
+    to_account_ref: str | None = None
+    from_account_type: str | None = None
+    to_account_type: str | None = None
+    account_inference_source: str | None = None
     project: str | None = None
     project_tags: tuple[str, ...] = ()
     project_source: str | None = None

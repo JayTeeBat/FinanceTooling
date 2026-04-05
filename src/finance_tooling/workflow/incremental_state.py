@@ -253,6 +253,7 @@ def compute_transform_input_fingerprint(settings: Settings) -> str:
         (
             settings.category_rules_path,
             settings.project_rules_path,
+            settings.account_rules_path,
             settings.project_overrides_path,
             settings.transaction_overrides_path,
         )

@@ -13,6 +13,7 @@ from typing import cast
 import pandas as pd
 from tqdm import tqdm
 
+from finance_tooling.account_inference import infer_accounts_for_transactions
 from finance_tooling.backup import create_stage_backup_run
 from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
 from finance_tooling.dashboard import render_dashboard_html
@@ -128,6 +129,7 @@ def _is_transform_output_current(
         manifest_path,
         settings.category_rules_path,
         settings.project_rules_path,
+        settings.account_rules_path,
         settings.project_overrides_path,
         settings.transaction_overrides_path,
         settings.review_state_path,
@@ -143,7 +145,15 @@ def _is_transform_output_current(
         canonical_columns = set(pd.read_parquet(settings.master_parquet_path).columns)
     except Exception:
         return False
-    return "cashflow_type" in canonical_columns
+    required_columns = {
+        "cashflow_type",
+        "from_account_ref",
+        "to_account_ref",
+        "from_account_type",
+        "to_account_type",
+        "account_inference_source",
+    }
+    return required_columns.issubset(canonical_columns)
 
 
 def _workflow_result_from_summary(
@@ -482,6 +492,7 @@ def run_transform(
             config_targets=(
                 settings.category_rules_path,
                 settings.project_rules_path,
+                settings.account_rules_path,
                 settings.project_overrides_path,
                 settings.transaction_overrides_path,
             ),
@@ -498,6 +509,10 @@ def run_transform(
     reviewed_transactions = apply_review_state(
         enrichment.transactions,
         settings.review_state_path,
+    )
+    inferred_transactions = infer_accounts_for_transactions(
+        reviewed_transactions,
+        config=enrichment.account_inference_config,
     )
     manifest_context = manifest.context
     registry = load_source_registry(source_registry_path(settings))
@@ -630,7 +645,7 @@ def run_transform(
         settings=settings,
         source_files=source_files,
         files_failed=files_failed,
-        transactions=reviewed_transactions,
+        transactions=inferred_transactions,
         validations=validations,
         parser_selection_diagnostics=parser_selection_diagnostics,
         parser_low_confidence_file_count=parser_low_confidence_file_count,
@@ -679,7 +694,7 @@ def run_transform(
         selection_plan=selection_plan,
         processed_source_files=processed_source_files,
         validations=validations,
-        transactions=reviewed_transactions,
+        transactions=inferred_transactions,
     )
     write_source_registry(source_registry_path(settings), next_registry)
     progress.update()

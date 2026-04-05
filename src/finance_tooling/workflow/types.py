@@ -9,6 +9,7 @@ from typing import TypedDict
 
 import pandas as pd
 
+from finance_tooling.account_inference import AccountInferenceConfig
 from finance_tooling.classify import ClassificationDiagnostics, ClassificationRules
 from finance_tooling.models import Transaction
 from finance_tooling.parsers.base import StatementValidation
@@ -110,11 +111,15 @@ class SummaryPayload(TypedDict):
     category_rules_path: str
     project_rules_path: str
     budget_targets_path: str
+    account_rules_path: str
     project_overrides_path: str
     transaction_overrides_path: str
     review_state_path: str
     cashflow_type_unknown_count: int
     cashflow_type_unknown_categories: list[str]
+    account_boundary_unknown_count: int
+    account_boundary_unknown_side_count: int
+    account_inference_source_counts: dict[str, int]
     cashflow_yoy: dict[str, object]
 
 
@@ -178,6 +183,8 @@ class EnrichmentResult:
     classification_diagnostics: ClassificationDiagnostics
     classification_rules: ClassificationRules
     transaction_override_store: TransactionOverrideStore
+    account_inference_config: AccountInferenceConfig
+    account_inference_warnings: list[str]
     manual_category_carry_forward_applied_count: int
     manual_category_carry_forward_ambiguous_skipped_count: int
     manual_category_carry_forward_unmatched_count: int
