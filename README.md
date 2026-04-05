@@ -146,6 +146,12 @@ includes finance KPIs such as categorization coverage, carry-forward
 diagnostics, and the year-over-year cashflow block used by the primary finance
 dashboard.
 
+Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
+- `Income`: every transaction whose category is exactly `Income`
+- `Expense`: every transaction whose category is not `Income`, `Transfers`, or
+  `Non Personal Transactions`
+- `Net cashflow`: `Income - Expense`
+
 Carry-forward diagnostics include:
 - `manual_category_carry_forward_applied_count`
 - `manual_category_carry_forward_ambiguous_skipped_count`
