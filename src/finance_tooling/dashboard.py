@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from finance_tooling.budgeting import BudgetConfig, budget_targets_to_rows, load_budget_config
+from finance_tooling.cashflow import build_cashflow_yoy_summary
 from finance_tooling.projecting import (
     ProjectConfig,
     assign_projects_to_dataframe,
@@ -101,6 +102,7 @@ def _build_dashboard_payload(
         },
         "transactions": _build_transaction_rows(projected),
         "budget_targets": budget_targets_to_rows(budget_config),
+        "cashflow_yoy": build_cashflow_yoy_summary(projected),
         "warnings": [*project_warnings, *budget_warnings],
     }
     return payload
@@ -386,6 +388,48 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       font-size: 13px;
       padding: 8px 0;
     }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .cashflow-grid {
+      grid-template-columns: minmax(620px, 1.8fr) minmax(280px, 1fr);
+      align-items: start;
+    }
+    .summary-card {
+      display: grid;
+      gap: 10px;
+    }
+    .cashflow-table table {
+      min-width: 0;
+    }
+    .summary-note {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .metric-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .metric-line span:first-child {
+      color: var(--muted);
+    }
+    .delta-positive {
+      color: var(--positive);
+      font-weight: 600;
+    }
+    .delta-negative {
+      color: var(--negative);
+      font-weight: 600;
+    }
+    .delta-neutral {
+      color: var(--muted);
+      font-weight: 600;
+    }
     @media (max-width: 720px) {
       .shell {
         padding: 12px;
@@ -397,6 +441,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         min-width: 640px;
       }
     }
+    @media (max-width: 980px) {
+      .cashflow-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -405,6 +454,30 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       <h1>Interactive Finance Dashboard</h1>
       <p id="generated-at">Generated -</p>
       <div class="meta-line" id="run-meta"></div>
+    </section>
+
+    <section class="card">
+      <h2>Year-over-Year Cashflow</h2>
+      <p class="summary-note">Full-year rows include completed calendar years only. The current year appears separately as YTD and this section does not change with the time-window filters below.</p>
+      <div class="summary-grid cashflow-grid" style="margin-top: 10px;">
+        <article class="summary-card">
+          <div class="table-wrap cashflow-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>Income</th>
+                  <th>Expenses</th>
+                  <th>Net Cashflow</th>
+                  <th>Margin</th>
+                </tr>
+              </thead>
+              <tbody id="cashflow-yoy-body"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="summary-card" id="cashflow-ytd-card"></article>
+      </div>
     </section>
 
     <section class="card">
@@ -524,7 +597,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function parsePayload() {
         const node = document.getElementById("dashboard-data");
         if (!node) {
-          return { meta: {}, transactions: [], budget_targets: [], warnings: [] };
+          return { meta: {}, transactions: [], budget_targets: [], cashflow_yoy: {}, warnings: [] };
         }
         try {
           const parsed = JSON.parse(node.textContent || "{}");
@@ -532,11 +605,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             meta: parsed.meta || {},
             transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
             budget_targets: Array.isArray(parsed.budget_targets) ? parsed.budget_targets : [],
+            cashflow_yoy: parsed.cashflow_yoy || {},
             warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
           };
         } catch (error) {
           console.error("Failed to parse embedded dashboard payload", error);
-          return { meta: {}, transactions: [], budget_targets: [], warnings: ["Invalid payload"] };
+          return {
+            meta: {},
+            transactions: [],
+            budget_targets: [],
+            cashflow_yoy: {},
+            warnings: ["Invalid payload"],
+          };
         }
       }
 
@@ -675,6 +755,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       const yoyChart = document.getElementById("yoy-chart");
       const budgetVarianceChart = document.getElementById("budget-variance-chart");
       const budgetTableBody = document.getElementById("budget-table-body");
+      const cashflowYoyBody = document.getElementById("cashflow-yoy-body");
+      const cashflowYtdCard = document.getElementById("cashflow-ytd-card");
 
       const minDate = transactions.length > 0 ? transactions[0].bookingDate : formatDate(new Date());
       const maxDate = transactions.length > 0 ? transactions[transactions.length - 1].bookingDate : formatDate(new Date());
@@ -982,6 +1064,79 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         }
       }
 
+      function formatPercent(value) {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          return "-";
+        }
+        return (value * 100).toFixed(1) + "%";
+      }
+
+      function renderCashflowYoy() {
+        const yearlyRows = Array.isArray(payload.cashflow_yoy && payload.cashflow_yoy.years)
+          ? payload.cashflow_yoy.years
+          : [];
+        if (!yearlyRows.length) {
+          cashflowYoyBody.innerHTML =
+            "<tr><td colspan=\\"5\\"><span class=\\"empty\\">Not enough completed years to show year-over-year cashflow yet.</span></td></tr>";
+        } else {
+          cashflowYoyBody.innerHTML = yearlyRows
+            .map((row) => {
+              const netValue = toNumber(row.net_cashflow) || 0;
+              const netClass = netValue > 0 ? "delta-positive" : (netValue < 0 ? "delta-negative" : "delta-neutral");
+              return (
+                "<tr>" +
+                  "<td>" + escapeHtml(String(row.year || "-")) + "</td>" +
+                  "<td>" + escapeHtml(money.format(toNumber(row.income) || 0)) + "</td>" +
+                  "<td>" + escapeHtml(money.format(toNumber(row.expenses) || 0)) + "</td>" +
+                  "<td class=\\"" + netClass + "\\">" +
+                    escapeHtml(money.format(netValue)) +
+                  "</td>" +
+                  "<td>" + escapeHtml(formatPercent(toNumber(row.cashflow_margin))) + "</td>" +
+                "</tr>"
+              );
+            })
+            .join("");
+        }
+
+        const ytd = payload.cashflow_yoy && typeof payload.cashflow_yoy.current_ytd === "object"
+          ? payload.cashflow_yoy.current_ytd
+          : null;
+        if (!ytd || !ytd.current || !ytd.prior || !ytd.delta) {
+          cashflowYtdCard.innerHTML =
+            "<h2>Current YTD</h2><p class=\\"empty\\">No current-year YTD comparison is available yet.</p>";
+          return;
+        }
+
+        const netDelta = toNumber(ytd.delta.net_cashflow);
+        const deltaClass = netDelta === null
+          ? "delta-neutral"
+          : (netDelta > 0 ? "delta-positive" : (netDelta < 0 ? "delta-negative" : "delta-neutral"));
+        cashflowYtdCard.innerHTML =
+          "<h2>" + escapeHtml(String(ytd.label || "Current YTD")) + "</h2>" +
+          "<p class=\\"summary-note\\">" +
+            escapeHtml(String(ytd.current_period_start || "")) +
+            " to " +
+            escapeHtml(String(ytd.current_period_end || "")) +
+          "</p>" +
+          "<div class=\\"metric-line\\"><span>Income</span><strong>" +
+            escapeHtml(money.format(toNumber(ytd.current.income) || 0)) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>Expenses</span><strong>" +
+            escapeHtml(money.format(toNumber(ytd.current.expenses) || 0)) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>Net cashflow</span><strong>" +
+            escapeHtml(money.format(toNumber(ytd.current.net_cashflow) || 0)) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>Margin</span><strong>" +
+            escapeHtml(formatPercent(toNumber(ytd.current.cashflow_margin))) +
+            "</strong></div>" +
+          "<div class=\\"metric-line\\"><span>vs prior YTD</span><strong class=\\"" + deltaClass + "\\">" +
+            escapeHtml(money.format(netDelta || 0)) +
+            " / " +
+            escapeHtml(formatPercent(toNumber(ytd.delta.cashflow_margin))) +
+            "</strong></div>";
+      }
+
       function renderBarRows(container, rows, formatValue, classForValue) {
         if (!rows.length) {
           container.innerHTML = "<p class=\\"empty\\">No data for the current filters.</p>";
@@ -1217,6 +1372,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
       renderMeta();
       renderWarnings();
+      renderCashflowYoy();
       initializeFilters();
       refreshDashboard();
     })();

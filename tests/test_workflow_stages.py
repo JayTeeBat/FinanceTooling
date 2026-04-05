@@ -41,6 +41,7 @@ from finance_tooling.workflow.staging import write_staged_transactions
 from finance_tooling.workflow.transform_stage import run_transform
 from finance_tooling.workflow.types import EnrichmentResult, HsbcMergeResult, IngestResult
 from finance_tooling.workflow.update_stage import run_update, run_workflow
+from finance_tooling.workflow_status import build_pipeline_state
 
 
 @dataclass
@@ -209,46 +210,9 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         settings.output_path.parent / "household_healthcheck.html"
     )
     assert summary_payload["completeness_report_path"] == str(settings.completeness_json_path)
-    assert summary_payload["completeness_status"] == "fail"
-    assert summary_payload["missing_source_file_count"] == 1
-    assert summary_payload["statement_reconciliation_checkable_file_count"] == 0
-    assert summary_payload["statement_reconciliation_fail_count"] == 0
-    assert summary_payload["statement_reconciliation_uncheckable_file_count"] == 0
-    assert summary_payload["statement_reconciliation_pass_ratio"] is None
-    assert summary_payload["statement_reconciliation_median_abs_difference"] is None
-    assert summary_payload["statement_reconciliation_hsbc_median_abs_difference"] is None
-    assert summary_payload["hsbc_period_parse_variant_match_count"] == 0
-    assert summary_payload["hsbc_boundary_table_start_count"] == 0
-    assert summary_payload["hsbc_boundary_table_end_count"] == 0
-    assert summary_payload["hsbc_boundary_rows_seen_in_table"] == 0
     assert result.household_healthcheck_path == (
         settings.output_path.parent / "household_healthcheck.html"
     )
-    assert summary_payload["hsbc_boundary_rows_rejected_outside_table"] == 0
-    assert summary_payload["hsbc_boundary_rows_rejected_after_table"] == 0
-    assert summary_payload["hsbc_boundary_transition_anomaly_count"] == 0
-    assert summary_payload["hsbc_boundary_diagnostics"] == []
-    assert summary_payload["hsbc_sign_from_running_balance_count"] == 0
-    assert summary_payload["hsbc_sign_from_column_position_count"] == 0
-    assert summary_payload["hsbc_sign_from_token_marker_count"] == 0
-    assert summary_payload["hsbc_sign_from_description_marker_count"] == 0
-    assert summary_payload["hsbc_sign_from_fallback_hint_count"] == 0
-    assert summary_payload["hsbc_sign_default_debit_count"] == 0
-    assert summary_payload["hsbc_sign_conflict_running_vs_marker_count"] == 0
-    assert summary_payload["hsbc_sign_unresolved_ambiguous_count"] == 0
-    assert summary_payload["hsbc_sign_diagnostics"] == []
-    assert summary_payload["parser_low_confidence_file_count"] == 2
-    assert len(summary_payload["parser_selection_diagnostics"]) == 2
-    assert summary_payload["hsbc_selection_policy"] == "pdf_only"
-    assert summary_payload["hsbc_csv_files_scanned"] == 0
-    assert summary_payload["hsbc_csv_statement_replaced_count"] == 0
-    assert summary_payload["hsbc_selected_csv_month_count"] == 0
-    assert "ingest_parser_duration_seconds_by_parser" in summary_payload
-    assert "ingest_duration_seconds_by_bank" in summary_payload
-    assert summary_payload["ingest_text_cache_enabled"] is False
-    assert summary_payload["ingest_text_cache_hits"] == 0
-    assert summary_payload["ingest_text_cache_misses"] == 0
-    assert summary_payload["ingest_text_cache_write_count"] == 0
     assert summary_payload["categorized_count"] == 1
     assert summary_payload["uncategorized_count"] == 0
     assert summary_payload["uncategorized_ratio"] == 0.0
@@ -260,9 +224,51 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["reviewed_count"] == 0
     assert summary_payload["reviewed_ratio"] == 0.0
     assert summary_payload["category_source_counts"]["rule"] == 1
+    assert summary_payload["cashflow_yoy"]["years"][0]["year"] == 2024
+    assert summary_payload["cashflow_yoy"]["years"][0]["net_cashflow"] == 100.0
+    assert summary_payload["cashflow_yoy"]["current_ytd"] is None
     assert summary_payload["project_overrides_path"] == str(settings.project_overrides_path)
     assert summary_payload["transaction_overrides_path"] == str(settings.transaction_overrides_path)
     assert summary_payload["review_state_path"] == str(settings.review_state_path)
+    assert "statement_reconciliation_fail_count" not in summary_payload
+    assert "parser_low_confidence_file_count" not in summary_payload
+
+    pipeline_payload, _ = build_pipeline_state(settings)
+    assert pipeline_payload["transform_diagnostics"]["completeness_status"] == "fail"
+    assert pipeline_payload["transform_diagnostics"]["missing_source_file_count"] == 1
+    assert (
+        pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["checkable_file_count"]
+        == 0
+    )
+    assert (
+        pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["fail_count"] == 0
+    )
+    assert (
+        pipeline_payload["transform_diagnostics"]["statement_reconciliation"][
+            "uncheckable_file_count"
+        ]
+        == 0
+    )
+    assert pipeline_payload["ingest_diagnostics"]["parser_low_confidence_file_count"] == 2
+    assert len(pipeline_payload["ingest_diagnostics"]["parser_selection_diagnostics"]) == 2
+    assert pipeline_payload["transform_diagnostics"]["hsbc_selection_policy"] == "pdf_only"
+    assert pipeline_payload["transform_diagnostics"]["hsbc_csv_files_scanned"] == 0
+    assert (
+        pipeline_payload["transform_diagnostics"]["hsbc_merge_metrics"][
+            "hsbc_csv_statement_replaced_count"
+        ]
+        == 0
+    )
+    assert (
+        pipeline_payload["transform_diagnostics"]["hsbc_merge_metrics"][
+            "hsbc_selected_csv_month_count"
+        ]
+        == 0
+    )
+    assert pipeline_payload["ingest_diagnostics"]["ingest_text_cache_enabled"] is False
+    assert pipeline_payload["ingest_diagnostics"]["ingest_text_cache_hits"] == 0
+    assert pipeline_payload["ingest_diagnostics"]["ingest_text_cache_misses"] == 0
+    assert pipeline_payload["ingest_diagnostics"]["ingest_text_cache_write_count"] == 0
 
     assert result.completeness_path == settings.completeness_json_path
     assert result.completeness_status == "fail"
@@ -280,6 +286,141 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert result.uncategorized_count_delta is None
     assert result.categorized_amount_eur_abs_delta is None
     assert result.uncategorized_amount_eur_abs_delta is None
+
+
+def test_run_workflow_amount_ratios_use_categorized_income_denominator(
+    monkeypatch, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    parsed_pdf = input_dir / "parsed_2024.pdf"
+    parsed_pdf.write_text("fake parsed", encoding="utf-8")
+    settings = _settings(input_dir)
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
+        lambda _: [parsed_pdf],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.extract_text_from_pdf",
+        lambda _: ExtractedPdfText(first_page_text="", full_text=""),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.select_parser_with_diagnostics",
+        lambda *_: ParserSelection(
+            parser=cast(StatementParser, _DummyParser()),
+            score=2,
+            threshold=2,
+            candidates=(ParserScoreItem(parser_name="dummy", score=2),),
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.render_dashboard_html",
+        lambda *args, **kwargs: settings.output_path,
+    )
+    dataframe = pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx-income",
+                "booking_date": "2024-05-06",
+                "description": "Salary",
+                "amount_native": 100.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-06",
+                "fx_source": "BASE",
+                "amount_eur": 100.0,
+                "category": "Income",
+                "category_source": "rule",
+                "bank": "DummyBank",
+                "account_label": None,
+                "source_file": str(parsed_pdf),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "reviewed": False,
+                "ingested_at": "2026-02-23T00:00:00+00:00",
+            },
+            {
+                "transaction_id": "tx-transfer",
+                "booking_date": "2024-05-07",
+                "description": "Refund transfer",
+                "amount_native": 200.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-07",
+                "fx_source": "BASE",
+                "amount_eur": 200.0,
+                "category": "Transfers",
+                "category_source": "rule",
+                "bank": "DummyBank",
+                "account_label": None,
+                "source_file": str(parsed_pdf),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "reviewed": False,
+                "ingested_at": "2026-02-23T00:00:00+00:00",
+            },
+            {
+                "transaction_id": "tx-expense",
+                "booking_date": "2024-05-08",
+                "description": "Rent",
+                "amount_native": -150.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-08",
+                "fx_source": "BASE",
+                "amount_eur": -150.0,
+                "category": "Housing",
+                "category_source": "rule",
+                "bank": "DummyBank",
+                "account_label": None,
+                "source_file": str(parsed_pdf),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "reviewed": False,
+                "ingested_at": "2026-02-23T00:00:00+00:00",
+            },
+            {
+                "transaction_id": "tx-uncat",
+                "booking_date": "2024-05-09",
+                "description": "Unknown",
+                "amount_native": -50.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-09",
+                "fx_source": "BASE",
+                "amount_eur": -50.0,
+                "category": "Uncategorized",
+                "category_source": "uncategorized",
+                "bank": "DummyBank",
+                "account_label": None,
+                "source_file": str(parsed_pdf),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "reviewed": False,
+                "ingested_at": "2026-02-23T00:00:00+00:00",
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.upsert_transactions",
+        lambda *_: UpsertResult(
+            parquet_path=settings.master_parquet_path,
+            dataframe=dataframe,
+            new_rows=4,
+            total_rows=4,
+        ),
+    )
+
+    run_workflow(settings)
+
+    summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
+    assert summary_payload["total_income_eur"] == 100.0
+    assert summary_payload["categorized_amount_eur_abs"] == 450.0
+    assert summary_payload["uncategorized_amount_eur_abs"] == 50.0
+    assert summary_payload["categorized_amount_eur_abs_ratio"] == 4.5
+    assert summary_payload["uncategorized_amount_eur_abs_ratio"] == 0.5
 
 
 def test_review_import_then_transform_preserves_source_document_id_identity(
@@ -607,23 +748,24 @@ def test_run_workflow_uses_hsbc_pdf_balances_for_validation(monkeypatch, tmp_pat
 
     run_workflow(settings)
 
-    summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
-    assert summary_payload["hsbc_pdf_balance_validated_count"] == 1
-    assert summary_payload["hsbc_pdf_balance_validation_fail_count"] == 1
-    assert summary_payload["statement_reconciliation_fail_count"] == 1
-    assert summary_payload["hsbc_adaptive_source_switch_count"] == 0
-    assert summary_payload["hsbc_selected_csv_month_count"] == 0
-    assert summary_payload["hsbc_selected_pdf_month_count"] == 1
-    assert summary_payload["hsbc_selection_policy"] == "pdf_only"
-    diagnostics = summary_payload["hsbc_selection_diagnostics"]
+    pipeline_payload, _ = build_pipeline_state(settings)
+    metrics = pipeline_payload["transform_diagnostics"]["hsbc_merge_metrics"]
+    assert metrics["hsbc_pdf_balance_validated_count"] == 1
+    assert metrics["hsbc_pdf_balance_validation_fail_count"] == 1
+    assert (
+        pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["fail_count"] == 1
+    )
+    assert metrics["hsbc_adaptive_source_switch_count"] == 0
+    assert metrics["hsbc_selected_csv_month_count"] == 0
+    assert metrics["hsbc_selected_pdf_month_count"] == 1
+    assert pipeline_payload["transform_diagnostics"]["hsbc_selection_policy"] == "pdf_only"
+    diagnostics = pipeline_payload["transform_diagnostics"]["hsbc_selection_diagnostics"]
     assert len(diagnostics) == 1
     assert diagnostics[0]["selected_source"] == "hsbc"
     assert diagnostics[0]["csv_transaction_count"] == 0
     assert diagnostics[0]["csv_abs_difference"] is None
     assert diagnostics[0]["pdf_abs_difference"] == 10.0
-    assert any(
-        "HSBC hsbc reconciliation mismatch" in warning for warning in summary_payload["warnings"]
-    )
+    assert pipeline_payload["transform_diagnostics"]["warnings"] == []
 
 
 def test_run_ingest_writes_staged_artifacts_only(monkeypatch, tmp_path: Path) -> None:

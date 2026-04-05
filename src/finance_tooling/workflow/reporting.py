@@ -12,9 +12,10 @@ import pandas as pd
 from pandas import DataFrame
 
 from finance_tooling.backup import BackupRunResult
+from finance_tooling.cashflow import build_cashflow_yoy_summary
 from finance_tooling.classify import ClassificationDiagnostics, normalize_description
 from finance_tooling.completeness import build_completeness_report_from_dataframe
-from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings, state_root_path
+from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.models import Transaction, WorkflowResult
@@ -140,9 +141,9 @@ def _build_classification_diagnostics_from_dataframe(
 
 def _build_category_metrics_from_dataframe(
     dataframe: DataFrame,
-) -> tuple[list[dict[str, object]], float, float, int]:
+) -> tuple[list[dict[str, object]], float, float, float, int]:
     if dataframe.empty:
-        return [], 0.0, 0.0, 0
+        return [], 0.0, 0.0, 0.0, 0
 
     bank_series = (
         dataframe.get("bank", pd.Series("", index=dataframe.index, dtype="object"))
@@ -172,6 +173,7 @@ def _build_category_metrics_from_dataframe(
         dataframe.get("amount_eur", pd.Series(0.0, index=dataframe.index)),
         errors="coerce",
     ).fillna(0.0)
+    income_mask = category_series.str.casefold().eq("income") & amount_series.gt(0)
     absolute_amount_series = amount_series.abs()
     uncategorized_mask = category_series.str.casefold().eq("uncategorized") | (
         category_source_series.str.casefold().eq("uncategorized")
@@ -182,6 +184,7 @@ def _build_category_metrics_from_dataframe(
             "bank": bank_series,
             "reviewed": reviewed_series,
             "uncategorized": uncategorized_mask,
+            "income_amount_eur": amount_series.where(income_mask, 0.0),
             "absolute_amount_eur": absolute_amount_series,
         },
         index=dataframe.index,
@@ -199,6 +202,7 @@ def _build_category_metrics_from_dataframe(
         categorized_count=("categorized", "sum"),
         uncategorized_count=("uncategorized", "sum"),
         reviewed_count=("reviewed", "sum"),
+        income_amount_eur=("income_amount_eur", "sum"),
         categorized_amount_eur_abs=("categorized_amount_eur_abs", "sum"),
         uncategorized_amount_eur_abs=("uncategorized_amount_eur_abs", "sum"),
     )
@@ -209,15 +213,16 @@ def _build_category_metrics_from_dataframe(
         categorized_count = int(row["categorized_count"])
         uncategorized_count = int(row["uncategorized_count"])
         reviewed_count = int(row["reviewed_count"])
+        income_amount_eur = float(row["income_amount_eur"])
         categorized_amount_eur_abs = float(row["categorized_amount_eur_abs"])
         uncategorized_amount_eur_abs = float(row["uncategorized_amount_eur_abs"])
-        total_bank_amount = categorized_amount_eur_abs + uncategorized_amount_eur_abs
         category_metrics_by_bank.append(
             {
                 "bank": str(bank),
                 "transactions_count": transactions_count,
                 "categorized_count": categorized_count,
                 "uncategorized_count": uncategorized_count,
+                "income_amount_eur": round(income_amount_eur, 4),
                 "categorized_amount_eur_abs": round(categorized_amount_eur_abs, 4),
                 "uncategorized_amount_eur_abs": round(uncategorized_amount_eur_abs, 4),
                 "reviewed_count": reviewed_count,
@@ -232,14 +237,14 @@ def _build_category_metrics_from_dataframe(
                     4,
                 ),
                 "categorized_amount_eur_abs_ratio": round(
-                    (categorized_amount_eur_abs / total_bank_amount) * 100.0
-                    if total_bank_amount
+                    (categorized_amount_eur_abs / income_amount_eur) * 100.0
+                    if income_amount_eur
                     else 0.0,
                     4,
                 ),
                 "uncategorized_amount_eur_abs_ratio": round(
-                    (uncategorized_amount_eur_abs / total_bank_amount) * 100.0
-                    if total_bank_amount
+                    (uncategorized_amount_eur_abs / income_amount_eur) * 100.0
+                    if income_amount_eur
                     else 0.0,
                     4,
                 ),
@@ -252,6 +257,7 @@ def _build_category_metrics_from_dataframe(
 
     return (
         category_metrics_by_bank,
+        float(metrics_frame["income_amount_eur"].sum()),
         float(metrics_frame["categorized_amount_eur_abs"].sum()),
         float(metrics_frame["uncategorized_amount_eur_abs"].sum()),
         int(metrics_frame["reviewed"].sum()),
@@ -316,18 +322,6 @@ def persist_and_report(
     reconciliation_fail_count = cast(int, reconciliation["fail_count"])
     reconciliation_uncheckable_count = cast(int, reconciliation["uncheckable_file_count"])
     reconciliation_pass_ratio = cast(float | None, reconciliation["pass_ratio"])
-    reconciliation_median_abs_difference = cast(
-        float | None, reconciliation["median_abs_difference"]
-    )
-    by_bank_abs_difference = cast(list[dict[str, object]], reconciliation["by_bank_abs_difference"])
-    hsbc_abs_difference = next(
-        (
-            cast(float | None, item.get("median_abs_difference"))
-            for item in by_bank_abs_difference
-            if cast(str, item.get("bank")) == "HSBC"
-        ),
-        None,
-    )
 
     write_json(settings.completeness_json_path, completeness_report)
 
@@ -358,6 +352,7 @@ def persist_and_report(
 
     (
         category_metrics_by_bank,
+        total_income_eur,
         categorized_amount_eur_abs,
         uncategorized_amount_eur_abs,
         reviewed_count,
@@ -365,11 +360,13 @@ def persist_and_report(
     total_amount_eur_abs = categorized_amount_eur_abs + uncategorized_amount_eur_abs
     reviewed_ratio = (reviewed_count / len(dataframe)) if len(dataframe) else 0.0
     categorized_amount_eur_abs_ratio = (
-        (categorized_amount_eur_abs / total_amount_eur_abs) if total_amount_eur_abs > 0 else 0.0
+        (categorized_amount_eur_abs / total_income_eur) if total_income_eur > 0 else 0.0
     )
     uncategorized_amount_eur_abs_ratio = (
-        (uncategorized_amount_eur_abs / total_amount_eur_abs) if total_amount_eur_abs > 0 else 0.0
+        (uncategorized_amount_eur_abs / total_income_eur) if total_income_eur > 0 else 0.0
     )
+
+    cashflow_yoy = build_cashflow_yoy_summary(dataframe)
 
     summary_payload: SummaryPayload = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -382,88 +379,13 @@ def persist_and_report(
         "dashboard_path": str(dashboard_path),
         "household_healthcheck_path": str(household_healthcheck_path),
         "completeness_report_path": str(settings.completeness_json_path),
-        "completeness_status": completeness_status,
-        "file_coverage_ratio": completeness_coverage_ratio,
-        "missing_source_file_count": missing_source_file_count,
-        "statement_reconciliation_checkable_file_count": reconciliation_checkable_count,
-        "statement_reconciliation_fail_count": reconciliation_fail_count,
-        "statement_reconciliation_uncheckable_file_count": reconciliation_uncheckable_count,
-        "statement_reconciliation_pass_ratio": reconciliation_pass_ratio,
-        "statement_reconciliation_median_abs_difference": reconciliation_median_abs_difference,
-        "statement_reconciliation_hsbc_median_abs_difference": hsbc_abs_difference,
-        "parser_low_confidence_file_count": parser_low_confidence_file_count,
-        "parser_selection_diagnostics": parser_selection_diagnostics,
-        "hsbc_csv_files_scanned": hsbc_csv_files_scanned,
-        "hsbc_csv_statement_replaced_count": hsbc_merge_metrics[
-            "hsbc_csv_statement_replaced_count"
-        ],
-        "hsbc_pdf_fallback_statement_count": hsbc_merge_metrics[
-            "hsbc_pdf_fallback_statement_count"
-        ],
-        "hsbc_csv_only_statement_count": hsbc_merge_metrics["hsbc_csv_only_statement_count"],
-        "hsbc_pdf_balance_validated_count": hsbc_merge_metrics["hsbc_pdf_balance_validated_count"],
-        "hsbc_pdf_balance_validation_fail_count": hsbc_merge_metrics[
-            "hsbc_pdf_balance_validation_fail_count"
-        ],
-        "hsbc_selection_policy": "pdf_only",
-        "hsbc_adaptive_source_switch_count": hsbc_merge_metrics[
-            "hsbc_adaptive_source_switch_count"
-        ],
-        "hsbc_selected_csv_month_count": hsbc_merge_metrics["hsbc_selected_csv_month_count"],
-        "hsbc_selected_pdf_month_count": hsbc_merge_metrics["hsbc_selected_pdf_month_count"],
-        "hsbc_period_remap_applied_month_count": hsbc_merge_metrics[
-            "hsbc_period_remap_applied_month_count"
-        ],
-        "hsbc_period_remap_reassigned_tx_count": hsbc_merge_metrics[
-            "hsbc_period_remap_reassigned_tx_count"
-        ],
-        "hsbc_period_remap_unassigned_csv_tx_count": hsbc_merge_metrics[
-            "hsbc_period_remap_unassigned_csv_tx_count"
-        ],
-        "hsbc_period_parse_variant_match_count": hsbc_period_parse_variant_match_count,
-        "hsbc_boundary_table_start_count": hsbc_boundary_metrics["table_start_count"],
-        "hsbc_boundary_table_end_count": hsbc_boundary_metrics["table_end_count"],
-        "hsbc_boundary_rows_seen_in_table": hsbc_boundary_metrics["rows_seen_in_table"],
-        "hsbc_boundary_rows_rejected_outside_table": hsbc_boundary_metrics[
-            "rows_rejected_outside_table"
-        ],
-        "hsbc_boundary_rows_rejected_after_table": hsbc_boundary_metrics[
-            "rows_rejected_after_table"
-        ],
-        "hsbc_boundary_transition_anomaly_count": hsbc_boundary_metrics["transition_anomaly_count"],
-        "hsbc_boundary_diagnostics": hsbc_boundary_diagnostics,
-        "hsbc_sign_from_running_balance_count": hsbc_sign_metrics[
-            "sign_from_running_balance_count"
-        ],
-        "hsbc_sign_from_column_position_count": hsbc_sign_metrics[
-            "sign_from_column_position_count"
-        ],
-        "hsbc_sign_from_token_marker_count": hsbc_sign_metrics["sign_from_token_marker_count"],
-        "hsbc_sign_from_description_marker_count": hsbc_sign_metrics[
-            "sign_from_description_marker_count"
-        ],
-        "hsbc_sign_from_fallback_hint_count": hsbc_sign_metrics["sign_from_fallback_hint_count"],
-        "hsbc_sign_default_debit_count": hsbc_sign_metrics["sign_default_debit_count"],
-        "hsbc_sign_conflict_running_vs_marker_count": hsbc_sign_metrics[
-            "sign_conflict_running_vs_marker_count"
-        ],
-        "hsbc_sign_unresolved_ambiguous_count": hsbc_sign_metrics[
-            "sign_unresolved_ambiguous_count"
-        ],
-        "hsbc_sign_diagnostics": hsbc_sign_diagnostics,
-        "hsbc_selection_diagnostics": hsbc_selection_diagnostics,
-        "ingest_parser_duration_seconds_by_parser": ingest_parser_duration_seconds_by_parser,
-        "ingest_duration_seconds_by_bank": ingest_duration_seconds_by_bank,
-        "ingest_text_cache_enabled": ingest_text_cache_enabled,
-        "ingest_text_cache_hits": ingest_text_cache_hits,
-        "ingest_text_cache_misses": ingest_text_cache_misses,
-        "ingest_text_cache_write_count": ingest_text_cache_write_count,
         "categorized_count": classification_diagnostics.categorized_count,
         "uncategorized_count": classification_diagnostics.uncategorized_count,
         "uncategorized_ratio": classification_diagnostics.uncategorized_ratio,
         "categorized_amount_eur_abs": round(categorized_amount_eur_abs, 4),
         "uncategorized_amount_eur_abs": round(uncategorized_amount_eur_abs, 4),
         "total_amount_eur_abs": round(total_amount_eur_abs, 4),
+        "total_income_eur": round(total_income_eur, 4),
         "categorized_amount_eur_abs_ratio": round(categorized_amount_eur_abs_ratio, 4),
         "uncategorized_amount_eur_abs_ratio": round(uncategorized_amount_eur_abs_ratio, 4),
         "reviewed_count": reviewed_count,
@@ -489,35 +411,7 @@ def persist_and_report(
         "project_overrides_path": str(settings.project_overrides_path),
         "transaction_overrides_path": str(settings.transaction_overrides_path),
         "review_state_path": str(settings.review_state_path),
-        "fx_cache_path": str(settings.fx_cache_path),
-        "source_inventory_path": str(state_root_path(settings) / "workflow_source_inventory.json"),
-        "backup_run_id": backup_run.run_id if backup_run is not None else None,
-        "backup_processed_dir": (
-            str(backup_run.processed_backup_dir)
-            if backup_run is not None and backup_run.processed_backup_dir is not None
-            else None
-        ),
-        "backup_config_dir": (
-            str(backup_run.config_backup_dir)
-            if backup_run is not None and backup_run.config_backup_dir is not None
-            else None
-        ),
-        "backup_manifest_paths": (
-            [str(path) for path in backup_run.manifest_paths] if backup_run is not None else []
-        ),
-        "backup_copied_file_count": len(backup_run.copied_files) if backup_run is not None else 0,
-        "backup_missing_file_count": (
-            len(backup_run.skipped_missing_files) if backup_run is not None else 0
-        ),
-        "backup_pruned_run_ids": list(backup_run.pruned_run_ids) if backup_run is not None else [],
-        "run_mode": run_mode,
-        "files_selected_for_processing": files_selected_for_processing,
-        "files_skipped_already_committed": files_skipped_already_committed,
-        "files_skipped_modified_existing": files_skipped_modified_existing,
-        "files_missing_since_last_commit": files_missing_since_last_commit,
-        "dataset_stale": dataset_stale,
-        "stale_reasons": stale_reasons or [],
-        "warnings": warnings,
+        "cashflow_yoy": cashflow_yoy,
     }
     write_json(settings.summary_json_path, summary_payload)
 

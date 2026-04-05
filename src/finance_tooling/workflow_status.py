@@ -102,6 +102,46 @@ class TransformedState(TypedDict):
     completeness_path: str
 
 
+class IngestDiagnosticsState(TypedDict):
+    """Operational diagnostics sourced from the staged manifest context."""
+
+    parser_low_confidence_file_count: int
+    parser_selection_diagnostics: list[dict[str, object]]
+    ingest_parser_duration_seconds_by_parser: dict[str, float]
+    ingest_duration_seconds_by_bank: dict[str, float]
+    ingest_text_cache_enabled: bool
+    ingest_text_cache_hits: int
+    ingest_text_cache_misses: int
+    ingest_text_cache_write_count: int
+
+
+class TransformDiagnosticsState(TypedDict):
+    """Operational transform diagnostics sourced from completeness and run context."""
+
+    completeness_status: str | None
+    file_coverage_ratio: float | None
+    missing_source_file_count: int
+    statement_reconciliation: dict[str, object]
+    hsbc_selection_policy: str | None
+    hsbc_csv_files_scanned: int
+    hsbc_merge_metrics: dict[str, int]
+    hsbc_period_parse_variant_match_count: int
+    hsbc_boundary_metrics: dict[str, int]
+    hsbc_boundary_diagnostics: list[dict[str, object]]
+    hsbc_sign_metrics: dict[str, int]
+    hsbc_sign_diagnostics: list[dict[str, object]]
+    hsbc_selection_diagnostics: list[dict[str, object]]
+    run_mode: str | None
+    files_selected_for_processing: int
+    files_skipped_already_committed: int
+    files_skipped_modified_existing: int
+    files_missing_since_last_commit: int
+    dataset_stale: bool
+    stale_reasons: list[str]
+    backup: dict[str, object]
+    warnings: list[str]
+
+
 class PipelineStatePayload(TypedDict):
     """Machine-readable pipeline status payload."""
 
@@ -113,6 +153,8 @@ class PipelineStatePayload(TypedDict):
     committed_state: CommittedState
     drift_state: DriftState
     transformed_state: TransformedState
+    ingest_diagnostics: IngestDiagnosticsState
+    transform_diagnostics: TransformDiagnosticsState
     findings: list[PipelineFinding]
 
 
@@ -133,6 +175,58 @@ def _load_summary(path: Path) -> dict[str, object] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def _context_dict(payload: dict[str, object] | None, key: str) -> dict[str, object]:
+    if payload is None:
+        return {}
+    value = payload.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _context_list(payload: dict[str, object] | None, key: str) -> list[dict[str, object]]:
+    if payload is None:
+        return []
+    value = payload.get(key)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _context_int(payload: dict[str, object] | None, key: str) -> int:
+    if payload is None:
+        return 0
+    value = payload.get(key, 0)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return 0
+    return 0
+
+
+def _context_float(payload: dict[str, object] | None, key: str) -> float | None:
+    if payload is None:
+        return None
+    value = payload.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
 
 
 def _master_snapshot(path: Path) -> MasterState:
@@ -312,7 +406,12 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
         status = "warn"
 
     summary_payload = _load_summary(settings.summary_json_path)
+    completeness_payload = _load_summary(settings.completeness_json_path)
+    manifest_context = manifest.context if manifest is not None else {}
+    if not isinstance(manifest_context, dict):
+        manifest_context = {}
     master_state = _master_snapshot(settings.master_parquet_path)
+    reconciliation = _context_dict(completeness_payload, "statement_reconciliation")
     if (
         selection_plan.modified_existing_entries
         or selection_plan.missing_committed_entries
@@ -378,6 +477,131 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
             "master": master_state,
             "summary_path": str(settings.summary_json_path),
             "completeness_path": str(settings.completeness_json_path),
+        },
+        "ingest_diagnostics": {
+            "parser_low_confidence_file_count": _context_int(
+                manifest_context, "parser_low_confidence_file_count"
+            ),
+            "parser_selection_diagnostics": _context_list(
+                manifest_context, "parser_selection_diagnostics"
+            ),
+            "ingest_parser_duration_seconds_by_parser": {
+                str(key): float(value)
+                for key, value in _context_dict(
+                    manifest_context, "ingest_parser_duration_seconds_by_parser"
+                ).items()
+                if isinstance(value, int | float)
+            },
+            "ingest_duration_seconds_by_bank": {
+                str(key): float(value)
+                for key, value in _context_dict(
+                    manifest_context, "ingest_duration_seconds_by_bank"
+                ).items()
+                if isinstance(value, int | float)
+            },
+            "ingest_text_cache_enabled": bool(
+                manifest_context.get("ingest_text_cache_enabled", False)
+            ),
+            "ingest_text_cache_hits": _context_int(manifest_context, "ingest_text_cache_hits"),
+            "ingest_text_cache_misses": _context_int(
+                manifest_context, "ingest_text_cache_misses"
+            ),
+            "ingest_text_cache_write_count": _context_int(
+                manifest_context, "ingest_text_cache_write_count"
+            ),
+        },
+        "transform_diagnostics": {
+            "completeness_status": (
+                str(completeness_payload.get("status"))
+                if (
+                    completeness_payload is not None
+                    and completeness_payload.get("status") is not None
+                )
+                else None
+            ),
+            "file_coverage_ratio": _context_float(completeness_payload, "file_coverage_ratio"),
+            "missing_source_file_count": _context_int(
+                completeness_payload, "missing_source_file_count"
+            ),
+            "statement_reconciliation": reconciliation,
+            "hsbc_selection_policy": (
+                str(manifest_context.get("hsbc_selection_policy"))
+                if manifest_context.get("hsbc_selection_policy") is not None
+                else ("pdf_only" if manifest is not None else None)
+            ),
+            "hsbc_csv_files_scanned": _context_int(manifest_context, "hsbc_csv_files_scanned"),
+            "hsbc_merge_metrics": {
+                str(key): int(value)
+                for key, value in _context_dict(manifest_context, "hsbc_merge_metrics").items()
+                if isinstance(value, bool | int | float)
+            },
+            "hsbc_period_parse_variant_match_count": _context_int(
+                manifest_context, "hsbc_period_parse_variant_match_count"
+            ),
+            "hsbc_boundary_metrics": {
+                str(key): int(value)
+                for key, value in _context_dict(manifest_context, "hsbc_boundary_metrics").items()
+                if isinstance(value, bool | int | float)
+            },
+            "hsbc_boundary_diagnostics": _context_list(
+                manifest_context, "hsbc_boundary_diagnostics"
+            ),
+            "hsbc_sign_metrics": {
+                str(key): int(value)
+                for key, value in _context_dict(manifest_context, "hsbc_sign_metrics").items()
+                if isinstance(value, bool | int | float)
+            },
+            "hsbc_sign_diagnostics": _context_list(manifest_context, "hsbc_sign_diagnostics"),
+            "hsbc_selection_diagnostics": _context_list(
+                manifest_context, "hsbc_selection_diagnostics"
+            ),
+            "run_mode": manifest.run_mode if manifest is not None else None,
+            "files_selected_for_processing": (
+                manifest.files_selected_for_processing if manifest is not None else 0
+            ),
+            "files_skipped_already_committed": (
+                manifest.files_skipped_already_committed if manifest is not None else 0
+            ),
+            "files_skipped_modified_existing": (
+                manifest.files_skipped_modified_existing if manifest is not None else 0
+            ),
+            "files_missing_since_last_commit": (
+                manifest.files_missing_since_last_commit if manifest is not None else 0
+            ),
+            "dataset_stale": manifest.dataset_stale if manifest is not None else False,
+            "stale_reasons": list(manifest.stale_reasons) if manifest is not None else [],
+            "backup": {
+                "run_id": (
+                    summary_payload.get("backup_run_id") if summary_payload is not None else None
+                ),
+                "processed_dir": (
+                    summary_payload.get("backup_processed_dir")
+                    if summary_payload is not None
+                    else None
+                ),
+                "config_dir": (
+                    summary_payload.get("backup_config_dir")
+                    if summary_payload is not None
+                    else None
+                ),
+                "manifest_paths": (
+                    summary_payload.get("backup_manifest_paths")
+                    if summary_payload is not None
+                    else []
+                ),
+                "copied_file_count": _context_int(summary_payload, "backup_copied_file_count"),
+                "missing_file_count": _context_int(summary_payload, "backup_missing_file_count"),
+                "pruned_run_ids": (
+                    summary_payload.get("backup_pruned_run_ids")
+                    if summary_payload is not None
+                    else []
+                ),
+            },
+            "warnings": (
+                list(summary_payload.get("warnings", []))
+                if summary_payload is not None and isinstance(summary_payload.get("warnings"), list)
+                else []
+            ),
         },
         "findings": findings,
     }

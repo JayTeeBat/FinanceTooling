@@ -40,11 +40,11 @@ Advanced/recovery commands:
 
 Stable operator-facing outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
 
-- `household_healthcheck.html`
+- `household_healthcheck.html` (secondary compatibility dashboard)
 - `transform_transactions.parquet`
 - `transform_transactions.csv`
-- `transform_run_summary.json`
-- `transform_dashboard.html`
+- `transform_run_summary.json` (finance/reporting summary)
+- `transform_dashboard.html` (primary finance dashboard)
 
 Internal state and diagnostics under `${FINANCE_PROCESSED_PATH}/state/`:
 
@@ -131,16 +131,22 @@ Detailed guides:
   `household_healthcheck.html`, `transform_transactions.parquet`,
   `transform_transactions.csv`, `transform_run_summary.json`, and
   `transform_dashboard.html`.
-- Writes optional diagnostics under `${FINANCE_PROCESSED_PATH}/state/`,
-  including `transform_completeness_report.json` and, when explicitly enabled
-  for compatibility, `transform_transactions.json`.
+- Writes operational diagnostics under `${FINANCE_PROCESSED_PATH}/state/`,
+  including `workflow_pipeline_state.json`,
+  `transform_completeness_report.json`, and, when explicitly enabled for
+  compatibility, `transform_transactions.json`.
 - In incremental mode, upserts only the staged source documents into the master
   parquet, then rebuilds summary/dashboard/export artifacts from the full merged
   canonical dataset.
 - Projects persisted `reviewed` state into canonical outputs so review progress
   survives across sessions and appears in `transform_transactions.csv`.
 
-`transform_run_summary.json` also includes carry-forward diagnostics:
+`transform_run_summary.json` is the machine-discoverable finance summary. It
+includes finance KPIs such as categorization coverage, carry-forward
+diagnostics, and the year-over-year cashflow block used by the primary finance
+dashboard.
+
+Carry-forward diagnostics include:
 - `manual_category_carry_forward_applied_count`
 - `manual_category_carry_forward_ambiguous_skipped_count`
 - `manual_category_carry_forward_unmatched_count`
@@ -148,9 +154,9 @@ Detailed guides:
 ### 4) Dashboard
 
 Dashboard output:
-- `${FINANCE_PROCESSED_PATH}/outputs/transform_dashboard.html`
-- `${FINANCE_PROCESSED_PATH}/outputs/household_healthcheck.html`
-- Open it in a browser after `transform` or `update`.
+- Primary: `${FINANCE_PROCESSED_PATH}/outputs/transform_dashboard.html`
+- Secondary compatibility view: `${FINANCE_PROCESSED_PATH}/outputs/household_healthcheck.html`
+- Open the primary dashboard after `transform` or `update`.
 
 ### Advanced and recovery commands
 
@@ -225,8 +231,8 @@ uv run workflow-status
 
 This writes `${FINANCE_PROCESSED_PATH}/state/workflow_pipeline_state.json` and prints a compact
 health summary, including duplicate raw-source detection, staged-vs-transform
-timestamp drift, committed source-registry state, stale reasons, and
-full-refresh risk.
+timestamp drift, committed source-registry state, stale reasons, full-refresh
+risk, parser diagnostics, and reconciliation/data-quality diagnostics.
 
 ### Review command examples
 
@@ -490,5 +496,5 @@ transaction count, sign distribution, and reconciliation status from fixture cas
 Add new entries as parser behavior is expanded or when snapshot text extracted from
 real PDFs is available.
 
-Parser routing uses score-based selection (`match_score`) with diagnostics captured
-in `transform_run_summary.json` under `parser_selection_diagnostics`.
+Parser routing uses score-based selection (`match_score`) with diagnostics
+captured in `${FINANCE_PROCESSED_PATH}/state/workflow_pipeline_state.json`.

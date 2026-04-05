@@ -302,19 +302,22 @@ def print_workflow_result(result: WorkflowResult, *, verbose: bool = False) -> i
 
     print(f"Transactions: {result.total_rows} total")
     print(
-        "Categorized coverage: "
-        f"{result.categorized_count} transactions "
-        f"({categorized_count_ratio * 100.0:.2f}%), "
-        f"EUR {result.categorized_amount_eur_abs:.2f} "
-        f"({result.categorized_amount_eur_abs_ratio * 100.0:.2f}%)"
+        "Uncategorized exposure: "
+        f"{result.uncategorized_count} transactions "
+        f"({uncategorized_count_ratio * 100.0:.2f}%), "
+        f"EUR {result.uncategorized_amount_eur_abs:.2f} "
+        f"({result.uncategorized_amount_eur_abs_ratio * 100.0:.2f}% of Income)"
     )
-    if result.categorized_count_delta is None or result.categorized_amount_eur_abs_delta is None:
-        print("Newly categorized: n/a")
+    if (
+        result.uncategorized_count_delta is None
+        or result.uncategorized_amount_eur_abs_delta is None
+    ):
+        print("Uncategorized delta: n/a")
     else:
         print(
-            "Newly categorized: "
-            f"{result.categorized_count_delta:+d} transactions, "
-            f"EUR {result.categorized_amount_eur_abs_delta:+.2f}"
+            "Uncategorized delta: "
+            f"{result.uncategorized_count_delta:+d} transactions, "
+            f"EUR {result.uncategorized_amount_eur_abs_delta:+.2f}"
         )
     if verbose:
         print_selection_summary(
@@ -357,38 +360,38 @@ def print_workflow_result(result: WorkflowResult, *, verbose: bool = False) -> i
         )
         print(
             "Categorization: "
-            f"{result.categorized_count} categorized / "
-            f"{result.uncategorized_count} uncategorized "
-            f"(abs EUR categorized={result.categorized_amount_eur_abs:.2f}, "
-            f"uncategorized={result.uncategorized_amount_eur_abs:.2f})"
+            f"{result.uncategorized_count} uncategorized / "
+            f"{result.categorized_count} categorized "
+            f"(abs EUR uncategorized={result.uncategorized_amount_eur_abs:.2f}, "
+            f"categorized={result.categorized_amount_eur_abs:.2f})"
         )
         print(
-            "Categorization coverage by transaction count: "
-            f"{categorized_count_ratio * 100.0:.2f}% categorized / "
-            f"{uncategorized_count_ratio * 100.0:.2f}% uncategorized"
+            "Categorization by transaction count: "
+            f"{uncategorized_count_ratio * 100.0:.2f}% uncategorized / "
+            f"{categorized_count_ratio * 100.0:.2f}% categorized"
         )
         print(
-            "Categorization coverage by absolute EUR amount: "
-            f"{result.categorized_amount_eur_abs_ratio * 100.0:.2f}% categorized / "
-            f"{result.uncategorized_amount_eur_abs_ratio * 100.0:.2f}% uncategorized"
+            "Categorization by EUR amount vs Income: "
+            f"{result.uncategorized_amount_eur_abs_ratio * 100.0:.2f}% uncategorized / "
+            f"{result.categorized_amount_eur_abs_ratio * 100.0:.2f}% categorized"
         )
         if (
             result.categorized_count_delta is not None
             and result.uncategorized_count_delta is not None
         ):
             print(
-                "Delta since last run: "
-                f"categorized {result.categorized_count_delta:+d}, "
-                f"uncategorized {result.uncategorized_count_delta:+d}"
+                "Count delta since last run: "
+                f"uncategorized {result.uncategorized_count_delta:+d}, "
+                f"categorized {result.categorized_count_delta:+d}"
             )
         if (
             result.categorized_amount_eur_abs_delta is not None
             and result.uncategorized_amount_eur_abs_delta is not None
         ):
             print(
-                "Delta abs EUR: "
-                f"categorized {result.categorized_amount_eur_abs_delta:+.2f}, "
-                f"uncategorized {result.uncategorized_amount_eur_abs_delta:+.2f}"
+                "EUR delta since last run: "
+                f"uncategorized {result.uncategorized_amount_eur_abs_delta:+.2f}, "
+                f"categorized {result.categorized_amount_eur_abs_delta:+.2f}"
             )
         if result.backup_run is not None:
             print_backup_run(result.backup_run)

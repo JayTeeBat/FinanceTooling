@@ -114,6 +114,9 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
     assert 'id="specific-year"' in html
 
     payload = _extract_payload(html)
+    cashflow_yoy = payload["cashflow_yoy"]
+    assert isinstance(cashflow_yoy, dict)
+    assert "years" in cashflow_yoy
     transactions_raw = payload["transactions"]
     assert isinstance(transactions_raw, list)
     transactions = cast(list[dict[str, object]], transactions_raw)

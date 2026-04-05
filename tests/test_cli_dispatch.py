@@ -896,10 +896,10 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
 
     assert exit_code == 0
     assert "Transactions: 1 total" in stdio.out
-    assert "Categorized coverage: 1 transactions (100.00%), EUR 1.00 (100.00%)" in stdio.out
-    assert "Newly categorized: n/a" in stdio.out
+    assert "Uncategorized exposure: 0 transactions (0.00%), EUR 0.00 (0.00% of Income)" in stdio.out
+    assert "Uncategorized delta: n/a" in stdio.out
     assert "Backup run:" not in stdio.out
-    assert "Categorization coverage by transaction count:" not in stdio.out
+    assert "Categorization by transaction count:" not in stdio.out
     assert "transactions_master.parquet" not in stdio.out
 
 
@@ -967,10 +967,10 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
     assert "Backup run: 20260321T101530000000Z" in stdio.out
     assert str(backup_run.config_backup_dir) not in stdio.out
     assert (
-        "Categorization coverage by transaction count: "
-        "100.00% categorized / 0.00% uncategorized"
+        "Categorization by transaction count: "
+        "0.00% uncategorized / 100.00% categorized"
     ) in stdio.out
     assert (
-        "Categorization coverage by absolute EUR amount: "
-        "100.00% categorized / 0.00% uncategorized"
+        "Categorization by EUR amount vs Income: "
+        "0.00% uncategorized / 100.00% categorized"
     ) in stdio.out

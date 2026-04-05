@@ -88,60 +88,13 @@ class SummaryPayload(TypedDict):
     dashboard_path: str
     household_healthcheck_path: str
     completeness_report_path: str
-    completeness_status: str
-    file_coverage_ratio: float
-    missing_source_file_count: int
-    statement_reconciliation_checkable_file_count: int
-    statement_reconciliation_fail_count: int
-    statement_reconciliation_uncheckable_file_count: int
-    statement_reconciliation_pass_ratio: float | None
-    statement_reconciliation_median_abs_difference: float | None
-    statement_reconciliation_hsbc_median_abs_difference: float | None
-    parser_low_confidence_file_count: int
-    parser_selection_diagnostics: list[ParserSelectionDiagnostic]
-    hsbc_csv_files_scanned: int
-    hsbc_csv_statement_replaced_count: int
-    hsbc_pdf_fallback_statement_count: int
-    hsbc_csv_only_statement_count: int
-    hsbc_pdf_balance_validated_count: int
-    hsbc_pdf_balance_validation_fail_count: int
-    hsbc_selection_policy: str
-    hsbc_adaptive_source_switch_count: int
-    hsbc_selected_csv_month_count: int
-    hsbc_selected_pdf_month_count: int
-    hsbc_period_remap_applied_month_count: int
-    hsbc_period_remap_reassigned_tx_count: int
-    hsbc_period_remap_unassigned_csv_tx_count: int
-    hsbc_period_parse_variant_match_count: int
-    hsbc_boundary_table_start_count: int
-    hsbc_boundary_table_end_count: int
-    hsbc_boundary_rows_seen_in_table: int
-    hsbc_boundary_rows_rejected_outside_table: int
-    hsbc_boundary_rows_rejected_after_table: int
-    hsbc_boundary_transition_anomaly_count: int
-    hsbc_boundary_diagnostics: list[HsbcBoundaryDiagnostic]
-    hsbc_sign_from_running_balance_count: int
-    hsbc_sign_from_column_position_count: int
-    hsbc_sign_from_token_marker_count: int
-    hsbc_sign_from_description_marker_count: int
-    hsbc_sign_from_fallback_hint_count: int
-    hsbc_sign_default_debit_count: int
-    hsbc_sign_conflict_running_vs_marker_count: int
-    hsbc_sign_unresolved_ambiguous_count: int
-    hsbc_sign_diagnostics: list[HsbcSignDiagnostic]
-    hsbc_selection_diagnostics: list[HsbcSelectionDiagnostic]
-    ingest_parser_duration_seconds_by_parser: dict[str, float]
-    ingest_duration_seconds_by_bank: dict[str, float]
-    ingest_text_cache_enabled: bool
-    ingest_text_cache_hits: int
-    ingest_text_cache_misses: int
-    ingest_text_cache_write_count: int
     categorized_count: int
     uncategorized_count: int
     uncategorized_ratio: float
     categorized_amount_eur_abs: float
     uncategorized_amount_eur_abs: float
     total_amount_eur_abs: float
+    total_income_eur: float
     categorized_amount_eur_abs_ratio: float
     uncategorized_amount_eur_abs_ratio: float
     reviewed_count: int
@@ -159,23 +112,7 @@ class SummaryPayload(TypedDict):
     project_overrides_path: str
     transaction_overrides_path: str
     review_state_path: str
-    fx_cache_path: str
-    source_inventory_path: str
-    backup_run_id: str | None
-    backup_processed_dir: str | None
-    backup_config_dir: str | None
-    backup_manifest_paths: list[str]
-    backup_copied_file_count: int
-    backup_missing_file_count: int
-    backup_pruned_run_ids: list[str]
-    run_mode: str
-    files_selected_for_processing: int
-    files_skipped_already_committed: int
-    files_skipped_modified_existing: int
-    files_missing_since_last_commit: int
-    dataset_stale: bool
-    stale_reasons: list[str]
-    warnings: list[str]
+    cashflow_yoy: dict[str, object]
 
 
 @dataclass(frozen=True)
