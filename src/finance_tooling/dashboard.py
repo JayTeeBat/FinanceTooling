@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from finance_tooling.budgeting import BudgetConfig, budget_targets_to_rows, load_budget_config
-from finance_tooling.cashflow import build_cashflow_yoy_summary
+from finance_tooling.cashflow import build_cashflow_rows_frame, build_cashflow_yoy_summary
 from finance_tooling.projecting import (
     ProjectConfig,
     assign_projects_to_dataframe,
@@ -26,37 +26,48 @@ def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: 
 def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     if dataframe.empty:
         return pd.DataFrame(
-            columns=["booking_date", "category", "project", "amount_eur", "is_transfer"]
+            columns=[
+                "booking_date",
+                "category",
+                "project",
+                "amount_eur",
+                "is_transfer",
+                "tracked_savings",
+                "neutral_transfer",
+            ]
         )
 
-    working = dataframe.reindex(
-        columns=["booking_date", "category", "project", "amount_eur"]
-    ).copy()
-
-    booking_dates = pd.to_datetime(working["booking_date"], errors="coerce")
-    working["booking_date"] = booking_dates.dt.strftime("%Y-%m-%d")
-    working = working.loc[working["booking_date"].notna()].copy()
+    working = build_cashflow_rows_frame(dataframe)
     if working.empty:
         return pd.DataFrame(
-            columns=["booking_date", "category", "project", "amount_eur", "is_transfer"]
+            columns=[
+                "booking_date",
+                "category",
+                "project",
+                "amount_eur",
+                "is_transfer",
+                "tracked_savings",
+                "neutral_transfer",
+            ]
         )
 
-    working["category"] = _normalized_string_series(
-        working,
-        "category",
-        default="Uncategorized",
-    )
-    working["project"] = _normalized_string_series(
-        working,
-        "project",
-        default="Unassigned",
-    )
+    working["project"] = _normalized_string_series(working, "project", default="Unassigned")
     amounts = pd.to_numeric(working["amount_eur"], errors="coerce")
     working["amount_eur"] = amounts.astype(object)
     working.loc[amounts.isna(), "amount_eur"] = None
     working["is_transfer"] = working["category"].str.casefold().eq("transfers")
 
-    return working.sort_values("booking_date", kind="stable", ignore_index=True)
+    return working[
+        [
+            "booking_date",
+            "category",
+            "project",
+            "amount_eur",
+            "is_transfer",
+            "tracked_savings",
+            "neutral_transfer",
+        ]
+    ].sort_values("booking_date", kind="stable", ignore_index=True)
 
 
 def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
@@ -723,6 +734,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               : "Unassigned",
             amountEur: toNumber(item.amount_eur),
             isTransfer: Boolean(item.is_transfer) || (typeof item.category === "string" && item.category.trim().toLowerCase() === "transfers"),
+            trackedSavings: Boolean(item.tracked_savings),
+            neutralTransfer: Boolean(item.neutral_transfer),
           };
         })
         .filter((item) => item !== null);
@@ -791,6 +804,26 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           nextEnd = maxDate;
         }
         return { startDate: nextStart, endDate: nextEnd };
+      }
+
+      function normalizeCustomFullYearRange(startDate, endDate) {
+        if (windowSelect.value !== "custom") {
+          return { startDate, endDate };
+        }
+        const startMatch = /^(\\d{4})-01-01$/.exec(startDate);
+        const endMatch = /^(\\d{4})-01-01$/.exec(endDate);
+        if (!startMatch || !endMatch) {
+          return { startDate, endDate };
+        }
+        const startYear = Number(startMatch[1]);
+        const endYear = Number(endMatch[1]);
+        if (!Number.isFinite(startYear) || !Number.isFinite(endYear) || endYear !== startYear + 1) {
+          return { startDate, endDate };
+        }
+        return {
+          startDate,
+          endDate: String(startYear) + "-12-31",
+        };
       }
 
       function rangeForLastMonths(monthCount) {
@@ -919,7 +952,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateMonthlyNet(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.isTransfer) {
+          if (tx.amountEur === null || tx.neutralTransfer) {
+            continue;
+          }
+          if (tx.amountEur < 0 && tx.trackedSavings) {
             continue;
           }
           const existing = totals.get(tx.month) || 0;
@@ -934,7 +970,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (
+            tx.amountEur === null ||
+            tx.amountEur >= 0 ||
+            tx.neutralTransfer ||
+            tx.trackedSavings
+          ) {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
@@ -948,7 +989,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function collectYears(filtered) {
         const years = new Set();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (
+            tx.amountEur === null ||
+            tx.amountEur >= 0 ||
+            tx.neutralTransfer ||
+            tx.trackedSavings
+          ) {
             continue;
           }
           years.add(Number(tx.bookingDate.slice(0, 4)));
@@ -978,7 +1024,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const current = new Array(12).fill(0);
         const previous = new Array(12).fill(0);
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (
+            tx.amountEur === null ||
+            tx.amountEur >= 0 ||
+            tx.neutralTransfer ||
+            tx.trackedSavings
+          ) {
             continue;
           }
           const year = Number(tx.bookingDate.slice(0, 4));
@@ -1004,7 +1055,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const categoryActual = new Map();
         const projectActual = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.amountEur >= 0 || tx.isTransfer) {
+          if (
+            tx.amountEur === null ||
+            tx.amountEur >= 0 ||
+            tx.neutralTransfer ||
+            tx.trackedSavings
+          ) {
             continue;
           }
           const spend = Math.abs(tx.amountEur);
@@ -1232,6 +1288,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           state.endDate = state.startDate;
           endInput.value = state.endDate;
         }
+        const normalizedRange = normalizeCustomFullYearRange(state.startDate, state.endDate);
+        state.startDate = normalizedRange.startDate;
+        state.endDate = normalizedRange.endDate;
+        if (startInput.value !== state.startDate) {
+          startInput.value = state.startDate;
+        }
+        if (endInput.value !== state.endDate) {
+          endInput.value = state.endDate;
+        }
 
         const filtered = filterTransactions(state);
         const categoryProjectFiltered = filterByCategoryProject(state);
@@ -1243,15 +1308,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.amountEur === null) {
             continue;
           }
-          if (tx.isTransfer) {
+          if (tx.neutralTransfer) {
             transfers += Math.abs(tx.amountEur);
             continue;
           }
-          net += tx.amountEur;
           if (tx.amountEur >= 0) {
             income += tx.amountEur;
-          } else {
+            net += tx.amountEur;
+          } else if (!tx.trackedSavings) {
             expense += Math.abs(tx.amountEur);
+            net += tx.amountEur;
           }
         }
 

@@ -105,6 +105,7 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
     html = destination.read_text(encoding="utf-8")
     assert "Interactive Finance Dashboard" in html
     assert 'id="window-select"' in html
+    assert "normalizeCustomFullYearRange" in html
     assert "Last 3 Years" in html
     assert "Last 5 Years" in html
     assert "Last 10 Years" in html
@@ -236,7 +237,7 @@ def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path
     assert transactions[0]["is_transfer"] is True
     assert transactions[1]["category"] == "Uncategorized"
     assert transactions[1]["project"] == "Unassigned"
-    assert transactions[1]["amount_eur"] is None
+    assert transactions[1]["amount_eur"] == 0.0
     assert transactions[2]["category"] == "Income"
     assert transactions[2]["project"] == "Unassigned"
     assert transactions[2]["amount_eur"] == 1000.5
