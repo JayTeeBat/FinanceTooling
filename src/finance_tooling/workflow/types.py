@@ -117,6 +117,11 @@ class SummaryPayload(TypedDict):
     review_state_path: str
     cashflow_type_unknown_count: int
     cashflow_type_unknown_categories: list[str]
+    exclude_count: int
+    exclude_amount_eur_abs: float
+    exclude_categories: list[str]
+    account_transfer_override_count: int
+    account_transfer_conflict_count: int
     account_boundary_unknown_count: int
     account_boundary_unknown_side_count: int
     account_inference_source_counts: dict[str, int]
