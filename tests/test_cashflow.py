@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.canonical import canonical_dataframe_from_transactions
 from finance_tooling.cashflow import (
     build_cashflow_yoy_summary,
     resolve_cashflow_types_for_dataframe,
 )
 from finance_tooling.classify import ClassificationRules, TaxonomyCategory
 from finance_tooling.models import Transaction
-from finance_tooling.store import canonicalize_transactions
+from finance_tooling.store import _frame_from_transactions
 from finance_tooling.transaction_overrides import load_transaction_override_store
 
 
@@ -44,9 +43,7 @@ def _rules() -> ClassificationRules:
 
 
 def _dataframe_for(tx: Transaction):
-    return canonical_dataframe_from_transactions(
-        canonicalize_transactions([tx], ingested_at=datetime(2026, 4, 6, tzinfo=UTC))
-    )
+    return _frame_from_transactions([tx])
 
 
 def test_resolve_cashflow_types_internal_to_internal_becomes_transfer(tmp_path: Path) -> None:
@@ -160,9 +157,7 @@ def test_build_cashflow_yoy_summary_excludes_exclude_rows_from_metrics() -> None
         ),
     ]
 
-    dataframe = canonical_dataframe_from_transactions(
-        canonicalize_transactions(transactions, ingested_at=datetime(2026, 4, 6, tzinfo=UTC))
-    )
+    dataframe = _frame_from_transactions(transactions)
     summary = build_cashflow_yoy_summary(dataframe)
     years = summary["years"]
 
