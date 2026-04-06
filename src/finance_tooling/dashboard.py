@@ -1336,7 +1336,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           setSpecificYearState();
           refreshDashboard();
         });
-        for (const node of [categorySelect, projectSelect, yoyYearSelect]) {
+        for (const node of [categorySelect, projectSelect]) {
           node.addEventListener("change", refreshDashboard);
         }
       }
