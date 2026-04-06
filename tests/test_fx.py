@@ -2,6 +2,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from finance_tooling.fx import (
     build_fx_lookup_index,
     ensure_fx_cache,
@@ -35,6 +37,7 @@ def test_parse_ecb_csv() -> None:
 
     assert len(frame) == 2
     assert list(frame["currency"]) == ["USD", "USD"]
+    assert frame.loc[0, "rate_to_eur"] == pytest.approx(1 / 1.1767, rel=1e-9)
 
 
 def test_resolve_rate_uses_previous_day_fallback() -> None:
@@ -49,7 +52,7 @@ def test_resolve_rate_uses_previous_day_fallback() -> None:
 
     assert resolution is not None
     assert resolution.rate_date == date(2026, 2, 20)
-    assert resolution.rate_to_eur == Decimal("1.1767")
+    assert float(resolution.rate_to_eur) == pytest.approx(1 / 1.1767, rel=1e-9)
 
 
 def test_ensure_fx_cache_fetches_missing_ranges(tmp_path: Path, monkeypatch) -> None:
@@ -77,6 +80,27 @@ def test_ensure_fx_cache_fetches_missing_ranges(tmp_path: Path, monkeypatch) -> 
     assert len(called) == 1
     assert len(cache) == 1
     assert cache_path.exists()
+
+
+def test_ensure_fx_cache_migrates_legacy_ecb_semantics(tmp_path: Path) -> None:
+    cache_path = tmp_path / "fx_rates_history.parquet"
+    legacy = parse_ecb_csv(
+        "KEY,TIME_PERIOD,OBS_VALUE\nEXR.D.GBP.EUR.SP00.A,2017-01-27,0.8517\n",
+        "GBP",
+    )
+    legacy = legacy.drop(columns=["rate_semantics_version"])
+    legacy.loc[:, "rate_to_eur"] = 0.8517
+    legacy.to_parquet(cache_path, index=False)
+
+    cache, warnings = ensure_fx_cache(
+        cache_path,
+        [_tx(date(2017, 1, 27), "GBP")],
+        base_currency="EUR",
+        auto_fetch=False,
+    )
+
+    assert warnings == []
+    assert cache.loc[0, "rate_to_eur"] == pytest.approx(1 / 0.8517, rel=1e-9)
 
 
 def test_resolve_rate_from_index_matches_dataframe_resolution() -> None:

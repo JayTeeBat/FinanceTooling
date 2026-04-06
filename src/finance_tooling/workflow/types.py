@@ -115,6 +115,7 @@ class SummaryPayload(TypedDict):
     project_overrides_path: str
     transaction_overrides_path: str
     review_state_path: str
+    fx_rate_semantics_version: int
     cashflow_type_unknown_count: int
     cashflow_type_unknown_categories: list[str]
     exclude_count: int

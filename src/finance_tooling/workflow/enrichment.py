@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import pandas as pd
+
 from finance_tooling.account_inference import load_account_inference_config
 from finance_tooling.classify import (
     build_classification_diagnostics,
@@ -84,6 +86,96 @@ def apply_fx_and_mtime(
         )
 
     return enriched, warnings
+
+
+def recompute_dataframe_fx(
+    dataframe: pd.DataFrame,
+    settings: Settings,
+) -> tuple[pd.DataFrame, list[str]]:
+    """Recompute FX-derived canonical fields for the full merged dataframe."""
+    if dataframe.empty:
+        return dataframe.copy(), []
+
+    seed_transactions: list[Transaction] = []
+    for row in dataframe.to_dict(orient="records"):
+        booking_ts = pd.to_datetime(row.get("booking_date"), errors="coerce")
+        if pd.isna(booking_ts):
+            continue
+        currency = str(row.get("currency") or settings.base_currency).strip().upper()
+        seed_transactions.append(
+            Transaction(
+                booking_date=booking_ts.date(),
+                description=str(row.get("description") or ""),
+                amount_native=Decimal(str(row.get("amount_native") or "0")),
+                currency=currency,
+                source_file=Path(str(row.get("source_file") or "unknown")),
+                bank=str(row.get("bank") or "UNKNOWN"),
+                parser=str(row.get("parser") or "unknown"),
+            )
+        )
+
+    cache, warnings = ensure_fx_cache(
+        settings.fx_cache_path,
+        seed_transactions,
+        base_currency=settings.base_currency,
+        auto_fetch=settings.fx_auto_fetch,
+    )
+    fx_lookup_index = build_fx_lookup_index(cache)
+
+    recomputed = dataframe.copy()
+    fx_rates: list[float | None] = []
+    fx_rate_dates: list[str | None] = []
+    fx_sources: list[str | None] = []
+    amounts_eur: list[float | None] = []
+
+    for row in recomputed.to_dict(orient="records"):
+        booking_ts = pd.to_datetime(row.get("booking_date"), errors="coerce")
+        currency = str(row.get("currency") or settings.base_currency).strip().upper()
+        amount_native = Decimal(str(row.get("amount_native") or "0"))
+        if pd.isna(booking_ts):
+            fx_rates.append(None)
+            fx_rate_dates.append(None)
+            fx_sources.append(None)
+            amounts_eur.append(None)
+            continue
+
+        resolution = resolve_rate_from_index(
+            fx_lookup_index,
+            currency=currency,
+            booking_date=booking_ts.date(),
+            base_currency=settings.base_currency,
+        )
+        if resolution is None:
+            warnings.append(
+                "Missing dated FX rate for currency "
+                f"{currency} on or before {booking_ts.date()} "
+                f"({Path(str(row.get('source_file') or 'unknown')).name}); "
+                "converted metrics will skip this row"
+            )
+            fx_rates.append(None)
+            fx_rate_dates.append(None)
+            fx_sources.append(None)
+            amounts_eur.append(None)
+            continue
+
+        fx_rates.append(float(resolution.rate_to_eur))
+        fx_rate_dates.append(resolution.rate_date.isoformat())
+        fx_sources.append(resolution.source)
+        amounts_eur.append(float(amount_native * resolution.rate_to_eur))
+
+    recomputed["currency"] = (
+        recomputed.get("currency", pd.Series(settings.base_currency, index=recomputed.index))
+        .astype("string")
+        .fillna(settings.base_currency)
+        .str.strip()
+        .str.upper()
+        .astype(object)
+    )
+    recomputed["fx_rate_to_eur"] = fx_rates
+    recomputed["fx_rate_date"] = fx_rate_dates
+    recomputed["fx_source"] = fx_sources
+    recomputed["amount_eur"] = amounts_eur
+    return recomputed, warnings
 
 
 def enrich_transactions(transactions: list[Transaction], settings: Settings) -> EnrichmentResult:

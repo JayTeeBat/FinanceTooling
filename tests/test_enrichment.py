@@ -5,10 +5,15 @@ from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from finance_tooling.config import Settings
 from finance_tooling.models import Transaction
-from finance_tooling.workflow.enrichment import apply_fx_and_mtime, enrich_transactions
+from finance_tooling.workflow.enrichment import (
+    apply_fx_and_mtime,
+    enrich_transactions,
+    recompute_dataframe_fx,
+)
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -135,3 +140,47 @@ def test_apply_fx_and_mtime_memoizes_source_file_mtime_stats(tmp_path: Path, mon
     assert warnings == []
     assert len(result) == 2
     assert stat_calls == 1
+
+
+def test_recompute_dataframe_fx_repairs_existing_gbp_rows(tmp_path: Path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    cache = pd.DataFrame(
+        [
+            {
+                "currency": "GBP",
+                "rate_date": date(2017, 1, 27),
+                "rate_to_eur": 1 / 0.8517,
+                "source": "ECB_SDW",
+                "fetched_at": "2026-04-06T00:00:00+00:00",
+                "rate_semantics_version": 2,
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.enrichment.ensure_fx_cache",
+        lambda *_args, **_kwargs: (cache, []),
+    )
+
+    dataframe = pd.DataFrame(
+        [
+            {
+                "booking_date": "2017-01-27",
+                "description": "Salary",
+                "amount_native": 4357.95,
+                "currency": "GBP",
+                "amount_eur": 3711.66,
+                "fx_rate_to_eur": 0.8517,
+                "fx_rate_date": "2017-01-27",
+                "fx_source": "ECB_SDW",
+                "source_file": str(tmp_path / "statement.pdf"),
+                "bank": "HSBC",
+                "parser": "hsbc",
+            }
+        ]
+    )
+
+    recomputed, warnings = recompute_dataframe_fx(dataframe, settings)
+
+    assert warnings == []
+    assert recomputed.loc[0, "fx_rate_to_eur"] == pytest.approx(1 / 0.8517, rel=1e-9)
+    assert recomputed.loc[0, "amount_eur"] == pytest.approx(4357.95 / 0.8517, rel=1e-9)

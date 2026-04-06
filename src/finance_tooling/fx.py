@@ -17,7 +17,15 @@ from finance_tooling.models import Transaction
 
 _ECB_SOURCE = "ECB_SDW"
 _ECB_URL = "https://data-api.ecb.europa.eu/service/data/EXR"
-_CACHE_COLUMNS = ["currency", "rate_date", "rate_to_eur", "source", "fetched_at"]
+FX_RATE_SEMANTICS_VERSION = 2
+_CACHE_COLUMNS = [
+    "currency",
+    "rate_date",
+    "rate_to_eur",
+    "source",
+    "fetched_at",
+    "rate_semantics_version",
+]
 
 
 @dataclass(frozen=True)
@@ -55,6 +63,34 @@ def read_fx_cache(path: Path) -> pd.DataFrame:
     return frame.drop_duplicates(subset=["currency", "rate_date"], keep="last")
 
 
+def _migrate_cache_rate_semantics(frame: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+    """Migrate cached FX rows to the current EUR-per-unit semantics."""
+    if frame.empty:
+        return frame, False
+
+    migrated = frame.copy()
+    version_series = pd.to_numeric(
+        migrated.get("rate_semantics_version"),
+        errors="coerce",
+    )
+    needs_migration = version_series.ne(FX_RATE_SEMANTICS_VERSION)
+    ecb_rows = migrated["source"].astype("string").fillna("").eq(_ECB_SOURCE)
+    non_base_rows = migrated["currency"].astype("string").fillna("").str.upper().ne("EUR")
+    invert_mask = needs_migration & ecb_rows & non_base_rows
+
+    changed = bool(invert_mask.any() or needs_migration.any())
+    if invert_mask.any():
+        invert_index = migrated.index[invert_mask]
+        rates = pd.to_numeric(migrated.loc[invert_index, "rate_to_eur"], errors="coerce")
+        valid = rates.notna() & rates.ne(0.0)
+        if valid.any():
+            migrated.loc[invert_index[valid], "rate_to_eur"] = (1.0 / rates.loc[valid]).astype(
+                float
+            )
+    migrated["rate_semantics_version"] = FX_RATE_SEMANTICS_VERSION
+    return migrated, changed
+
+
 def _write_fx_cache(path: Path, frame: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(".tmp.parquet")
@@ -74,8 +110,11 @@ def parse_ecb_csv(csv_text: str, currency: str) -> pd.DataFrame:
 
         try:
             rate_date = datetime.strptime(time_period, "%Y-%m-%d").date()
-            rate_to_eur = float(obs_value)
-        except ValueError:
+            quoted_rate = Decimal(str(obs_value))
+            if quoted_rate <= 0:
+                continue
+            rate_to_eur = float(Decimal("1") / quoted_rate)
+        except (ValueError, ArithmeticError):
             continue
 
         rows.append(
@@ -85,6 +124,7 @@ def parse_ecb_csv(csv_text: str, currency: str) -> pd.DataFrame:
                 "rate_to_eur": rate_to_eur,
                 "source": _ECB_SOURCE,
                 "fetched_at": datetime.now(UTC).isoformat(),
+                "rate_semantics_version": FX_RATE_SEMANTICS_VERSION,
             }
         )
 
@@ -104,6 +144,7 @@ def fetch_ecb_rates(currency: str, start_date: date, end_date: date) -> pd.DataF
                 "rate_to_eur": 1.0,
                 "source": "BASE",
                 "fetched_at": datetime.now(UTC).isoformat(),
+                "rate_semantics_version": FX_RATE_SEMANTICS_VERSION,
             }
         ]
         return pd.DataFrame(rows, columns=_CACHE_COLUMNS)
@@ -147,6 +188,7 @@ def ensure_fx_cache(
 ) -> tuple[pd.DataFrame, list[str]]:
     """Ensure cache contains rates for the transaction date ranges."""
     cache = read_fx_cache(cache_path)
+    cache, migrated = _migrate_cache_rate_semantics(cache)
     warnings: list[str] = []
     requirements = _required_ranges(transactions, base_currency=base_currency)
 
@@ -182,6 +224,9 @@ def ensure_fx_cache(
         fetched_all = pd.concat(fetched_frames, ignore_index=True)
         cache = pd.concat([cache, fetched_all], ignore_index=True)
         cache = cache.drop_duplicates(subset=["currency", "rate_date"], keep="last")
+        cache = cache.sort_values(by=["currency", "rate_date"]).reset_index(drop=True)
+        _write_fx_cache(cache_path, cache)
+    elif migrated:
         cache = cache.sort_values(by=["currency", "rate_date"]).reset_index(drop=True)
         _write_fx_cache(cache_path, cache)
 

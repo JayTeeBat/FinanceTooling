@@ -17,6 +17,7 @@ from finance_tooling.account_inference import infer_accounts_for_transactions
 from finance_tooling.backup import create_stage_backup_run
 from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
 from finance_tooling.dashboard import render_dashboard_html
+from finance_tooling.fx import FX_RATE_SEMANTICS_VERSION
 from finance_tooling.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.models import WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
@@ -140,6 +141,11 @@ def _is_transform_output_current(
     )
     earliest_output_mtime_ns = min(path.stat().st_mtime_ns for path in required_outputs)
     if earliest_output_mtime_ns < latest_input_mtime_ns:
+        return False
+    summary_payload = _load_previous_summary(settings.summary_json_path)
+    if summary_payload is None:
+        return False
+    if _summary_int(summary_payload, "fx_rate_semantics_version") != FX_RATE_SEMANTICS_VERSION:
         return False
     try:
         canonical_columns = set(pd.read_parquet(settings.master_parquet_path).columns)
