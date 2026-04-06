@@ -74,6 +74,7 @@ def test_infer_accounts_assigns_statement_side_and_counterparty_rule() -> None:
                 banks=(),
                 account_labels=(),
                 categories=(),
+                is_employer=True,
                 from_account_ref=None,
                 to_account_ref=None,
                 from_account_type="external",

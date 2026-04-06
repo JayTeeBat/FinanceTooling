@@ -32,6 +32,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "project",
                 "amount_eur",
                 "cashflow_type",
+                "economic_role",
                 "is_transfer",
                 "tracked_savings",
                 "neutral_transfer",
@@ -47,6 +48,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "project",
                 "amount_eur",
                 "cashflow_type",
+                "economic_role",
                 "is_transfer",
                 "tracked_savings",
                 "neutral_transfer",
@@ -66,6 +68,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             "project",
             "amount_eur",
             "cashflow_type",
+            "economic_role",
             "is_transfer",
             "tracked_savings",
             "neutral_transfer",
@@ -80,7 +83,7 @@ def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
 
 def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
     rows_frame = build_cashflow_rows_frame(dataframe)
-    if rows_frame.empty or "cashflow_type" not in rows_frame.columns:
+    if rows_frame.empty or "economic_role" not in rows_frame.columns:
         return []
 
     warnings: list[str] = []
@@ -102,7 +105,7 @@ def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
             f"Cashflow type unresolved for {unknown_count} {transaction_word} across: {category_list}"
         )
 
-    exclude_mask = rows_frame["cashflow_type"].astype("string").str.casefold().eq("exclude")
+    exclude_mask = rows_frame["economic_role"].astype("string").str.casefold().eq("exclude")
     exclude_count = int(exclude_mask.sum())
     if exclude_count > 0:
         exclude_categories = sorted(
@@ -117,7 +120,7 @@ def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
         category_list = ", ".join(preview_categories)
         transaction_word = "transaction" if exclude_count == 1 else "transactions"
         warnings.append(
-            f"Cashflow type exclude applies to {exclude_count} {transaction_word} across: {category_list}"
+            f"Economic role exclude applies to {exclude_count} {transaction_word} across: {category_list}"
         )
 
     return warnings
@@ -184,8 +187,8 @@ def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list
         .str.strip()
         .str.casefold()
     )
-    cashflow_type = (
-        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+    economic_role = (
+        dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
         .astype("string")
         .fillna("")
         .str.strip()
@@ -199,7 +202,7 @@ def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list
         .str.casefold()
     )
     boundary_transfer_mask = (
-        from_type.eq("internal") & to_type.eq("internal") & cashflow_type.eq("transfer")
+        from_type.eq("internal") & to_type.eq("internal") & economic_role.eq("transfer")
     )
     override_count = int(boundary_transfer_mask.sum())
     if override_count == 0:
@@ -687,12 +690,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     </section>
 
     <section class="card">
-      <h2>Key Metrics</h2>
+      <h2>Income / Expenses Balance</h2>
       <div class="kpis" style="margin-top: 10px;">
         <article class="kpi"><span class="label">Income</span><span class="value" id="kpi-income">-</span></article>
-        <article class="kpi"><span class="label">Expense</span><span class="value" id="kpi-expense">-</span></article>
+        <article class="kpi"><span class="label">Expenses</span><span class="value" id="kpi-expense">-</span></article>
         <article class="kpi"><span class="label">Transfers</span><span class="value" id="kpi-transfers">-</span></article>
-        <article class="kpi"><span class="label">Net</span><span class="value" id="kpi-net">-</span></article>
+        <article class="kpi"><span class="label">Balance</span><span class="value" id="kpi-net">-</span></article>
         <article class="kpi"><span class="label">Transactions</span><span class="value" id="kpi-tx-count">-</span></article>
         <article class="kpi"><span class="label">Budget Month</span><span class="value" id="kpi-budget-month">-</span></article>
         <article class="kpi"><span class="label">Budget Variance</span><span class="value" id="kpi-budget-variance">-</span></article>
@@ -882,6 +885,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               : "Unassigned",
             amountEur: toNumber(item.amount_eur),
             cashflowType: typeof item.cashflow_type === "string" ? item.cashflow_type.trim().toLowerCase() : "unknown",
+            economicRole: typeof item.economic_role === "string" ? item.economic_role.trim().toLowerCase() : "expense",
             isTransfer: Boolean(item.is_transfer) || (typeof item.category === "string" && item.category.trim().toLowerCase() === "transfers"),
             trackedSavings: Boolean(item.tracked_savings),
             neutralTransfer: Boolean(item.neutral_transfer),
@@ -1101,7 +1105,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateMonthlyNet(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || !["in", "out"].includes(tx.cashflowType)) {
+          if (tx.amountEur === null || !["income", "expense"].includes(tx.economicRole)) {
             continue;
           }
           const existing = totals.get(tx.month) || 0;
@@ -1116,7 +1120,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
+          if (tx.amountEur === null || tx.economicRole !== "expense") {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
@@ -1132,7 +1136,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function collectYears(filtered) {
         const years = new Set();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
+          if (tx.amountEur === null || tx.economicRole !== "expense") {
             continue;
           }
           years.add(Number(tx.bookingDate.slice(0, 4)));
@@ -1162,7 +1166,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const current = new Array(12).fill(0);
         const previous = new Array(12).fill(0);
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
+          if (tx.amountEur === null || tx.economicRole !== "expense") {
             continue;
           }
           const year = Number(tx.bookingDate.slice(0, 4));
@@ -1190,7 +1194,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const categoryActual = new Map();
         const projectActual = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
+          if (tx.amountEur === null || tx.economicRole !== "expense") {
             continue;
           }
           const spend = -tx.amountEur;
@@ -1442,10 +1446,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             transfers += Math.abs(tx.amountEur);
             continue;
           }
-          if (tx.cashflowType === "in") {
+          if (tx.economicRole === "income") {
             income += tx.amountEur;
             net += tx.amountEur;
-          } else if (tx.cashflowType === "out") {
+          } else if (tx.economicRole === "expense") {
             expense -= tx.amountEur;
             net += tx.amountEur;
           }

@@ -166,6 +166,13 @@ Practical policy:
 - if a transaction-level exception is needed, set `cashflow_type` directly in
   `transaction_overrides.yaml`
 
+Canonical outputs also include `economic_role`, which the primary dashboard now
+uses for displayed income/expenses balance metrics:
+- `economic_role = income`: employer-identified payments plus interest
+- `economic_role = expense`: everything not identified as income/transfer/exclude
+- `economic_role = transfer`: excluded from the income/expenses balance
+- `economic_role = exclude`: ignored in the income/expenses balance
+
 Account-boundary inference is configured separately in `account_rules.yaml`:
 - `internal_accounts` defines personal/internal statement accounts
 - `counterparty_rules` infers the emitting or receiving counterparty side

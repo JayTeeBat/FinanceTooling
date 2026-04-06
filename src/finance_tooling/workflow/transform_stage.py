@@ -147,6 +147,7 @@ def _is_transform_output_current(
         return False
     required_columns = {
         "cashflow_type",
+        "economic_role",
         "from_account_ref",
         "to_account_ref",
         "from_account_type",
@@ -683,6 +684,7 @@ def run_transform(
         backup_run=backup_run,
         classification_rules=enrichment.classification_rules,
         transaction_override_store=enrichment.transaction_override_store,
+        account_inference_config=enrichment.account_inference_config,
         upsert_transactions_fn=upsert_transactions,
         render_dashboard_html_fn=render_dashboard_html,
         render_household_healthcheck_html_fn=render_household_healthcheck_html,

@@ -110,6 +110,7 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "category_source": tx.category_source,
             "category_rule_id": tx.category_rule_id,
             "cashflow_type": tx.cashflow_type,
+            "economic_role": tx.economic_role,
             "from_account_ref": tx.from_account_ref,
             "to_account_ref": tx.to_account_ref,
             "from_account_type": tx.from_account_type,
@@ -204,6 +205,11 @@ def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
                 cashflow_type=(
                     str(row["cashflow_type"])
                     if row.get("cashflow_type") is not None and not pd.isna(row["cashflow_type"])
+                    else None
+                ),
+                economic_role=(
+                    str(row["economic_role"])
+                    if row.get("economic_role") is not None and not pd.isna(row["economic_role"])
                     else None
                 ),
                 from_account_ref=(
