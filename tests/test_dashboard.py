@@ -22,9 +22,7 @@ def _extract_payload(html: str) -> dict[str, object]:
     return json.loads(match.group(1))
 
 
-def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
-    tmp_path: Path,
-) -> None:
+def test_render_dashboard_html_embeds_transactions_and_projects(tmp_path: Path) -> None:
     frame = pd.DataFrame(
         [
             {
@@ -79,20 +77,6 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
         ),
         encoding="utf-8",
     )
-    budget_targets_path = tmp_path / "budget_targets.yaml"
-    budget_targets_path.write_text(
-        "\n".join(
-            [
-                "targets:",
-                "  - month: '2026-01'",
-                "    category: Transport",
-                "    project: Mobility",
-                "    amount: 200.0",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
     destination = tmp_path / "dashboard.html"
     render_dashboard_html(
         frame,
@@ -102,7 +86,6 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
         files_failed=0,
         new_rows=2,
         project_rules_path=project_rules_path,
-        budget_targets_path=budget_targets_path,
     )
 
     html = destination.read_text(encoding="utf-8")
@@ -127,11 +110,6 @@ def test_render_dashboard_html_embeds_transactions_projects_and_budget_targets(
     assert transactions[0]["project"] == "Mobility"
     assert transactions[1]["project"] == "Unassigned"
     assert transactions[2]["is_transfer"] is True
-    budget_targets_raw = payload["budget_targets"]
-    assert isinstance(budget_targets_raw, list)
-    budget_targets = cast(list[dict[str, object]], budget_targets_raw)
-    assert budget_targets[0]["category"] == "Transport"
-    assert budget_targets[0]["amount"] == 200.0
 
 
 def test_render_dashboard_html_includes_config_warnings_when_loading_fails(tmp_path: Path) -> None:
@@ -151,8 +129,6 @@ def test_render_dashboard_html_includes_config_warnings_when_loading_fails(tmp_p
     )
     project_rules_path = tmp_path / "broken_project_rules.yaml"
     project_rules_path.write_text("rules: {bad: true}\n", encoding="utf-8")
-    budget_targets_path = tmp_path / "broken_budget_targets.yaml"
-    budget_targets_path.write_text("targets: duplicate\n", encoding="utf-8")
 
     destination = tmp_path / "dashboard.html"
     render_dashboard_html(
@@ -163,13 +139,12 @@ def test_render_dashboard_html_includes_config_warnings_when_loading_fails(tmp_p
         files_failed=0,
         new_rows=1,
         project_rules_path=project_rules_path,
-        budget_targets_path=budget_targets_path,
     )
 
     payload = _extract_payload(destination.read_text(encoding="utf-8"))
     warnings = payload["warnings"]
     assert isinstance(warnings, list)
-    assert len(warnings) == 2
+    assert len(warnings) == 1
 
 
 def test_render_dashboard_html_includes_cashflow_type_warning_when_unknown_present(
@@ -238,7 +213,7 @@ def test_render_dashboard_html_includes_cashflow_type_exclude_warning_when_prese
     payload = _extract_payload(destination.read_text(encoding="utf-8"))
     warnings = cast(list[str], payload["warnings"])
     assert len(warnings) == 1
-    assert "Cashflow type exclude applies to 1 transaction" in warnings[0]
+    assert "Economic role exclude applies to 1 transaction" in warnings[0]
     assert "Non Personal Transactions" in warnings[0]
 
 
@@ -292,6 +267,7 @@ def test_render_dashboard_html_includes_account_transfer_warning_when_boundary_r
                 "amount_eur": -250.0,
                 "category": "Shopping",
                 "cashflow_type": "transfer",
+                "economic_role": "transfer",
                 "from_account_type": "internal",
                 "to_account_type": "internal",
                 "account_inference_source": "account_rule",
@@ -442,7 +418,6 @@ def test_render_dashboard_html_cashflow_income_uses_income_category_only(tmp_pat
         files_failed=0,
         new_rows=3,
         project_rules_path=None,
-        budget_targets_path=None,
     )
 
     payload = _extract_payload(destination.read_text(encoding="utf-8"))

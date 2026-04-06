@@ -39,6 +39,7 @@ _CONTEXT_EXPORT_COLUMNS = (
     "amount_native",
     "currency",
     "bank",
+    "economic_role",
 )
 _EDITABLE_EXPORT_COLUMNS = (
     "category",
@@ -313,7 +314,7 @@ def export_review_rows(
     review_rows[PROJECT_TAGS_COLUMN] = None
     review_rows[REVIEWED_COLUMN] = False
     review_rows[REVIEW_COMMENT_COLUMN] = None
-    for removable in ("category_source", "category_rule_id"):
+    for removable in ("category_source", "category_rule_id", "cashflow_type"):
         if removable in review_rows.columns:
             review_rows = review_rows.drop(columns=[removable])
 

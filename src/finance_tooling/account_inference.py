@@ -49,6 +49,7 @@ class CounterpartyRule:
     banks: tuple[str, ...]
     account_labels: tuple[str, ...]
     categories: tuple[str, ...]
+    is_employer: bool
     from_account_ref: str | None
     to_account_ref: str | None
     from_account_type: AccountType | None
@@ -212,6 +213,7 @@ def _parse_counterparty_rules(raw_rules: object) -> tuple[CounterpartyRule, ...]
                     for item in (categories_raw if isinstance(categories_raw, list) else [])
                     if (normalized := _normalize_lower(item)) is not None
                 ),
+                is_employer=bool(rule.get("is_employer")),
                 from_account_ref=_normalize_account_ref(rule.get("from_account_ref")),
                 to_account_ref=_normalize_account_ref(rule.get("to_account_ref")),
                 from_account_type=_normalize_account_type(rule.get("from_account_type")),
@@ -358,3 +360,15 @@ def infer_accounts_for_transactions(
         )
 
     return updated
+
+
+def transaction_matches_identified_employer(
+    transaction: Transaction,
+    *,
+    config: AccountInferenceConfig,
+) -> bool:
+    """Return True when a transaction matches an employer-marked counterparty rule."""
+    return any(
+        rule.is_employer and _rule_matches(transaction, rule)
+        for rule in config.counterparty_rules
+    )

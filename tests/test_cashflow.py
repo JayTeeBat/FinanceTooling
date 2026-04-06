@@ -4,9 +4,11 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from finance_tooling.account_inference import AccountInferenceConfig, CounterpartyRule
 from finance_tooling.cashflow import (
     build_cashflow_yoy_summary,
     resolve_cashflow_types_for_dataframe,
+    resolve_economic_roles_for_dataframe,
 )
 from finance_tooling.classify import ClassificationRules, TaxonomyCategory
 from finance_tooling.models import Transaction
@@ -44,6 +46,34 @@ def _rules() -> ClassificationRules:
 
 def _dataframe_for(tx: Transaction):
     return _frame_from_transactions([tx])
+
+
+def _account_config(*, employer_patterns: tuple[str, ...] = ()) -> AccountInferenceConfig:
+    return AccountInferenceConfig(
+        internal_accounts=(),
+        counterparty_rules=(
+            (
+                CounterpartyRule(
+                    rule_id="employer",
+                    priority=100,
+                    match_type="contains",
+                    patterns=employer_patterns,
+                    expense_only=False,
+                    income_only=True,
+                    banks=(),
+                    account_labels=(),
+                    categories=(),
+                    is_employer=True,
+                    from_account_ref=None,
+                    to_account_ref=None,
+                    from_account_type="external",
+                    to_account_type=None,
+                ),
+            )
+            if employer_patterns
+            else ()
+        ),
+    )
 
 
 def test_resolve_cashflow_types_internal_to_internal_becomes_transfer(tmp_path: Path) -> None:
@@ -224,3 +254,179 @@ def test_resolve_cashflow_types_falls_back_to_sign_for_negative_unmapped_rows(
     assert warnings == []
     assert result.dataframe.loc[0, "cashflow_type"] == "out"
     assert result.unknown_count == 0
+
+
+def test_resolve_economic_roles_marks_employer_as_income() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Acme salary payment",
+        amount_native=Decimal("1250.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Uncategorized",
+        cashflow_type="in",
+        amount_eur=Decimal("1250.00"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(employer_patterns=("acme",)),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "income"
+    assert result.role_counts == {"income": 1, "expense": 0, "transfer": 0, "exclude": 0}
+
+
+def test_resolve_economic_roles_marks_interest_as_income() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Monthly interest",
+        amount_native=Decimal("5.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Income",
+        subcategory="Interest",
+        cashflow_type="in",
+        amount_eur=Decimal("5.00"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "income"
+
+
+def test_resolve_economic_roles_marks_salary_subcategory_as_income() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Employer payment",
+        amount_native=Decimal("1250.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Income",
+        subcategory="Salary",
+        cashflow_type="in",
+        amount_eur=Decimal("1250.00"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "income"
+
+
+def test_resolve_economic_roles_marks_legacy_interest_bucket_as_income_when_description_matches(
+) -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="*INTER.BRUTS31/12/24",
+        amount_native=Decimal("5.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Income",
+        subcategory="Refunds & Interest",
+        cashflow_type="in",
+        amount_eur=Decimal("5.00"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "income"
+
+
+def test_resolve_economic_roles_keeps_legacy_refund_bucket_as_expense_when_not_interest() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Refund from Amz*amazon.co.uk",
+        amount_native=Decimal("11.85"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Income",
+        subcategory="Refunds & Interest",
+        cashflow_type="in",
+        amount_eur=Decimal("11.85"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "expense"
+
+
+def test_resolve_economic_roles_marks_transfer_and_exclude_before_income() -> None:
+    transactions = [
+        Transaction(
+            booking_date=date(2026, 1, 3),
+            description="Acme salary payment",
+            amount_native=Decimal("1250.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Income",
+            subcategory="Salary",
+            cashflow_type="transfer",
+            amount_eur=Decimal("1250.00"),
+        ),
+        Transaction(
+            booking_date=date(2026, 1, 4),
+            description="Acme salary payment",
+            amount_native=Decimal("1250.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Income",
+            subcategory="Interest",
+            cashflow_type="exclude",
+            amount_eur=Decimal("1250.00"),
+        ),
+    ]
+
+    result = resolve_economic_roles_for_dataframe(
+        _frame_from_transactions(transactions),
+        account_inference_config=_account_config(employer_patterns=("acme",)),
+    )
+
+    assert list(result.dataframe["economic_role"]) == ["transfer", "exclude"]
+
+
+def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_inflow() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Refund from merchant",
+        amount_native=Decimal("25.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Refunds",
+        cashflow_type="in",
+        amount_eur=Decimal("25.00"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "expense"

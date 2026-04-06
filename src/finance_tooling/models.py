@@ -26,6 +26,7 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "category_source",
     "category_rule_id",
     "cashflow_type",
+    "economic_role",
     "from_account_ref",
     "to_account_ref",
     "from_account_type",
@@ -62,6 +63,7 @@ class Transaction:
     category_source: str | None = None
     category_rule_id: str | None = None
     cashflow_type: str | None = None
+    economic_role: str | None = None
     from_account_ref: str | None = None
     to_account_ref: str | None = None
     from_account_type: str | None = None

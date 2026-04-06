@@ -8,6 +8,10 @@ from typing import cast
 
 import pandas as pd
 
+from finance_tooling.account_inference import (
+    AccountInferenceConfig,
+    transaction_matches_identified_employer,
+)
 from finance_tooling.classify import ClassificationRules, resolve_taxonomy_cashflow_type
 from finance_tooling.models import CANONICAL_TRANSACTION_COLUMNS
 from finance_tooling.store import transactions_from_dataframe
@@ -17,6 +21,7 @@ from finance_tooling.transaction_overrides import (
 )
 
 _VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
+_VALID_ECONOMIC_ROLES = frozenset({"income", "expense", "transfer", "exclude"})
 _TRACKED_SAVINGS_CATEGORIES = frozenset({"Retirement", "House"})
 _TRACKED_SAVINGS_TRANSFER_SUBCATEGORIES = frozenset(
     {
@@ -28,6 +33,13 @@ _TRACKED_SAVINGS_TRANSFER_SUBCATEGORIES = frozenset(
     }
 )
 _TRACKED_SAVINGS_KEYWORDS = frozenset({"retirement", "education", "house", "emergency"})
+_INTEREST_DESCRIPTION_MARKERS = (
+    "interest",
+    "inter bruts",
+    "inter.bruts",
+    "interets",
+    "interet",
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +53,14 @@ class CashflowResolutionResult:
     account_transfer_conflict_count: int
 
 
+@dataclass(frozen=True)
+class EconomicRoleResolutionResult:
+    """Resolved economic roles for a dataframe."""
+
+    dataframe: pd.DataFrame
+    role_counts: dict[str, int]
+
+
 def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: str) -> pd.Series:
     values = dataframe.get(column, pd.Series("", index=dataframe.index, dtype="object"))
     return values.astype("string").fillna("").str.strip().replace("", default)
@@ -52,9 +72,26 @@ def _normalize_cashflow_type_series(dataframe: pd.DataFrame) -> pd.Series:
     return normalized.where(normalized.isin(_VALID_CASHFLOW_TYPES), "unknown")
 
 
+def _normalize_economic_role_series(dataframe: pd.DataFrame) -> pd.Series:
+    values = dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
+    normalized = values.astype("string").fillna("").str.strip().str.casefold()
+    valid = normalized.where(normalized.isin(_VALID_ECONOMIC_ROLES))
+    cashflow_type = _normalize_cashflow_type_series(dataframe)
+    fallback = pd.Series("expense", index=dataframe.index, dtype="string")
+    fallback = fallback.mask(cashflow_type.eq("transfer"), "transfer")
+    fallback = fallback.mask(cashflow_type.eq("exclude"), "exclude")
+    fallback = fallback.mask(cashflow_type.eq("in"), "income")
+    return valid.fillna(fallback)
+
+
 def _contains_keyword(value: str) -> bool:
     normalized = value.strip().casefold()
     return any(keyword in normalized for keyword in _TRACKED_SAVINGS_KEYWORDS)
+
+
+def _looks_like_interest_payment(description: str) -> bool:
+    normalized = description.strip().casefold()
+    return any(marker in normalized for marker in _INTEREST_DESCRIPTION_MARKERS)
 
 
 def _project_tags_series(dataframe: pd.DataFrame) -> pd.Series:
@@ -153,6 +190,58 @@ def resolve_cashflow_types_for_dataframe(
     )
 
 
+def resolve_economic_roles_for_dataframe(
+    dataframe: pd.DataFrame,
+    *,
+    account_inference_config: AccountInferenceConfig,
+) -> EconomicRoleResolutionResult:
+    """Resolve persisted economic roles from account rules, interest, and cashflow semantics."""
+    if dataframe.empty:
+        resolved = dataframe.copy()
+        resolved["economic_role"] = pd.Series(dtype="object")
+        return EconomicRoleResolutionResult(
+            dataframe=resolved,
+            role_counts={"income": 0, "expense": 0, "transfer": 0, "exclude": 0},
+        )
+
+    normalized_frame = dataframe.copy()
+    for column in CANONICAL_TRANSACTION_COLUMNS:
+        if column not in normalized_frame.columns:
+            normalized_frame[column] = None
+
+    transactions = transactions_from_dataframe(normalized_frame[CANONICAL_TRANSACTION_COLUMNS])
+    resolved_roles: list[str] = []
+    for tx in transactions:
+        cashflow_type = (tx.cashflow_type or "").strip().casefold()
+        category = (tx.category or "").strip().casefold()
+        subcategory = (tx.subcategory or "").strip().casefold()
+        if cashflow_type == "transfer":
+            resolved_role = "transfer"
+        elif cashflow_type == "exclude":
+            resolved_role = "exclude"
+        elif subcategory == "salary":
+            resolved_role = "income"
+        elif transaction_matches_identified_employer(tx, config=account_inference_config):
+            resolved_role = "income"
+        elif category == "income" and subcategory == "interest":
+            resolved_role = "income"
+        elif subcategory == "refunds & interest" and _looks_like_interest_payment(tx.description):
+            resolved_role = "income"
+        else:
+            resolved_role = "expense"
+        resolved_roles.append(resolved_role)
+
+    resolved = normalized_frame.copy()
+    resolved["economic_role"] = resolved_roles
+    normalized = _normalize_economic_role_series(resolved)
+    resolved["economic_role"] = normalized.astype(object)
+    role_counts = {
+        role: int((normalized == role).sum())
+        for role in ("income", "expense", "transfer", "exclude")
+    }
+    return EconomicRoleResolutionResult(dataframe=resolved, role_counts=role_counts)
+
+
 def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Normalize canonical transaction rows for cashflow reporting."""
     if dataframe.empty:
@@ -168,6 +257,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "project",
                 "subcategory",
                 "cashflow_type",
+                "economic_role",
                 "tracked_savings",
                 "neutral_transfer",
             ]
@@ -191,6 +281,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "project",
                 "subcategory",
                 "cashflow_type",
+                "economic_role",
                 "tracked_savings",
                 "neutral_transfer",
             ]
@@ -203,6 +294,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     working["subcategory"] = _normalized_string_series(working, "subcategory", default="")
     working["description"] = _normalized_string_series(working, "description", default="unknown")
     working["cashflow_type"] = _normalize_cashflow_type_series(working)
+    working["economic_role"] = _normalize_economic_role_series(working)
     working["amount_eur"] = pd.to_numeric(working.get("amount_eur"), errors="coerce").fillna(0.0)
     project_tags = _project_tags_series(working)
     category_casefold = working["category"].str.casefold()
@@ -234,6 +326,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             "project",
             "subcategory",
             "cashflow_type",
+            "economic_role",
             "tracked_savings",
             "neutral_transfer",
         ]
@@ -249,9 +342,9 @@ def _period_metrics(rows: pd.DataFrame) -> dict[str, float | None]:
             "cashflow_margin": None,
         }
 
-    cashflow_type = _normalize_cashflow_type_series(rows)
-    income_total = float(rows.loc[cashflow_type.eq("in"), "amount_eur"].sum())
-    expense_total = float((-rows.loc[cashflow_type.eq("out"), "amount_eur"]).sum())
+    economic_role = _normalize_economic_role_series(rows)
+    income_total = float(rows.loc[economic_role.eq("income"), "amount_eur"].sum())
+    expense_total = float((-rows.loc[economic_role.eq("expense"), "amount_eur"]).sum())
     net_cashflow = income_total - expense_total
     return {
         "income": round(income_total, 2),

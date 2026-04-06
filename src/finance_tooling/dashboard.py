@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.budgeting import BudgetConfig, budget_targets_to_rows, load_budget_config
 from finance_tooling.cashflow import build_cashflow_rows_frame, build_cashflow_yoy_summary
 from finance_tooling.projecting import (
     ProjectConfig,
@@ -32,6 +31,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "project",
                 "amount_eur",
                 "cashflow_type",
+                "economic_role",
                 "is_transfer",
                 "tracked_savings",
                 "neutral_transfer",
@@ -47,6 +47,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "project",
                 "amount_eur",
                 "cashflow_type",
+                "economic_role",
                 "is_transfer",
                 "tracked_savings",
                 "neutral_transfer",
@@ -66,6 +67,7 @@ def _build_transaction_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             "project",
             "amount_eur",
             "cashflow_type",
+            "economic_role",
             "is_transfer",
             "tracked_savings",
             "neutral_transfer",
@@ -80,7 +82,7 @@ def _build_transaction_rows(dataframe: pd.DataFrame) -> list[dict[str, object]]:
 
 def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
     rows_frame = build_cashflow_rows_frame(dataframe)
-    if rows_frame.empty or "cashflow_type" not in rows_frame.columns:
+    if rows_frame.empty or "economic_role" not in rows_frame.columns:
         return []
 
     warnings: list[str] = []
@@ -102,7 +104,7 @@ def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
             f"Cashflow type unresolved for {unknown_count} {transaction_word} across: {category_list}"
         )
 
-    exclude_mask = rows_frame["cashflow_type"].astype("string").str.casefold().eq("exclude")
+    exclude_mask = rows_frame["economic_role"].astype("string").str.casefold().eq("exclude")
     exclude_count = int(exclude_mask.sum())
     if exclude_count > 0:
         exclude_categories = sorted(
@@ -117,7 +119,7 @@ def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
         category_list = ", ".join(preview_categories)
         transaction_word = "transaction" if exclude_count == 1 else "transactions"
         warnings.append(
-            f"Cashflow type exclude applies to {exclude_count} {transaction_word} across: {category_list}"
+            f"Economic role exclude applies to {exclude_count} {transaction_word} across: {category_list}"
         )
 
     return warnings
@@ -184,8 +186,8 @@ def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list
         .str.strip()
         .str.casefold()
     )
-    cashflow_type = (
-        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+    economic_role = (
+        dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
         .astype("string")
         .fillna("")
         .str.strip()
@@ -199,7 +201,7 @@ def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list
         .str.casefold()
     )
     boundary_transfer_mask = (
-        from_type.eq("internal") & to_type.eq("internal") & cashflow_type.eq("transfer")
+        from_type.eq("internal") & to_type.eq("internal") & economic_role.eq("transfer")
     )
     override_count = int(boundary_transfer_mask.sum())
     if override_count == 0:
@@ -223,12 +225,6 @@ def _load_projecting(path: Path | None) -> tuple[ProjectConfig, list[str]]:
     return load_project_config(path)
 
 
-def _load_budgets(path: Path | None) -> tuple[BudgetConfig, list[str]]:
-    if path is None:
-        return BudgetConfig(currency="EUR", targets=()), []
-    return load_budget_config(path)
-
-
 def _build_dashboard_payload(
     dataframe: pd.DataFrame,
     *,
@@ -240,7 +236,6 @@ def _build_dashboard_payload(
     budget_targets_path: Path | None,
 ) -> dict[str, object]:
     project_config, project_warnings = _load_projecting(project_rules_path)
-    budget_config, budget_warnings = _load_budgets(budget_targets_path)
     projected = assign_projects_to_dataframe(dataframe, config=project_config)
 
     payload: dict[str, object] = {
@@ -254,11 +249,9 @@ def _build_dashboard_payload(
             "default_window": "last_12_months",
         },
         "transactions": _build_transaction_rows(projected),
-        "budget_targets": budget_targets_to_rows(budget_config),
         "cashflow_yoy": build_cashflow_yoy_summary(projected),
         "warnings": [
             *project_warnings,
-            *budget_warnings,
             *_build_cashflow_diagnostic_warnings(projected),
             *_build_account_diagnostic_warnings(projected),
             *_build_account_transfer_diagnostic_warnings(projected),
@@ -563,6 +556,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .cashflow-table table {
       min-width: 0;
     }
+    .monthly-balance-table table {
+      min-width: 0;
+    }
     .summary-note {
       font-size: 13px;
       color: var(--muted);
@@ -676,10 +672,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           <select id="project-select" multiple></select>
         </div>
         <div class="field">
-          <label for="yoy-year">YoY Year</label>
-          <select id="yoy-year"></select>
-        </div>
-        <div class="field">
           <label for="reset-filters">Reset Filters</label>
           <button id="reset-filters" type="button">Reset to Last 12 Months</button>
         </div>
@@ -687,59 +679,38 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     </section>
 
     <section class="card">
-      <h2>Key Metrics</h2>
+      <h2>Income / Expenses Balance</h2>
       <div class="kpis" style="margin-top: 10px;">
         <article class="kpi"><span class="label">Income</span><span class="value" id="kpi-income">-</span></article>
-        <article class="kpi"><span class="label">Expense</span><span class="value" id="kpi-expense">-</span></article>
+        <article class="kpi"><span class="label">Expenses</span><span class="value" id="kpi-expense">-</span></article>
         <article class="kpi"><span class="label">Transfers</span><span class="value" id="kpi-transfers">-</span></article>
-        <article class="kpi"><span class="label">Net</span><span class="value" id="kpi-net">-</span></article>
+        <article class="kpi"><span class="label">Balance</span><span class="value" id="kpi-net">-</span></article>
         <article class="kpi"><span class="label">Transactions</span><span class="value" id="kpi-tx-count">-</span></article>
-        <article class="kpi"><span class="label">Budget Month</span><span class="value" id="kpi-budget-month">-</span></article>
-        <article class="kpi"><span class="label">Budget Variance</span><span class="value" id="kpi-budget-variance">-</span></article>
       </div>
     </section>
 
     <section class="layout-two">
       <article class="card chart-area">
-        <h2>Monthly Net Trend</h2>
-        <div id="monthly-net-chart" class="bar-list"></div>
+        <h2>Monthly Income / Expenses Balance</h2>
+        <div class="table-wrap monthly-balance-table" style="margin-top: 10px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Income</th>
+                <th>Expenses</th>
+                <th>Balance</th>
+                <th>Margin</th>
+              </tr>
+            </thead>
+            <tbody id="monthly-balance-body"></tbody>
+          </table>
+        </div>
       </article>
       <article class="card chart-area">
         <h2>Spending by Category</h2>
         <div id="category-spend-chart" class="bar-list"></div>
       </article>
-    </section>
-
-    <section class="layout-two">
-      <article class="card chart-area">
-        <h2>Year-over-Year Spending</h2>
-        <p class="empty">YoY uses full selected years and category/project filters.</p>
-        <div id="yoy-chart" class="bar-list"></div>
-      </article>
-      <article class="card chart-area">
-        <h2>Budget Variance by Target</h2>
-        <div id="budget-variance-chart" class="bar-list"></div>
-      </article>
-    </section>
-
-    <section class="card">
-      <h2>Budget Status</h2>
-      <div class="table-wrap" style="margin-top: 10px;">
-        <table>
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Category</th>
-              <th>Project</th>
-              <th>Budget</th>
-              <th>Actual</th>
-              <th>Variance</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="budget-table-body"></tbody>
-        </table>
-      </div>
     </section>
 
     <section class="warning-box" id="warning-box">
@@ -756,14 +727,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function parsePayload() {
         const node = document.getElementById("dashboard-data");
         if (!node) {
-          return { meta: {}, transactions: [], budget_targets: [], cashflow_yoy: {}, warnings: [] };
+          return { meta: {}, transactions: [], cashflow_yoy: {}, warnings: [] };
         }
         try {
           const parsed = JSON.parse(node.textContent || "{}");
           return {
             meta: parsed.meta || {},
             transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
-            budget_targets: Array.isArray(parsed.budget_targets) ? parsed.budget_targets : [],
             cashflow_yoy: parsed.cashflow_yoy || {},
             warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
           };
@@ -772,7 +742,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           return {
             meta: {},
             transactions: [],
-            budget_targets: [],
             cashflow_yoy: {},
             warnings: ["Invalid payload"],
           };
@@ -882,6 +851,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               : "Unassigned",
             amountEur: toNumber(item.amount_eur),
             cashflowType: typeof item.cashflow_type === "string" ? item.cashflow_type.trim().toLowerCase() : "unknown",
+            economicRole: typeof item.economic_role === "string" ? item.economic_role.trim().toLowerCase() : "expense",
             isTransfer: Boolean(item.is_transfer) || (typeof item.category === "string" && item.category.trim().toLowerCase() === "transfers"),
             trackedSavings: Boolean(item.tracked_savings),
             neutralTransfer: Boolean(item.neutral_transfer),
@@ -891,32 +861,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
       transactions.sort((left, right) => left.bookingDate.localeCompare(right.bookingDate));
 
-      const budgetTargets = payload.budget_targets
-        .map((item) => {
-          const month = typeof item.month === "string" ? item.month : "";
-          const category = typeof item.category === "string" ? item.category.trim() : "";
-          const project = typeof item.project === "string" && item.project.trim() ? item.project.trim() : null;
-          const amount = toNumber(item.amount);
-          if (!month || !category || amount === null || amount <= 0) {
-            return null;
-          }
-          return { month, category, project, amount };
-        })
-        .filter((item) => item !== null);
-
       const startInput = document.getElementById("start-date");
       const endInput = document.getElementById("end-date");
       const windowSelect = document.getElementById("window-select");
       const specificYearSelect = document.getElementById("specific-year");
       const categorySelect = document.getElementById("category-select");
       const projectSelect = document.getElementById("project-select");
-      const yoyYearSelect = document.getElementById("yoy-year");
       const resetButton = document.getElementById("reset-filters");
-      const monthlyNetChart = document.getElementById("monthly-net-chart");
+      const monthlyBalanceBody = document.getElementById("monthly-balance-body");
       const categorySpendChart = document.getElementById("category-spend-chart");
-      const yoyChart = document.getElementById("yoy-chart");
-      const budgetVarianceChart = document.getElementById("budget-variance-chart");
-      const budgetTableBody = document.getElementById("budget-table-body");
       const cashflowYoyBody = document.getElementById("cashflow-yoy-body");
       const cashflowYtdCard = document.getElementById("cashflow-ytd-card");
 
@@ -998,7 +951,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       function setSpecificYearState() {
-        specificYearSelect.disabled = windowSelect.value !== "specific_year" || dataYears.length === 0;
+        specificYearSelect.disabled = dataYears.length === 0;
       }
 
       function fillSpecificYearOptions() {
@@ -1098,25 +1051,31 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         });
       }
 
-      function aggregateMonthlyNet(filtered, state) {
+      function aggregateMonthlyBalance(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || !["in", "out"].includes(tx.cashflowType)) {
+          if (tx.amountEur === null) {
             continue;
           }
-          const existing = totals.get(tx.month) || 0;
-          totals.set(tx.month, existing + tx.amountEur);
+          const existing = totals.get(tx.month) || { income: 0, expenses: 0 };
+          if (tx.economicRole === "income") {
+            existing.income += tx.amountEur;
+          } else if (tx.economicRole === "expense") {
+            existing.expenses += -tx.amountEur;
+          }
+          totals.set(tx.month, existing);
         }
         return monthKeysBetween(state.startDate, state.endDate).map((month) => ({
           month,
-          value: totals.get(month) || 0,
+          income: (totals.get(month) || { income: 0, expenses: 0 }).income,
+          expenses: (totals.get(month) || { income: 0, expenses: 0 }).expenses,
         }));
       }
 
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
+          if (tx.amountEur === null || tx.economicRole !== "expense") {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
@@ -1127,120 +1086,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           .filter((row) => row.value > 0);
         rows.sort((left, right) => right.value - left.value || left.category.localeCompare(right.category));
         return rows.slice(0, 12);
-      }
-
-      function collectYears(filtered) {
-        const years = new Set();
-        for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
-            continue;
-          }
-          years.add(Number(tx.bookingDate.slice(0, 4)));
-        }
-        return Array.from(years)
-          .filter((value) => Number.isFinite(value))
-          .sort((left, right) => left - right);
-      }
-
-      function syncYearOptions(years) {
-        const previous = Number(yoyYearSelect.value);
-        yoyYearSelect.innerHTML = years
-          .map((year) => "<option value=\\"" + String(year) + "\\">" + String(year) + "</option>")
-          .join("");
-        if (!years.length) {
-          return null;
-        }
-        const selected = years.includes(previous) ? previous : years[years.length - 1];
-        yoyYearSelect.value = String(selected);
-        return selected;
-      }
-
-      function aggregateYoY(filtered, selectedYear) {
-        if (selectedYear === null) {
-          return [];
-        }
-        const current = new Array(12).fill(0);
-        const previous = new Array(12).fill(0);
-        for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
-            continue;
-          }
-          const year = Number(tx.bookingDate.slice(0, 4));
-          const month = Number(tx.bookingDate.slice(5, 7)) - 1;
-          if (month < 0 || month > 11) {
-            continue;
-          }
-          const spend = -tx.amountEur;
-          if (year === selectedYear) {
-            current[month] += spend;
-          } else if (year === selectedYear - 1) {
-            previous[month] += spend;
-          }
-        }
-        return monthNames
-          .map((label, index) => ({
-            month: label,
-            current: current[index],
-            previous: previous[index],
-          }))
-          .filter((row) => row.current > 0 || row.previous > 0);
-      }
-
-      function buildBudgetRows(filtered, state) {
-        const categoryActual = new Map();
-        const projectActual = new Map();
-        for (const tx of filtered) {
-          if (tx.amountEur === null || tx.cashflowType !== "out") {
-            continue;
-          }
-          const spend = -tx.amountEur;
-          const categoryKey = tx.month + "||" + tx.category.toLowerCase();
-          categoryActual.set(categoryKey, (categoryActual.get(categoryKey) || 0) + spend);
-          const projectKey = tx.month + "||" + tx.category.toLowerCase() + "||" + tx.project.toLowerCase();
-          projectActual.set(projectKey, (projectActual.get(projectKey) || 0) + spend);
-        }
-
-        const startMonth = state.startDate.slice(0, 7);
-        const endMonth = state.endDate.slice(0, 7);
-        const rows = [];
-        for (const target of budgetTargets) {
-          if (target.month < startMonth || target.month > endMonth) {
-            continue;
-          }
-          if (state.categories.size > 0 && !state.categories.has(target.category)) {
-            continue;
-          }
-          if (state.projects.size > 0 && target.project && !state.projects.has(target.project)) {
-            continue;
-          }
-
-          const categoryKey = target.month + "||" + target.category.toLowerCase();
-          const projectKey = categoryKey + "||" + (target.project ? target.project.toLowerCase() : "");
-          const actual = target.project
-            ? (projectActual.get(projectKey) || 0)
-            : (categoryActual.get(categoryKey) || 0);
-          const variance = target.amount - actual;
-          rows.push({
-            month: target.month,
-            category: target.category,
-            project: target.project,
-            budget: target.amount,
-            actual: actual,
-            variance: variance,
-            status: actual <= target.amount ? "On Track" : "Over Budget",
-          });
-        }
-
-        rows.sort((left, right) => {
-          if (left.month !== right.month) {
-            return left.month.localeCompare(right.month);
-          }
-          if (left.category !== right.category) {
-            return left.category.localeCompare(right.category);
-          }
-          return (left.project || "").localeCompare(right.project || "");
-        });
-        return rows;
       }
 
       function setKpi(id, value) {
@@ -1350,57 +1195,26 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           .join("");
       }
 
-      function renderYoY(rows, selectedYear) {
-        if (!rows.length || selectedYear === null) {
-          yoyChart.innerHTML = "<p class=\\"empty\\">No expense data available for YoY view.</p>";
-          return;
-        }
-        const maxValue = Math.max(
-          ...rows.flatMap((row) => [row.current, row.previous]),
-          1
-        );
-        yoyChart.innerHTML = rows
-          .map((row) => {
-            const currentWidth = Math.max(2, (row.current / maxValue) * 100);
-            const previousWidth = Math.max(2, (row.previous / maxValue) * 100);
-            return (
-              "<div class=\\"yoy-row\\">" +
-                "<span class=\\"bar-label\\">" + escapeHtml(row.month) + "</span>" +
-                "<div class=\\"yoy-bars\\">" +
-                  "<div class=\\"yoy-series\\">" +
-                    "<span class=\\"series-label\\">" + String(selectedYear) + "</span>" +
-                    "<div class=\\"bar-track\\"><div class=\\"bar-fill accent\\" style=\\"width:" + currentWidth.toFixed(2) + "%\\"></div></div>" +
-                    "<span class=\\"bar-value\\">" + escapeHtml(money.format(row.current)) + "</span>" +
-                  "</div>" +
-                  "<div class=\\"yoy-series\\">" +
-                    "<span class=\\"series-label\\">" + String(selectedYear - 1) + "</span>" +
-                    "<div class=\\"bar-track\\"><div class=\\"bar-fill positive\\" style=\\"width:" + previousWidth.toFixed(2) + "%\\"></div></div>" +
-                    "<span class=\\"bar-value\\">" + escapeHtml(money.format(row.previous)) + "</span>" +
-                  "</div>" +
-                "</div>" +
-              "</div>"
-            );
-          })
-          .join("");
-      }
-
-      function renderBudgetTable(rows) {
+      function renderMonthlyBalance(rows) {
         if (!rows.length) {
-          budgetTableBody.innerHTML = "<tr><td colspan=\\"7\\"><span class=\\"empty\\">No budget rows for the current filters.</span></td></tr>";
+          monthlyBalanceBody.innerHTML =
+            "<tr><td colspan=\\"5\\"><span class=\\"empty\\">No monthly balance rows for the current filters.</span></td></tr>";
           return;
         }
-        budgetTableBody.innerHTML = rows
+        monthlyBalanceBody.innerHTML = rows
           .map((row) => {
-            const statusClass = row.status === "On Track" ? "status-on" : "status-over";
+            const income = row.income || 0;
+            const expenses = row.expenses || 0;
+            const balance = income - expenses;
+            const balanceClass = balance > 0 ? "delta-positive" : (balance < 0 ? "delta-negative" : "delta-neutral");
+            const margin = income > 0 ? balance / income : null;
             return (
               "<tr>" +
                 "<td>" + escapeHtml(row.month) + "</td>" +
-                "<td>" + escapeHtml(row.category) + "</td>" +
-                "<td>" + escapeHtml(row.project || "All Projects") + "</td>" +
-                "<td>" + escapeHtml(money.format(row.budget)) + "</td>" +
-                "<td>" + escapeHtml(money.format(row.actual)) + "</td>" +
-                "<td>" + escapeHtml(money.format(row.variance)) + "</td>" +
-                "<td class=\\"" + statusClass + "\\">" + escapeHtml(row.status) + "</td>" +
+                "<td>" + escapeHtml(money.format(income)) + "</td>" +
+                "<td>" + escapeHtml(money.format(expenses)) + "</td>" +
+                "<td class=\\"" + balanceClass + "\\">" + escapeHtml(money.format(balance)) + "</td>" +
+                "<td>" + escapeHtml(formatPercent(margin)) + "</td>" +
               "</tr>"
             );
           })
@@ -1429,7 +1243,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         const filtered = filterTransactions(state);
-        const categoryProjectFiltered = filterByCategoryProject(state);
         let income = 0;
         let expense = 0;
         let transfers = 0;
@@ -1442,10 +1255,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             transfers += Math.abs(tx.amountEur);
             continue;
           }
-          if (tx.cashflowType === "in") {
+          if (tx.economicRole === "income") {
             income += tx.amountEur;
             net += tx.amountEur;
-          } else if (tx.cashflowType === "out") {
+          } else if (tx.economicRole === "expense") {
             expense -= tx.amountEur;
             net += tx.amountEur;
           }
@@ -1457,16 +1270,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         setKpi("kpi-net", money.format(net));
         setKpi("kpi-tx-count", String(filtered.length));
 
-        const monthlyRows = aggregateMonthlyNet(filtered, state).map((row) => ({
-          label: row.month,
-          value: row.value,
-        }));
-        renderBarRows(
-          monthlyNetChart,
-          monthlyRows,
-          (value) => money.format(value),
-          (value) => (value < 0 ? "negative" : "positive")
-        );
+        renderMonthlyBalance(aggregateMonthlyBalance(filtered, state));
 
         const categoryRows = aggregateCategorySpend(filtered).map((row) => ({
           label: row.category,
@@ -1480,35 +1284,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             return "accent";
           }
         );
-
-        const years = collectYears(categoryProjectFiltered);
-        const selectedYear = syncYearOptions(years);
-        renderYoY(aggregateYoY(categoryProjectFiltered, selectedYear), selectedYear);
-
-        const budgetRows = buildBudgetRows(filtered, state);
-        renderBudgetTable(budgetRows);
-
-        const varianceRows = budgetRows.map((row) => ({
-          label: row.month + " " + row.category + (row.project ? " / " + row.project : ""),
-          value: row.variance,
-        }));
-        renderBarRows(
-          budgetVarianceChart,
-          varianceRows.slice(0, 12),
-          (value) => money.format(value),
-          (value) => (value < 0 ? "negative" : "positive")
-        );
-
-        if (!budgetRows.length) {
-          setKpi("kpi-budget-month", "-");
-          setKpi("kpi-budget-variance", "-");
-        } else {
-          const latestMonth = budgetRows[budgetRows.length - 1].month;
-          const monthRows = budgetRows.filter((row) => row.month === latestMonth);
-          const monthVariance = monthRows.reduce((sum, row) => sum + row.variance, 0);
-          setKpi("kpi-budget-month", latestMonth);
-          setKpi("kpi-budget-variance", money.format(monthVariance));
-        }
       }
 
       function initializeFilters() {
@@ -1546,9 +1321,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           refreshDashboard();
         });
         specificYearSelect.addEventListener("change", function () {
-          if (windowSelect.value === "specific_year") {
-            applyWindowSelection("specific_year");
-          }
+          windowSelect.value = "specific_year";
+          applyWindowSelection("specific_year");
           refreshDashboard();
         });
         startInput.addEventListener("change", function () {
@@ -1561,7 +1335,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           setSpecificYearState();
           refreshDashboard();
         });
-        for (const node of [categorySelect, projectSelect, yoyYearSelect]) {
+        for (const node of [categorySelect, projectSelect]) {
           node.addEventListener("change", refreshDashboard);
         }
       }

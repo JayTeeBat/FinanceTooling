@@ -11,10 +11,12 @@ from typing import cast
 import pandas as pd
 from pandas import DataFrame
 
+from finance_tooling.account_inference import AccountInferenceConfig
 from finance_tooling.backup import BackupRunResult
 from finance_tooling.cashflow import (
     build_cashflow_yoy_summary,
     resolve_cashflow_types_for_dataframe,
+    resolve_economic_roles_for_dataframe,
 )
 from finance_tooling.classify import (
     ClassificationDiagnostics,
@@ -357,6 +359,23 @@ def _build_account_inference_metrics_from_dataframe(
     )
 
 
+def _build_economic_role_metrics_from_dataframe(dataframe: DataFrame) -> dict[str, int]:
+    if dataframe.empty:
+        return {"income": 0, "expense": 0, "transfer": 0, "exclude": 0}
+
+    role_series = (
+        dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    return {
+        role: int(role_series.eq(role).sum())
+        for role in ("income", "expense", "transfer", "exclude")
+    }
+
+
 def persist_and_report(
     *,
     settings: Settings,
@@ -394,6 +413,7 @@ def persist_and_report(
     backup_run: BackupRunResult | None = None,
     classification_rules: ClassificationRules,
     transaction_override_store: TransactionOverrideStore,
+    account_inference_config: AccountInferenceConfig,
     upsert_transactions_fn: Callable[[Path, list[Transaction]], UpsertResult] = upsert_transactions,
     render_dashboard_html_fn: Callable[..., Path] = render_dashboard_html,
     render_household_healthcheck_html_fn: Callable[..., Path] = render_household_healthcheck_html,
@@ -405,7 +425,11 @@ def persist_and_report(
         classification_rules=classification_rules,
         transaction_override_store=transaction_override_store,
     )
-    dataframe: DataFrame = cashflow_resolution.dataframe
+    economic_role_resolution = resolve_economic_roles_for_dataframe(
+        cashflow_resolution.dataframe,
+        account_inference_config=account_inference_config,
+    )
+    dataframe: DataFrame = economic_role_resolution.dataframe
     write_canonical_dataframe(settings.master_parquet_path, dataframe)
     classification_diagnostics: ClassificationDiagnostics = (
         _build_classification_diagnostics_from_dataframe(dataframe)
@@ -466,6 +490,7 @@ def persist_and_report(
         account_boundary_unknown_side_count,
         account_inference_source_counts,
     ) = _build_account_inference_metrics_from_dataframe(dataframe)
+    economic_role_counts = _build_economic_role_metrics_from_dataframe(dataframe)
     total_amount_eur_abs = categorized_amount_eur_abs + uncategorized_amount_eur_abs
     reviewed_ratio = (reviewed_count / len(dataframe)) if len(dataframe) else 0.0
     categorized_amount_eur_abs_ratio = (
@@ -526,6 +551,7 @@ def persist_and_report(
         "exclude_count": exclude_count,
         "exclude_amount_eur_abs": round(exclude_amount_eur_abs, 4),
         "exclude_categories": exclude_categories,
+        "economic_role_counts": economic_role_counts,
         "account_transfer_override_count": cashflow_resolution.account_transfer_override_count,
         "account_transfer_conflict_count": cashflow_resolution.account_transfer_conflict_count,
         "account_boundary_unknown_count": account_boundary_unknown_count,

@@ -120,6 +120,7 @@ class SummaryPayload(TypedDict):
     exclude_count: int
     exclude_amount_eur_abs: float
     exclude_categories: list[str]
+    economic_role_counts: dict[str, int]
     account_transfer_override_count: int
     account_transfer_conflict_count: int
     account_boundary_unknown_count: int
