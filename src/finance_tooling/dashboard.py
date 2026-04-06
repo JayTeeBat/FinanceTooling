@@ -556,6 +556,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     .cashflow-table table {
       min-width: 0;
     }
+    .monthly-balance-table table {
+      min-width: 0;
+    }
     .summary-note {
       font-size: 13px;
       color: var(--muted);
@@ -689,7 +692,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     <section class="layout-two">
       <article class="card chart-area">
         <h2>Monthly Income / Expenses Balance</h2>
-        <div class="table-wrap" style="margin-top: 10px;">
+        <div class="table-wrap monthly-balance-table" style="margin-top: 10px;">
           <table>
             <thead>
               <tr>
