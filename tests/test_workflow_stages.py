@@ -1229,6 +1229,7 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
         "uncategorized_amount_eur_abs": 0.0,
         "categorized_amount_eur_abs_ratio": 1.0,
         "uncategorized_amount_eur_abs_ratio": 0.0,
+        "fx_rate_semantics_version": 2,
     }
     pd.DataFrame(
         [

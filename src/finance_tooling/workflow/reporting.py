@@ -26,6 +26,7 @@ from finance_tooling.classify import (
 from finance_tooling.completeness import build_completeness_report_from_dataframe
 from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
 from finance_tooling.dashboard import render_dashboard_html
+from finance_tooling.fx import FX_RATE_SEMANTICS_VERSION
 from finance_tooling.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
@@ -35,6 +36,7 @@ from finance_tooling.store import (
     write_canonical_dataframe,
 )
 from finance_tooling.transaction_overrides import TransactionOverrideStore
+from finance_tooling.workflow.enrichment import recompute_dataframe_fx
 from finance_tooling.workflow.types import (
     HsbcBoundaryDiagnostic,
     HsbcSelectionDiagnostic,
@@ -420,8 +422,10 @@ def persist_and_report(
 ) -> tuple[WorkflowResult, SummaryPayload]:
     """Persist artifacts and return final workflow result plus summary payload."""
     upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
+    dataframe, fx_warnings = recompute_dataframe_fx(upsert.dataframe, settings)
+    warnings = [*warnings, *fx_warnings]
     cashflow_resolution = resolve_cashflow_types_for_dataframe(
-        upsert.dataframe,
+        dataframe,
         classification_rules=classification_rules,
         transaction_override_store=transaction_override_store,
     )
@@ -429,7 +433,7 @@ def persist_and_report(
         cashflow_resolution.dataframe,
         account_inference_config=account_inference_config,
     )
-    dataframe: DataFrame = economic_role_resolution.dataframe
+    dataframe = economic_role_resolution.dataframe
     write_canonical_dataframe(settings.master_parquet_path, dataframe)
     classification_diagnostics: ClassificationDiagnostics = (
         _build_classification_diagnostics_from_dataframe(dataframe)
@@ -546,6 +550,7 @@ def persist_and_report(
         "project_overrides_path": str(settings.project_overrides_path),
         "transaction_overrides_path": str(settings.transaction_overrides_path),
         "review_state_path": str(settings.review_state_path),
+        "fx_rate_semantics_version": FX_RATE_SEMANTICS_VERSION,
         "cashflow_type_unknown_count": cashflow_resolution.unknown_count,
         "cashflow_type_unknown_categories": cashflow_resolution.unknown_categories,
         "exclude_count": exclude_count,
