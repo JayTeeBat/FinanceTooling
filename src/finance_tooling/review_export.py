@@ -52,6 +52,8 @@ _EDITABLE_EXPORT_COLUMNS = (
 _PROVENANCE_EXPORT_COLUMNS = (
     FINGERPRINT_COLUMN,
     "account_label",
+    "cashflow_type",
+    "economic_role",
     "project_source",
     EXISTING_PROJECT_TAGS_COLUMN,
     "source_file",

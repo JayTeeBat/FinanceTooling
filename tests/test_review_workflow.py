@@ -31,6 +31,8 @@ def test_export_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> Non
                 "category": "Uncategorized",
                 "subcategory": None,
                 "category_source": "uncategorized",
+                "cashflow_type": "out",
+                "economic_role": "expense",
                 "project_tags": "OldTagA|OldTagB",
                 "source_file": "a.pdf",
             },
@@ -45,6 +47,8 @@ def test_export_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> Non
                 "category": "Transport",
                 "subcategory": "Mobility",
                 "category_source": "rule",
+                "cashflow_type": "out",
+                "economic_role": "expense",
                 "project_tags": None,
                 "source_file": "b.pdf",
             },
@@ -72,10 +76,14 @@ def test_export_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> Non
     assert exported_df.loc[0, "original_category"] == "Uncategorized"
     assert pd.isna(exported_df.loc[0, "original_subcategory"])
     assert "normalized_description" in exported_df.columns
+    assert "cashflow_type" in exported_df.columns
+    assert "economic_role" in exported_df.columns
     assert "fingerprint" not in exported_df.columns
     assert "category_source" not in exported_df.columns
     assert "override_level" not in exported_df.columns
     assert exported_df.loc[0, "existing_project_tags"] == "OldTagA|OldTagB"
+    assert exported_df.loc[0, "cashflow_type"] == "out"
+    assert exported_df.loc[0, "economic_role"] == "expense"
     workbook = load_workbook(output_path)
     worksheet = workbook["review"]
     assert worksheet["A1"].font.name == "Calibri"
