@@ -951,7 +951,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       function setSpecificYearState() {
-        specificYearSelect.disabled = windowSelect.value !== "specific_year" || dataYears.length === 0;
+        specificYearSelect.disabled = dataYears.length === 0;
       }
 
       function fillSpecificYearOptions() {
@@ -1321,9 +1321,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           refreshDashboard();
         });
         specificYearSelect.addEventListener("change", function () {
-          if (windowSelect.value === "specific_year") {
-            applyWindowSelection("specific_year");
-          }
+          windowSelect.value = "specific_year";
+          applyWindowSelection("specific_year");
           refreshDashboard();
         });
         startInput.addEventListener("change", function () {
