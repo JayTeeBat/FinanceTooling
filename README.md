@@ -148,6 +148,9 @@ dashboard.
 
 Canonical transaction outputs now include `cashflow_type`, derived during
 `transform` from category taxonomy and optional transaction-level overrides.
+Canonical outputs also now include inferred account-boundary fields:
+`from_account_ref`, `to_account_ref`, `from_account_type`,
+`to_account_type`, and `account_inference_source`.
 
 Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
 - `cashflow_type = in`: contributes to income
@@ -158,9 +161,15 @@ Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
 
 Practical policy:
 - refunds are not income; positive refund rows reduce expense
+- non-personal and pass-through flows should use `cashflow_type = exclude`
 - interest remains income
 - if a transaction-level exception is needed, set `cashflow_type` directly in
   `transaction_overrides.yaml`
+
+Account-boundary inference is configured separately in `account_rules.yaml`:
+- `internal_accounts` defines personal/internal statement accounts
+- `counterparty_rules` infers the emitting or receiving counterparty side
+- transaction-level account exceptions can be set in `transaction_overrides.yaml`
 
 Carry-forward diagnostics include:
 - `manual_category_carry_forward_applied_count`

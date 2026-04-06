@@ -217,6 +217,16 @@ def _default_rules() -> ClassificationRules:
             subcategories=("Internal/External",),
             cashflow_type="transfer",
         ),
+        "non personal transactions": TaxonomyCategory(
+            name="Non Personal Transactions",
+            subcategories=(),
+            cashflow_type="exclude",
+        ),
+        "pass-through": TaxonomyCategory(
+            name="Pass-through",
+            subcategories=(),
+            cashflow_type="exclude",
+        ),
     }
     return ClassificationRules(rules=tuple(rules), taxonomy=default_taxonomy)
 

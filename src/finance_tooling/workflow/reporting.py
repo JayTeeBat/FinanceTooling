@@ -280,6 +280,83 @@ def _build_category_metrics_from_dataframe(
     )
 
 
+def _build_exclude_metrics_from_dataframe(
+    dataframe: DataFrame,
+) -> tuple[int, float, list[str]]:
+    if dataframe.empty:
+        return 0, 0.0, []
+
+    cashflow_type_series = (
+        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    exclude_mask = cashflow_type_series.eq("exclude")
+    exclude_count = int(exclude_mask.sum())
+    if exclude_count == 0:
+        return 0, 0.0, []
+
+    amount_series = pd.to_numeric(
+        dataframe.get("amount_eur", pd.Series(0.0, index=dataframe.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    category_series = (
+        dataframe.get("category", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+    )
+    exclude_categories = sorted(
+        {
+            str(category).strip() or "Uncategorized"
+            for category in category_series.loc[exclude_mask].tolist()
+        }
+    )
+    return exclude_count, float(amount_series.loc[exclude_mask].abs().sum()), exclude_categories
+
+
+def _build_account_inference_metrics_from_dataframe(
+    dataframe: DataFrame,
+) -> tuple[int, int, dict[str, int]]:
+    if dataframe.empty:
+        return 0, 0, {}
+
+    from_type = (
+        dataframe.get("from_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    to_type = (
+        dataframe.get("to_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    source = (
+        dataframe.get(
+            "account_inference_source", pd.Series("", index=dataframe.index, dtype="object")
+        )
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .replace("", "unknown")
+    )
+    unknown_from = from_type.eq("unknown") | from_type.eq("")
+    unknown_to = to_type.eq("unknown") | to_type.eq("")
+    unknown_transaction = unknown_from | unknown_to
+    source_counts = {str(index): int(value) for index, value in source.value_counts().items()}
+    return (
+        int(unknown_transaction.sum()),
+        int(unknown_from.sum() + unknown_to.sum()),
+        source_counts,
+    )
+
+
 def persist_and_report(
     *,
     settings: Settings,
@@ -381,6 +458,14 @@ def persist_and_report(
         uncategorized_amount_eur_abs,
         reviewed_count,
     ) = _build_category_metrics_from_dataframe(dataframe)
+    exclude_count, exclude_amount_eur_abs, exclude_categories = (
+        _build_exclude_metrics_from_dataframe(dataframe)
+    )
+    (
+        account_boundary_unknown_count,
+        account_boundary_unknown_side_count,
+        account_inference_source_counts,
+    ) = _build_account_inference_metrics_from_dataframe(dataframe)
     total_amount_eur_abs = categorized_amount_eur_abs + uncategorized_amount_eur_abs
     reviewed_ratio = (reviewed_count / len(dataframe)) if len(dataframe) else 0.0
     categorized_amount_eur_abs_ratio = (
@@ -432,11 +517,20 @@ def persist_and_report(
         "category_rules_path": str(settings.category_rules_path),
         "project_rules_path": str(settings.project_rules_path),
         "budget_targets_path": str(settings.budget_targets_path),
+        "account_rules_path": str(settings.account_rules_path),
         "project_overrides_path": str(settings.project_overrides_path),
         "transaction_overrides_path": str(settings.transaction_overrides_path),
         "review_state_path": str(settings.review_state_path),
         "cashflow_type_unknown_count": cashflow_resolution.unknown_count,
         "cashflow_type_unknown_categories": cashflow_resolution.unknown_categories,
+        "exclude_count": exclude_count,
+        "exclude_amount_eur_abs": round(exclude_amount_eur_abs, 4),
+        "exclude_categories": exclude_categories,
+        "account_transfer_override_count": cashflow_resolution.account_transfer_override_count,
+        "account_transfer_conflict_count": cashflow_resolution.account_transfer_conflict_count,
+        "account_boundary_unknown_count": account_boundary_unknown_count,
+        "account_boundary_unknown_side_count": account_boundary_unknown_side_count,
+        "account_inference_source_counts": account_inference_source_counts,
         "cashflow_yoy": cashflow_yoy,
     }
     write_json(settings.summary_json_path, summary_payload)

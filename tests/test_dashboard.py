@@ -207,6 +207,117 @@ def test_render_dashboard_html_includes_cashflow_type_warning_when_unknown_prese
     assert "Uncategorized" in warnings[0]
 
 
+def test_render_dashboard_html_includes_cashflow_type_exclude_warning_when_present(
+    tmp_path: Path,
+) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "booking_date": "2026-01-03",
+                "description": "Pass-through expense",
+                "amount_native": -20.0,
+                "amount_eur": -20.0,
+                "category": "Non Personal Transactions",
+                "cashflow_type": "exclude",
+                "bank": "HSBC",
+                "account_label": None,
+            }
+        ]
+    )
+
+    destination = tmp_path / "dashboard.html"
+    render_dashboard_html(
+        frame,
+        destination,
+        base_currency="EUR",
+        files_scanned=1,
+        files_failed=0,
+        new_rows=1,
+    )
+
+    payload = _extract_payload(destination.read_text(encoding="utf-8"))
+    warnings = cast(list[str], payload["warnings"])
+    assert len(warnings) == 1
+    assert "Cashflow type exclude applies to 1 transaction" in warnings[0]
+    assert "Non Personal Transactions" in warnings[0]
+
+
+def test_render_dashboard_html_includes_account_boundary_warning_when_unknown_present(
+    tmp_path: Path,
+) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "booking_date": "2026-01-03",
+                "description": "Mystery transfer",
+                "amount_native": 20.0,
+                "amount_eur": 20.0,
+                "category": "Transfers",
+                "cashflow_type": "transfer",
+                "from_account_type": "unknown",
+                "to_account_type": "internal",
+                "account_inference_source": "unknown",
+                "bank": "HSBC",
+                "account_label": None,
+            }
+        ]
+    )
+
+    destination = tmp_path / "dashboard.html"
+    render_dashboard_html(
+        frame,
+        destination,
+        base_currency="EUR",
+        files_scanned=1,
+        files_failed=0,
+        new_rows=1,
+    )
+
+    payload = _extract_payload(destination.read_text(encoding="utf-8"))
+    warnings = cast(list[str], payload["warnings"])
+    assert len(warnings) == 1
+    assert "Account boundary unresolved for 1 transaction" in warnings[0]
+    assert "unknown=1" in warnings[0]
+
+
+def test_render_dashboard_html_includes_account_transfer_warning_when_boundary_reclassifies(
+    tmp_path: Path,
+) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "booking_date": "2026-01-03",
+                "description": "Move to savings",
+                "amount_native": -250.0,
+                "amount_eur": -250.0,
+                "category": "Shopping",
+                "cashflow_type": "transfer",
+                "from_account_type": "internal",
+                "to_account_type": "internal",
+                "account_inference_source": "account_rule",
+                "bank": "HSBC",
+                "account_label": None,
+            }
+        ]
+    )
+
+    destination = tmp_path / "dashboard.html"
+    render_dashboard_html(
+        frame,
+        destination,
+        base_currency="EUR",
+        files_scanned=1,
+        files_failed=0,
+        new_rows=1,
+    )
+
+    payload = _extract_payload(destination.read_text(encoding="utf-8"))
+    warnings = cast(list[str], payload["warnings"])
+    assert len(warnings) == 2
+    assert "reclassified 1 internal-to-internal transaction as transfer" in warnings[0]
+    assert "transfer conflicts remain on 1 categorized rows" in warnings[1]
+
+
 def test_render_dashboard_html_vectorized_transaction_row_normalization(tmp_path: Path) -> None:
     frame = pd.DataFrame(
         [

@@ -33,6 +33,7 @@ def _settings(tmp_path: Path) -> Settings:
         category_rules_path=tmp_path / "category_rules.yaml",
         project_rules_path=tmp_path / "project_rules.yaml",
         budget_targets_path=tmp_path / "budget_targets.yaml",
+        account_rules_path=tmp_path / "account_rules.yaml",
         project_overrides_path=tmp_path / "project_overrides.yaml",
         transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
         review_state_path=tmp_path / "state" / "workflow_review_state.parquet",

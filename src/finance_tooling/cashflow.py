@@ -37,6 +37,8 @@ class CashflowResolutionResult:
     dataframe: pd.DataFrame
     unknown_count: int
     unknown_categories: list[str]
+    account_transfer_override_count: int
+    account_transfer_conflict_count: int
 
 
 def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: str) -> pd.Series:
@@ -85,6 +87,8 @@ def resolve_cashflow_types_for_dataframe(
             dataframe=resolved,
             unknown_count=0,
             unknown_categories=[],
+            account_transfer_override_count=0,
+            account_transfer_conflict_count=0,
         )
 
     normalized_frame = dataframe.copy()
@@ -94,11 +98,35 @@ def resolve_cashflow_types_for_dataframe(
 
     transactions = transactions_from_dataframe(normalized_frame[CANONICAL_TRANSACTION_COLUMNS])
     resolved_types: list[str] = []
+    account_transfer_override_count = 0
+    account_transfer_conflict_count = 0
     for tx in transactions:
-        resolved_type = resolve_taxonomy_cashflow_type(tx.category, rules=classification_rules)
+        override_cashflow_type: str | None = None
         for entry in iter_matching_override_entries(tx, transaction_override_store):
             if entry.set_cashflow_type and entry.cashflow_type is not None:
-                resolved_type = cast(str, entry.cashflow_type)
+                override_cashflow_type = cast(str, entry.cashflow_type)
+
+        taxonomy_type = resolve_taxonomy_cashflow_type(tx.category, rules=classification_rules)
+        from_account_type = (tx.from_account_type or "").strip().casefold()
+        to_account_type = (tx.to_account_type or "").strip().casefold()
+        internal_to_internal = from_account_type == "internal" and to_account_type == "internal"
+
+        if override_cashflow_type is not None:
+            resolved_type = override_cashflow_type
+        elif internal_to_internal:
+            resolved_type = "transfer"
+            account_transfer_override_count += 1
+            if taxonomy_type not in {None, "transfer"}:
+                account_transfer_conflict_count += 1
+        elif taxonomy_type is not None:
+            resolved_type = taxonomy_type
+        elif tx.amount_eur is not None and tx.amount_eur > 0:
+            resolved_type = "in"
+        elif tx.amount_eur is not None and tx.amount_eur < 0:
+            resolved_type = "out"
+        else:
+            resolved_type = None
+
         resolved_types.append(resolved_type or "unknown")
 
     resolved = normalized_frame.copy()
@@ -120,6 +148,8 @@ def resolve_cashflow_types_for_dataframe(
         dataframe=resolved,
         unknown_count=int((normalized == "unknown").sum()),
         unknown_categories=unknown_categories,
+        account_transfer_override_count=account_transfer_override_count,
+        account_transfer_conflict_count=account_transfer_conflict_count,
     )
 
 

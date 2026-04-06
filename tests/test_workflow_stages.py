@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import pandas as pd
 
+from finance_tooling.account_inference import AccountInferenceConfig
 from finance_tooling.backup import BackupRunResult
 from finance_tooling.classify import ClassificationDiagnostics, ClassificationRules
 from finance_tooling.config import Settings
@@ -94,6 +95,7 @@ def _settings(input_dir: Path, *, base_currency: str = "EUR") -> Settings:
         category_rules_path=input_dir / "category_rules.json",
         project_rules_path=input_dir / "project_rules.yaml",
         budget_targets_path=input_dir / "budget_targets.yaml",
+        account_rules_path=input_dir / "account_rules.yaml",
         project_overrides_path=Path("config/project_overrides.yaml").resolve(),
         transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
         review_state_path=processed_dir / "state" / "workflow_review_state.parquet",
@@ -225,8 +227,15 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["reviewed_count"] == 0
     assert summary_payload["reviewed_ratio"] == 0.0
     assert summary_payload["category_source_counts"]["rule"] == 1
+    assert summary_payload["account_rules_path"] == str(settings.account_rules_path)
     assert summary_payload["cashflow_type_unknown_count"] == 0
     assert summary_payload["cashflow_type_unknown_categories"] == []
+    assert summary_payload["exclude_count"] == 0
+    assert summary_payload["exclude_amount_eur_abs"] == 0.0
+    assert summary_payload["exclude_categories"] == []
+    assert summary_payload["account_boundary_unknown_count"] == 1
+    assert summary_payload["account_boundary_unknown_side_count"] == 2
+    assert summary_payload["account_inference_source_counts"] == {"unknown": 1}
     assert summary_payload["cashflow_yoy"]["years"][0]["year"] == 2024
     assert summary_payload["cashflow_yoy"]["years"][0]["net_cashflow"] == 100.0
     assert summary_payload["cashflow_yoy"]["current_ytd"] is None
@@ -289,6 +298,155 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert result.uncategorized_count_delta is None
     assert result.categorized_amount_eur_abs_delta is None
     assert result.uncategorized_amount_eur_abs_delta is None
+
+
+def test_run_workflow_reports_account_transfer_reclassification_counts(
+    monkeypatch, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    parsed_pdf = input_dir / "parsed_2024.pdf"
+    parsed_pdf.write_text("fake parsed", encoding="utf-8")
+    settings = _settings(input_dir)
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
+        lambda _: [parsed_pdf],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.extract_text_from_pdf",
+        lambda _: ExtractedPdfText(first_page_text="", full_text=""),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.select_parser_with_diagnostics",
+        lambda *_: ParserSelection(
+            parser=cast(StatementParser, _DummyParser()),
+            score=2,
+            threshold=2,
+            candidates=(ParserScoreItem(parser_name="dummy", score=2),),
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.render_dashboard_html",
+        lambda *args, **kwargs: settings.output_path,
+    )
+
+    dataframe = pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx-1",
+                "booking_date": "2024-05-06",
+                "description": "Salary",
+                "amount_native": 100.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-06",
+                "fx_source": "BASE",
+                "amount_eur": 100.0,
+                "category": "Income",
+                "bank": "DummyBank",
+                "account_label": None,
+                "from_account_ref": "hsbc_main",
+                "to_account_ref": "revolut_main",
+                "from_account_type": "internal",
+                "to_account_type": "internal",
+                "account_inference_source": "account_rule",
+                "source_file": str(parsed_pdf),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "reviewed": False,
+                "ingested_at": "2026-02-23T00:00:00+00:00",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.upsert_transactions",
+        lambda *_: UpsertResult(
+            parquet_path=settings.master_parquet_path,
+            dataframe=dataframe,
+            new_rows=1,
+            total_rows=1,
+        ),
+    )
+
+    run_workflow(settings)
+
+    summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
+    assert summary_payload["account_transfer_override_count"] == 1
+    assert summary_payload["account_transfer_conflict_count"] == 1
+
+
+def test_run_workflow_reports_exclude_metrics(monkeypatch, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+
+    parsed_pdf = input_dir / "parsed_2024.pdf"
+    parsed_pdf.write_text("fake parsed", encoding="utf-8")
+    settings = _settings(input_dir)
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
+        lambda _: [parsed_pdf],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.extract_text_from_pdf",
+        lambda _: ExtractedPdfText(first_page_text="", full_text=""),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.ingest_stage.select_parser_with_diagnostics",
+        lambda *_: ParserSelection(
+            parser=cast(StatementParser, _DummyParser()),
+            score=2,
+            threshold=2,
+            candidates=(ParserScoreItem(parser_name="dummy", score=2),),
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.render_dashboard_html",
+        lambda *args, **kwargs: settings.output_path,
+    )
+
+    dataframe = pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx-1",
+                "booking_date": "2024-05-06",
+                "description": "Pass-through expense",
+                "amount_native": -25.0,
+                "currency": "EUR",
+                "fx_rate_to_eur": 1.0,
+                "fx_rate_date": "2024-05-06",
+                "fx_source": "BASE",
+                "amount_eur": -25.0,
+                "category": "Non Personal Transactions",
+                "cashflow_type": "exclude",
+                "bank": "DummyBank",
+                "account_label": None,
+                "source_file": str(parsed_pdf),
+                "source_file_mtime": None,
+                "parser": "dummy",
+                "reviewed": False,
+                "ingested_at": "2026-02-23T00:00:00+00:00",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.upsert_transactions",
+        lambda *_: UpsertResult(
+            parquet_path=settings.master_parquet_path,
+            dataframe=dataframe,
+            new_rows=1,
+            total_rows=1,
+        ),
+    )
+
+    run_workflow(settings)
+
+    summary_payload = json.loads(settings.summary_json_path.read_text(encoding="utf-8"))
+    assert summary_payload["exclude_count"] == 1
+    assert summary_payload["exclude_amount_eur_abs"] == 25.0
+    assert summary_payload["exclude_categories"] == ["Non Personal Transactions"]
 
 
 def test_run_workflow_amount_ratios_use_categorized_income_denominator(
@@ -562,6 +720,10 @@ def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_pat
                 "classification_diagnostics": None,
                 "classification_rules": ClassificationRules(rules=()),
                 "transaction_override_store": TransactionOverrideStore(entries=()),
+                "account_inference_config": AccountInferenceConfig(
+                    internal_accounts=(), counterparty_rules=()
+                ),
+                "account_inference_warnings": [],
                 "manual_category_carry_forward_applied_count": 0,
                 "manual_category_carry_forward_ambiguous_skipped_count": 0,
                 "manual_category_carry_forward_unmatched_count": 0,
@@ -1072,10 +1234,15 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
                 "category": "Income",
                 "subcategory": "Salary",
                 "category_confidence": 1.0,
-                "category_source": "rule",
-                "category_rule_id": "income.salary",
-                "cashflow_type": "in",
-                "project": None,
+                    "category_source": "rule",
+                    "category_rule_id": "income.salary",
+                    "cashflow_type": "in",
+                    "from_account_ref": None,
+                    "to_account_ref": "salary_main",
+                    "from_account_type": "external",
+                    "to_account_type": "internal",
+                    "account_inference_source": "account_rule",
+                    "project": None,
                 "project_tags": None,
                 "project_source": None,
                 "reviewed": False,
@@ -1284,6 +1451,10 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
             ),
             classification_rules=ClassificationRules(rules=()),
             transaction_override_store=TransactionOverrideStore(entries=()),
+            account_inference_config=AccountInferenceConfig(
+                internal_accounts=(), counterparty_rules=()
+            ),
+            account_inference_warnings=[],
             manual_category_carry_forward_applied_count=0,
             manual_category_carry_forward_ambiguous_skipped_count=0,
             manual_category_carry_forward_unmatched_count=0,

@@ -110,6 +110,11 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "category_source": tx.category_source,
             "category_rule_id": tx.category_rule_id,
             "cashflow_type": tx.cashflow_type,
+            "from_account_ref": tx.from_account_ref,
+            "to_account_ref": tx.to_account_ref,
+            "from_account_type": tx.from_account_type,
+            "to_account_type": tx.to_account_type,
+            "account_inference_source": tx.account_inference_source,
             "project": tx.project,
             "project_tags": _serialize_project_tags(tx.project_tags),
             "project_source": tx.project_source,
@@ -199,6 +204,36 @@ def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
                 cashflow_type=(
                     str(row["cashflow_type"])
                     if row.get("cashflow_type") is not None and not pd.isna(row["cashflow_type"])
+                    else None
+                ),
+                from_account_ref=(
+                    str(row["from_account_ref"])
+                    if row.get("from_account_ref") is not None
+                    and not pd.isna(row["from_account_ref"])
+                    else None
+                ),
+                to_account_ref=(
+                    str(row["to_account_ref"])
+                    if row.get("to_account_ref") is not None
+                    and not pd.isna(row["to_account_ref"])
+                    else None
+                ),
+                from_account_type=(
+                    str(row["from_account_type"])
+                    if row.get("from_account_type") is not None
+                    and not pd.isna(row["from_account_type"])
+                    else None
+                ),
+                to_account_type=(
+                    str(row["to_account_type"])
+                    if row.get("to_account_type") is not None
+                    and not pd.isna(row["to_account_type"])
+                    else None
+                ),
+                account_inference_source=(
+                    str(row["account_inference_source"])
+                    if row.get("account_inference_source") is not None
+                    and not pd.isna(row["account_inference_source"])
                     else None
                 ),
                 project=(

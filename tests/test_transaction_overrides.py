@@ -49,6 +49,8 @@ def test_load_transaction_override_store_supports_nested_match_block(tmp_path: P
                 "    category: Transport",
                 "    subcategory: Taxi",
                 "    cashflow_type: out",
+                "    from_account_ref: revolut_main",
+                "    to_account_type: external",
                 "    project_tags: [Trip2026, Work]",
             ]
         ),
@@ -70,6 +72,8 @@ def test_load_transaction_override_store_supports_nested_match_block(tmp_path: P
     assert entry.category == "Transport"
     assert entry.subcategory == "Taxi"
     assert entry.cashflow_type == "out"
+    assert entry.from_account_ref == "revolut_main"
+    assert entry.to_account_type == "external"
     assert entry.project_tags == ("Trip2026", "Work")
 
 
@@ -117,6 +121,10 @@ def test_apply_transaction_overrides_uses_last_match_wins() -> None:
                 set_project_tags=True,
                 cashflow_type="out",
                 set_cashflow_type=True,
+                from_account_ref="revolut_main",
+                set_from_account_ref=True,
+                to_account_type="external",
+                set_to_account_type=True,
             ),
         )
     )
@@ -129,6 +137,9 @@ def test_apply_transaction_overrides_uses_last_match_wins() -> None:
     assert updated[0].category_rule_id is None
     assert updated[0].category_confidence == 1.0
     assert updated[0].cashflow_type == "out"
+    assert updated[0].from_account_ref == "revolut_main"
+    assert updated[0].to_account_type == "external"
+    assert updated[0].account_inference_source == "transaction_override"
     assert updated[0].project == "Trip2026"
     assert updated[0].project_tags == ("Trip2026", "Family")
     assert updated[0].project_source == "transaction_override"

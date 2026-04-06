@@ -11,6 +11,7 @@ from typing import cast
 
 import yaml
 
+from finance_tooling.account_inference import _normalize_account_type
 from finance_tooling.classify import _normalize_cashflow_type, normalize_description
 from finance_tooling.models import Transaction
 from finance_tooling.store import compute_transaction_id
@@ -38,6 +39,14 @@ class TransactionOverrideEntry:
     set_project_tags: bool
     cashflow_type: str | None = None
     set_cashflow_type: bool = False
+    from_account_ref: str | None = None
+    set_from_account_ref: bool = False
+    to_account_ref: str | None = None
+    set_to_account_ref: bool = False
+    from_account_type: str | None = None
+    set_from_account_type: bool = False
+    to_account_type: str | None = None
+    set_to_account_type: bool = False
 
     def matches(
         self,
@@ -223,15 +232,47 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
     set_category = "category" in raw_override
     set_subcategory = "subcategory" in raw_override
     set_cashflow_type = "cashflow_type" in raw_override
+    set_from_account_ref = "from_account_ref" in raw_override
+    set_to_account_ref = "to_account_ref" in raw_override
+    set_from_account_type = "from_account_type" in raw_override
+    set_to_account_type = "to_account_type" in raw_override
     set_project = "project" in raw_override
     set_project_tags = "project_tags" in raw_override
-    if not any((set_category, set_subcategory, set_cashflow_type, set_project, set_project_tags)):
+    if not any(
+        (
+            set_category,
+            set_subcategory,
+            set_cashflow_type,
+            set_from_account_ref,
+            set_to_account_ref,
+            set_from_account_type,
+            set_to_account_type,
+            set_project,
+            set_project_tags,
+        )
+    ):
         return None
 
     category_value = _optional_str(raw_override.get("category")) if set_category else None
     subcategory_value = _optional_str(raw_override.get("subcategory")) if set_subcategory else None
     cashflow_type_value = (
         _normalize_cashflow_type(raw_override.get("cashflow_type")) if set_cashflow_type else None
+    )
+    from_account_ref_value = (
+        _optional_str(raw_override.get("from_account_ref")) if set_from_account_ref else None
+    )
+    to_account_ref_value = (
+        _optional_str(raw_override.get("to_account_ref")) if set_to_account_ref else None
+    )
+    from_account_type_value = (
+        str(_normalize_account_type(raw_override.get("from_account_type")))
+        if set_from_account_type and _normalize_account_type(raw_override.get("from_account_type"))
+        else None
+    )
+    to_account_type_value = (
+        str(_normalize_account_type(raw_override.get("to_account_type")))
+        if set_to_account_type and _normalize_account_type(raw_override.get("to_account_type"))
+        else None
     )
     project_value = _optional_str(raw_override.get("project")) if set_project else None
     project_tags = (
@@ -253,6 +294,14 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
         set_subcategory=set_subcategory,
         cashflow_type=cashflow_type_value,
         set_cashflow_type=set_cashflow_type,
+        from_account_ref=from_account_ref_value,
+        set_from_account_ref=set_from_account_ref,
+        to_account_ref=to_account_ref_value,
+        set_to_account_ref=set_to_account_ref,
+        from_account_type=from_account_type_value,
+        set_from_account_type=set_from_account_type,
+        to_account_type=to_account_type_value,
+        set_to_account_type=set_to_account_type,
         project=project_value,
         set_project=set_project,
         project_tags=project_tags,
@@ -316,6 +365,30 @@ def merge_transaction_override_entries(
             merged,
             cashflow_type=incoming.cashflow_type,
             set_cashflow_type=True,
+        )
+    if incoming.set_from_account_ref:
+        merged = replace(
+            merged,
+            from_account_ref=incoming.from_account_ref,
+            set_from_account_ref=True,
+        )
+    if incoming.set_to_account_ref:
+        merged = replace(
+            merged,
+            to_account_ref=incoming.to_account_ref,
+            set_to_account_ref=True,
+        )
+    if incoming.set_from_account_type:
+        merged = replace(
+            merged,
+            from_account_type=incoming.from_account_type,
+            set_from_account_type=True,
+        )
+    if incoming.set_to_account_type:
+        merged = replace(
+            merged,
+            to_account_type=incoming.to_account_type,
+            set_to_account_type=True,
         )
     if incoming.set_project:
         merged = replace(merged, project=incoming.project, set_project=True)
@@ -386,6 +459,14 @@ def write_transaction_override_store(path: Path, store: TransactionOverrideStore
             row["subcategory"] = entry.subcategory
         if entry.set_cashflow_type:
             row["cashflow_type"] = entry.cashflow_type
+        if entry.set_from_account_ref:
+            row["from_account_ref"] = entry.from_account_ref
+        if entry.set_to_account_ref:
+            row["to_account_ref"] = entry.to_account_ref
+        if entry.set_from_account_type:
+            row["from_account_type"] = entry.from_account_type
+        if entry.set_to_account_type:
+            row["to_account_type"] = entry.to_account_type
         if entry.set_project:
             row["project"] = entry.project
         if entry.set_project_tags:
@@ -455,6 +536,11 @@ def apply_transaction_overrides(
             category_source = current.category_source
             category_rule_id = current.category_rule_id
             cashflow_type = current.cashflow_type
+            from_account_ref = current.from_account_ref
+            to_account_ref = current.to_account_ref
+            from_account_type = current.from_account_type
+            to_account_type = current.to_account_type
+            account_inference_source = current.account_inference_source
             project = current.project
             project_tags = current.project_tags
             project_source = current.project_source
@@ -473,6 +559,18 @@ def apply_transaction_overrides(
 
             if entry.set_cashflow_type:
                 cashflow_type = entry.cashflow_type
+            if entry.set_from_account_ref:
+                from_account_ref = entry.from_account_ref
+                account_inference_source = "transaction_override"
+            if entry.set_to_account_ref:
+                to_account_ref = entry.to_account_ref
+                account_inference_source = "transaction_override"
+            if entry.set_from_account_type:
+                from_account_type = entry.from_account_type
+                account_inference_source = "transaction_override"
+            if entry.set_to_account_type:
+                to_account_type = entry.to_account_type
+                account_inference_source = "transaction_override"
 
             project_override_applied = False
             if entry.set_project:
@@ -494,6 +592,11 @@ def apply_transaction_overrides(
                 category_source=category_source,
                 category_rule_id=category_rule_id,
                 cashflow_type=cashflow_type,
+                from_account_ref=from_account_ref,
+                to_account_ref=to_account_ref,
+                from_account_type=from_account_type,
+                to_account_type=to_account_type,
+                account_inference_source=account_inference_source,
                 project=project,
                 project_tags=project_tags,
                 project_source=project_source,

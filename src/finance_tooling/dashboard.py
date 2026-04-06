@@ -83,25 +83,138 @@ def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
     if rows_frame.empty or "cashflow_type" not in rows_frame.columns:
         return []
 
+    warnings: list[str] = []
     unknown_mask = rows_frame["cashflow_type"].astype("string").str.casefold().eq("unknown")
+    unknown_count = int(unknown_mask.sum())
+    if unknown_count > 0:
+        unknown_categories = sorted(
+            {
+                str(category).strip() or "Uncategorized"
+                for category in rows_frame.loc[unknown_mask, "category"].astype("string").fillna("")
+            }
+        )
+        preview_categories = unknown_categories[:5]
+        if len(unknown_categories) > 5:
+            preview_categories.append(f"+{len(unknown_categories) - 5} more")
+        category_list = ", ".join(preview_categories)
+        transaction_word = "transaction" if unknown_count == 1 else "transactions"
+        warnings.append(
+            f"Cashflow type unresolved for {unknown_count} {transaction_word} across: {category_list}"
+        )
+
+    exclude_mask = rows_frame["cashflow_type"].astype("string").str.casefold().eq("exclude")
+    exclude_count = int(exclude_mask.sum())
+    if exclude_count > 0:
+        exclude_categories = sorted(
+            {
+                str(category).strip() or "Uncategorized"
+                for category in rows_frame.loc[exclude_mask, "category"].astype("string").fillna("")
+            }
+        )
+        preview_categories = exclude_categories[:5]
+        if len(exclude_categories) > 5:
+            preview_categories.append(f"+{len(exclude_categories) - 5} more")
+        category_list = ", ".join(preview_categories)
+        transaction_word = "transaction" if exclude_count == 1 else "transactions"
+        warnings.append(
+            f"Cashflow type exclude applies to {exclude_count} {transaction_word} across: {category_list}"
+        )
+
+    return warnings
+
+
+def _build_account_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
+    if dataframe.empty or (
+        "from_account_type" not in dataframe.columns and "to_account_type" not in dataframe.columns
+    ):
+        return []
+
+    from_type = (
+        dataframe.get("from_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    to_type = (
+        dataframe.get("to_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    unknown_mask = from_type.isin(("", "unknown")) | to_type.isin(("", "unknown"))
     unknown_count = int(unknown_mask.sum())
     if unknown_count == 0:
         return []
 
-    unknown_categories = sorted(
-        {
-            str(category).strip() or "Uncategorized"
-            for category in rows_frame.loc[unknown_mask, "category"].astype("string").fillna("")
-        }
+    source_series = (
+        dataframe.get(
+            "account_inference_source", pd.Series("", index=dataframe.index, dtype="object")
+        )
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .replace("", "unknown")
     )
-    preview_categories = unknown_categories[:5]
-    if len(unknown_categories) > 5:
-        preview_categories.append(f"+{len(unknown_categories) - 5} more")
-    category_list = ", ".join(preview_categories)
+    source_counts = {
+        str(index): int(value)
+        for index, value in source_series.loc[unknown_mask].value_counts().items()
+    }
+    summary = ", ".join(f"{key}={value}" for key, value in sorted(source_counts.items()))
     transaction_word = "transaction" if unknown_count == 1 else "transactions"
-    return [
-        f"Cashflow type unresolved for {unknown_count} {transaction_word} across: {category_list}"
+    return [f"Account boundary unresolved for {unknown_count} {transaction_word}; sources: {summary}"]
+
+
+def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
+    if dataframe.empty:
+        return []
+
+    from_type = (
+        dataframe.get("from_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    to_type = (
+        dataframe.get("to_account_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    cashflow_type = (
+        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    category = (
+        dataframe.get("category", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    boundary_transfer_mask = (
+        from_type.eq("internal") & to_type.eq("internal") & cashflow_type.eq("transfer")
+    )
+    override_count = int(boundary_transfer_mask.sum())
+    if override_count == 0:
+        return []
+
+    conflict_count = int((boundary_transfer_mask & ~category.eq("transfers")).sum())
+    transaction_word = "transaction" if override_count == 1 else "transactions"
+    warnings = [
+        f"Account boundary reclassified {override_count} internal-to-internal {transaction_word} as transfer"
     ]
+    if conflict_count > 0:
+        warnings.append(
+            f"Account boundary transfer conflicts remain on {conflict_count} categorized rows"
+        )
+    return warnings
 
 
 def _load_projecting(path: Path | None) -> tuple[ProjectConfig, list[str]]:
@@ -147,6 +260,8 @@ def _build_dashboard_payload(
             *project_warnings,
             *budget_warnings,
             *_build_cashflow_diagnostic_warnings(projected),
+            *_build_account_diagnostic_warnings(projected),
+            *_build_account_transfer_diagnostic_warnings(projected),
         ],
     }
     return payload

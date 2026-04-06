@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from finance_tooling.account_inference import AccountInferenceConfig
 from finance_tooling.classify import ClassificationDiagnostics, ClassificationRules
 from finance_tooling.config import Settings
 from finance_tooling.models import Transaction, WorkflowResult
@@ -34,6 +35,7 @@ def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
         category_rules_path=processed_dir / "category_rules.yaml",
         project_rules_path=processed_dir / "project_rules.yaml",
         budget_targets_path=processed_dir / "budget_targets.yaml",
+        account_rules_path=processed_dir / "account_rules.yaml",
         project_overrides_path=Path("config/project_overrides.yaml").resolve(),
         transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
         review_state_path=processed_dir / "state" / "workflow_review_state.parquet",
@@ -133,6 +135,11 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
         ),
         classification_rules=ClassificationRules(rules=()),
         transaction_override_store=TransactionOverrideStore(entries=()),
+        account_inference_config=AccountInferenceConfig(
+            internal_accounts=(),
+            counterparty_rules=(),
+        ),
+        account_inference_warnings=[],
         manual_category_carry_forward_applied_count=0,
         manual_category_carry_forward_ambiguous_skipped_count=0,
         manual_category_carry_forward_unmatched_count=1,
