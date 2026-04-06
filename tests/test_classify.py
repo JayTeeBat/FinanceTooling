@@ -197,6 +197,14 @@ def test_resolve_taxonomy_cashflow_type_returns_none_when_missing() -> None:
     assert resolve_taxonomy_cashflow_type("Shopping", rules=ClassificationRules(rules=())) is None
 
 
+def test_default_rules_include_exclude_categories() -> None:
+    rules, warnings = load_classification_rules(Path("/tmp/does-not-exist-category-rules.yaml"))
+
+    assert warnings == []
+    assert resolve_taxonomy_cashflow_type("Non Personal Transactions", rules=rules) == "exclude"
+    assert resolve_taxonomy_cashflow_type("Pass-through", rules=rules) == "exclude"
+
+
 def test_load_classification_rules_infers_cashflow_type_from_legacy_taxonomy_lists(
     tmp_path: Path,
 ) -> None:

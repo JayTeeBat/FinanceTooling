@@ -62,6 +62,9 @@ taxonomy:
   Non Personal Transactions:
     cashflow_type: exclude
     subcategories: []
+  Pass-through:
+    cashflow_type: exclude
+    subcategories: []
 
 rules:
   - id: transfers.savings.to_gbp

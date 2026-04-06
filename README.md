@@ -161,6 +161,7 @@ Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
 
 Practical policy:
 - refunds are not income; positive refund rows reduce expense
+- non-personal and pass-through flows should use `cashflow_type = exclude`
 - interest remains income
 - if a transaction-level exception is needed, set `cashflow_type` directly in
   `transaction_overrides.yaml`
