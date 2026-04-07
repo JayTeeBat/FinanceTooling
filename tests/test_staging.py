@@ -6,8 +6,46 @@ from pathlib import Path
 
 import pandas as pd
 
+from finance_tooling.config import Settings
 from finance_tooling.models import Transaction
-from finance_tooling.workflow.staging import read_staged_transactions, write_staged_transactions
+from finance_tooling.workflow.staging import (
+    read_staged_transactions,
+    resolve_staged_transactions_path,
+    write_staged_transactions,
+)
+
+
+def _settings(tmp_path: Path) -> Settings:
+    input_dir = tmp_path / "input"
+    processed_dir = tmp_path / "processed"
+    input_dir.mkdir()
+    (processed_dir / "outputs").mkdir(parents=True, exist_ok=True)
+    (processed_dir / "state").mkdir(parents=True, exist_ok=True)
+    return Settings(
+        input_path=input_dir,
+        processed_path=processed_dir,
+        output_path=processed_dir / "outputs" / "transform_dashboard.html",
+        master_parquet_path=processed_dir / "outputs" / "transform_transactions.parquet",
+        export_csv_path=processed_dir / "outputs" / "transform_transactions.csv",
+        export_json_path=processed_dir / "outputs" / "transform_transactions.json",
+        staged_transactions_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
+        summary_json_path=processed_dir / "outputs" / "transform_run_summary.json",
+        completeness_json_path=processed_dir / "state" / "transform_completeness_report.json",
+        base_currency="EUR",
+        fx_cache_path=processed_dir / "state" / "workflow_fx_rates_history.parquet",
+        fx_auto_fetch=False,
+        ingest_workers=1,
+        ingest_text_cache_enabled=False,
+        ingest_text_cache_path=processed_dir / "state" / "ingest_text_cache.parquet",
+        category_rules_path=processed_dir / "category_rules.yaml",
+        project_rules_path=processed_dir / "project_rules.yaml",
+        budget_targets_path=processed_dir / "budget_targets.yaml",
+        account_rules_path=processed_dir / "account_rules.yaml",
+        project_overrides_path=processed_dir / "project_overrides.yaml",
+        transaction_overrides_path=processed_dir / "transaction_overrides.yaml",
+        review_state_path=processed_dir / "state" / "workflow_review_state.parquet",
+        review_export_dark_safe=True,
+    )
 
 
 def test_staging_roundtrip_preserves_transaction_fields(tmp_path: Path) -> None:
@@ -71,6 +109,14 @@ def test_read_staged_transactions_validates_required_columns(tmp_path: Path) -> 
         assert "parser" in message
     else:
         raise AssertionError("Expected ValueError for missing staged columns.")
+
+
+def test_resolve_staged_transactions_path_supports_legacy_outputs_location(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    legacy_path = settings.summary_json_path.parent / "staged_transactions.parquet"
+    legacy_path.write_text("placeholder", encoding="utf-8")
+
+    assert resolve_staged_transactions_path(settings) == legacy_path
 
 
 def test_read_staged_transactions_backfills_legacy_identity_columns(tmp_path: Path) -> None:

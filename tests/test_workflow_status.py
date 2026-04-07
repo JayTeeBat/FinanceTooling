@@ -13,6 +13,8 @@ from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
     compute_rule_config_fingerprint,
     compute_transform_input_fingerprint,
+    resolve_staged_batch_manifest_path,
+    resolve_staged_transactions_path,
     source_registry_path,
     update_source_registry,
     write_source_registry,
@@ -128,6 +130,23 @@ def test_bootstrap_incremental_registry_does_not_report_config_drift(tmp_path: P
     assert payload["drift_state"]["dataset_stale"] is False
     assert payload["drift_state"]["full_refresh_risk"] == "low"
     assert payload["committed_state"]["config_drift_since_last_full_refresh"] is False
+
+
+def test_incremental_state_prefers_legacy_outputs_registry_and_staged_artifacts(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+
+    legacy_registry = settings.summary_json_path.parent / "source_registry.json"
+    legacy_registry.write_text("{}", encoding="utf-8")
+    legacy_manifest = settings.summary_json_path.parent / "staged_batch_manifest.json"
+    legacy_manifest.write_text("{}", encoding="utf-8")
+    legacy_staged = settings.summary_json_path.parent / "staged_transactions.parquet"
+    legacy_staged.write_text("placeholder", encoding="utf-8")
+
+    assert source_registry_path(settings) == legacy_registry
+    assert resolve_staged_batch_manifest_path(settings) == legacy_manifest
+    assert resolve_staged_transactions_path(settings) == legacy_staged
 
 
 def test_transaction_override_changes_do_not_report_config_drift(tmp_path: Path) -> None:

@@ -10,7 +10,7 @@ from finance_tooling.config import Settings
 from finance_tooling.models import Transaction, WorkflowResult
 from finance_tooling.perf_check import assert_isolated_processed_path, run_perf_check
 from finance_tooling.transaction_overrides import TransactionOverrideStore
-from finance_tooling.workflow.types import EnrichmentResult, HsbcMergeResult, IngestResult
+from finance_tooling.workflow.types import EnrichmentResult, HsbcDiagnosticsResult, IngestResult
 
 
 def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
@@ -103,9 +103,7 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
         text_cache_misses=0,
         text_cache_write_count=0,
     )
-    hsbc_merge_result = HsbcMergeResult(
-        transactions=[tx],
-        validations=[],
+    hsbc_diagnostics_result = HsbcDiagnosticsResult(
         warnings=[],
         metrics={
             "hsbc_csv_statement_replaced_count": 0,
@@ -183,8 +181,8 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
         lambda *args, **kwargs: ingest_result,
     )
     monkeypatch.setattr(
-        "finance_tooling.perf_check.merge_hsbc_sources",
-        lambda *args, **kwargs: hsbc_merge_result,
+        "finance_tooling.perf_check.analyze_hsbc_parser_outputs",
+        lambda *args, **kwargs: hsbc_diagnostics_result,
     )
     monkeypatch.setattr(
         "finance_tooling.perf_check.enrich_transactions",
