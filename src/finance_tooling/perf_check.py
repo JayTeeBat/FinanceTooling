@@ -24,7 +24,7 @@ from finance_tooling.parsers import select_parser_with_diagnostics
 from finance_tooling.scanner import discover_statement_pdfs
 from finance_tooling.store import upsert_transactions
 from finance_tooling.workflow.enrichment import enrich_transactions
-from finance_tooling.workflow.hsbc_merge import merge_hsbc_sources
+from finance_tooling.workflow.hsbc_diagnostics import analyze_hsbc_parser_outputs
 from finance_tooling.workflow.ingest import ingest_statements
 from finance_tooling.workflow.reporting import persist_and_report
 
@@ -152,21 +152,20 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
     ingest_duration = perf_counter() - ingest_started_at
 
     hsbc_merge_started_at = perf_counter()
-    hsbc_merge = merge_hsbc_sources(
+    hsbc_diagnostics = analyze_hsbc_parser_outputs(
         ingest.transactions,
         ingest.validations,
-        ingest.source_files,
         ingest.hsbc_statement_periods_by_date,
     )
     hsbc_merge_duration = perf_counter() - hsbc_merge_started_at
 
     enrichment_started_at = perf_counter()
-    enrichment = enrich_transactions(hsbc_merge.transactions, settings)
+    enrichment = enrich_transactions(ingest.transactions, settings)
     enrichment_duration = perf_counter() - enrichment_started_at
 
     warnings = [
         *ingest.warnings,
-        *hsbc_merge.warnings,
+        *hsbc_diagnostics.warnings,
         *enrichment.warnings,
     ]
 
@@ -176,17 +175,17 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         source_files=ingest.source_files,
         files_failed=ingest.files_failed,
         transactions=enrichment.transactions,
-        validations=hsbc_merge.validations,
+        validations=ingest.validations,
         parser_selection_diagnostics=ingest.parser_selection_diagnostics,
         parser_low_confidence_file_count=ingest.parser_low_confidence_file_count,
         hsbc_csv_files_scanned=ingest.hsbc_csv_files_scanned,
-        hsbc_merge_metrics=hsbc_merge.metrics,
+        hsbc_merge_metrics=hsbc_diagnostics.metrics,
         hsbc_period_parse_variant_match_count=ingest.hsbc_period_parse_variant_match_count,
         hsbc_boundary_metrics=ingest.hsbc_boundary_metrics,
         hsbc_boundary_diagnostics=ingest.hsbc_boundary_diagnostics,
         hsbc_sign_metrics=ingest.hsbc_sign_metrics,
         hsbc_sign_diagnostics=ingest.hsbc_sign_diagnostics,
-        hsbc_selection_diagnostics=hsbc_merge.selection_diagnostics,
+        hsbc_selection_diagnostics=hsbc_diagnostics.selection_diagnostics,
         ingest_parser_duration_seconds_by_parser=ingest.parser_duration_seconds_by_parser,
         ingest_duration_seconds_by_bank=ingest.duration_seconds_by_bank,
         ingest_text_cache_enabled=ingest.text_cache_enabled,

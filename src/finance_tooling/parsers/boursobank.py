@@ -15,10 +15,10 @@ from finance_tooling.parsers.base import (
 from finance_tooling.parsers.common import parse_decimal
 
 _LINE_PATTERN = re.compile(
-    r"^\s*(\d{2}/\d{2}/\d{4})\s*(.+?)\s+(\d{2}/\d{2}/\d{4})?\s+(-?\d[\d\s,.]*,\d{2})\s*$"
+    r"^\s*(\d{1,2}/\d{1,2}/\d{4})\s*(.+?)\s+(\d{1,2}/\d{1,2}/\d{4})?\s+(-?\d[\d\s,.]*,\d{2})\s*$"
 )
 _FORCE_POSITIVE_HINTS = ("AVOIR", "REMBOURSEMENT")
-_CREDIT_COLUMN_MIN_START = 70
+_CREDIT_COLUMN_MIN_START = 69
 _OPENING_BALANCE_PATTERNS = (
     re.compile(r"SOLDE\s*AU\s*:?\s*(?:\d{2}/\d{2}/\d{4})?\s*(-?\d[\d\s,.]*,\d{2})", re.IGNORECASE),
 )

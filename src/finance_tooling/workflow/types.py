@@ -171,11 +171,9 @@ class IngestResult:
 
 
 @dataclass(frozen=True)
-class HsbcMergeResult:
-    """Outputs of HSBC merge/reconciliation source selection stage."""
+class HsbcDiagnosticsResult:
+    """HSBC diagnostics derived from parser-owned outputs."""
 
-    transactions: list[Transaction]
-    validations: list[StatementValidation]
     warnings: list[str]
     metrics: dict[str, int]
     selection_diagnostics: list[HsbcSelectionDiagnostic]

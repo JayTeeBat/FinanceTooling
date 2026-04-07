@@ -16,7 +16,7 @@ from finance_tooling.parsers import select_parser_with_diagnostics
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.scanner import discover_statement_pdfs
 from finance_tooling.source_inventory import build_source_inventory
-from finance_tooling.workflow.hsbc_merge import merge_hsbc_sources
+from finance_tooling.workflow.hsbc_diagnostics import analyze_hsbc_parser_outputs
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
     build_manifest_from_selection_plan,
@@ -236,18 +236,17 @@ def run_ingest(
         stale_reasons=list(selection_plan.stale_reasons),
     )
     progress.update()
-    progress.set_postfix_str("merge and stage")
-    hsbc_merge = merge_hsbc_sources(
+    progress.set_postfix_str("diagnostics and stage")
+    hsbc_diagnostics = analyze_hsbc_parser_outputs(
         ingest.transactions,
         ingest.validations,
-        ingest.selected_source_files,
         ingest.hsbc_statement_periods_by_date,
     )
     warnings = [
         *ingest.warnings,
-        *hsbc_merge.warnings,
+        *hsbc_diagnostics.warnings,
     ]
-    staging = write_staged_transactions(settings.staged_transactions_path, hsbc_merge.transactions)
+    staging = write_staged_transactions(settings.staged_transactions_path, ingest.transactions)
     progress.update()
     progress.set_postfix_str("write manifest")
     staged_manifest = build_manifest_from_selection_plan(
@@ -293,18 +292,18 @@ def run_ingest(
                     "reason": validation.reason,
                     "severity": validation.severity,
                 }
-                for validation in hsbc_merge.validations
+                for validation in ingest.validations
             ],
             "parser_selection_diagnostics": ingest.parser_selection_diagnostics,
             "parser_low_confidence_file_count": ingest.parser_low_confidence_file_count,
             "hsbc_csv_files_scanned": ingest.hsbc_csv_files_scanned,
-            "hsbc_merge_metrics": hsbc_merge.metrics,
+            "hsbc_merge_metrics": hsbc_diagnostics.metrics,
             "hsbc_period_parse_variant_match_count": ingest.hsbc_period_parse_variant_match_count,
             "hsbc_boundary_metrics": ingest.hsbc_boundary_metrics,
             "hsbc_boundary_diagnostics": ingest.hsbc_boundary_diagnostics,
             "hsbc_sign_metrics": ingest.hsbc_sign_metrics,
             "hsbc_sign_diagnostics": ingest.hsbc_sign_diagnostics,
-            "hsbc_selection_diagnostics": hsbc_merge.selection_diagnostics,
+            "hsbc_selection_diagnostics": hsbc_diagnostics.selection_diagnostics,
             "ingest_parser_duration_seconds_by_parser": ingest.parser_duration_seconds_by_parser,
             "ingest_duration_seconds_by_bank": ingest.duration_seconds_by_bank,
             "ingest_text_cache_enabled": ingest.text_cache_enabled,
@@ -332,9 +331,9 @@ def run_ingest(
             "raw_files_discovered": ingest.raw_file_count,
             "duplicate_raw_file_count": ingest.duplicate_raw_file_count,
             "files_failed": ingest.files_failed,
-            "transactions_parsed": len(hsbc_merge.transactions),
+            "transactions_parsed": len(ingest.transactions),
             "newly_covered_months": sorted(
-                {tx.booking_date.strftime("%Y-%m") for tx in hsbc_merge.transactions}
+                {tx.booking_date.strftime("%Y-%m") for tx in ingest.transactions}
             ),
             "staged_transactions_path": str(staging.path),
             "staged_batch_manifest_path": str(staged_manifest_path),
@@ -376,21 +375,21 @@ def run_ingest(
         raw_files_discovered=ingest.raw_file_count,
         duplicate_raw_file_count=ingest.duplicate_raw_file_count,
         files_failed=ingest.files_failed,
-        transactions_parsed=len(hsbc_merge.transactions),
+        transactions_parsed=len(ingest.transactions),
         hsbc_csv_files_scanned=ingest.hsbc_csv_files_scanned,
         parser_low_confidence_file_count=ingest.parser_low_confidence_file_count,
         warnings=tuple(warnings),
         source_files=tuple(ingest.source_files),
         selected_source_files=tuple(ingest.selected_source_files),
-        validations=tuple(hsbc_merge.validations),
+        validations=tuple(ingest.validations),
         parser_selection_diagnostics=tuple(ingest.parser_selection_diagnostics),
-        hsbc_merge_metrics=hsbc_merge.metrics,
+        hsbc_merge_metrics=hsbc_diagnostics.metrics,
         hsbc_period_parse_variant_match_count=ingest.hsbc_period_parse_variant_match_count,
         hsbc_boundary_metrics=ingest.hsbc_boundary_metrics,
         hsbc_boundary_diagnostics=tuple(ingest.hsbc_boundary_diagnostics),
         hsbc_sign_metrics=ingest.hsbc_sign_metrics,
         hsbc_sign_diagnostics=tuple(ingest.hsbc_sign_diagnostics),
-        hsbc_selection_diagnostics=tuple(hsbc_merge.selection_diagnostics),
+        hsbc_selection_diagnostics=tuple(hsbc_diagnostics.selection_diagnostics),
         ingest_parser_duration_seconds_by_parser=ingest.parser_duration_seconds_by_parser,
         ingest_duration_seconds_by_bank=ingest.duration_seconds_by_bank,
         ingest_text_cache_enabled=ingest.text_cache_enabled,
@@ -398,7 +397,7 @@ def run_ingest(
         ingest_text_cache_misses=ingest.text_cache_misses,
         ingest_text_cache_write_count=ingest.text_cache_write_count,
         newly_covered_months=tuple(
-            sorted({tx.booking_date.strftime("%Y-%m") for tx in hsbc_merge.transactions})
+            sorted({tx.booking_date.strftime("%Y-%m") for tx in ingest.transactions})
         ),
         ingest_summary_path=ingest_summary_path,
         run_mode=ingest.run_mode,

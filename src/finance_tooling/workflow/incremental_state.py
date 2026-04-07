@@ -134,9 +134,12 @@ def source_registry_path(settings: Settings) -> Path:
     preferred = state_root_path(settings) / TRANSFORM_SOURCE_REGISTRY_FILENAME
     if preferred.exists():
         return preferred
-    legacy = settings.processed_path / LEGACY_SOURCE_REGISTRY_FILENAME
-    if legacy.exists():
-        return legacy
+    for legacy in (
+        settings.processed_path / LEGACY_SOURCE_REGISTRY_FILENAME,
+        settings.summary_json_path.parent / LEGACY_SOURCE_REGISTRY_FILENAME,
+    ):
+        if legacy.exists():
+            return legacy
     return preferred
 
 
@@ -149,9 +152,12 @@ def resolve_staged_transactions_path(settings: Settings) -> Path:
     preferred = settings.staged_transactions_path
     if preferred.exists():
         return preferred
-    legacy = settings.processed_path / LEGACY_STAGED_TRANSACTIONS_FILENAME
-    if legacy.exists():
-        return legacy
+    for legacy in (
+        settings.processed_path / LEGACY_STAGED_TRANSACTIONS_FILENAME,
+        settings.summary_json_path.parent / LEGACY_STAGED_TRANSACTIONS_FILENAME,
+    ):
+        if legacy.exists():
+            return legacy
     return preferred
 
 
@@ -160,9 +166,12 @@ def resolve_staged_batch_manifest_path(settings: Settings) -> Path:
     preferred = staged_batch_manifest_path(settings)
     if preferred.exists():
         return preferred
-    legacy = settings.processed_path / LEGACY_STAGED_BATCH_MANIFEST_FILENAME
-    if legacy.exists():
-        return legacy
+    for legacy in (
+        settings.processed_path / LEGACY_STAGED_BATCH_MANIFEST_FILENAME,
+        settings.summary_json_path.parent / LEGACY_STAGED_BATCH_MANIFEST_FILENAME,
+    ):
+        if legacy.exists():
+            return legacy
     return preferred
 
 

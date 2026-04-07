@@ -213,6 +213,18 @@ def test_boursobank_parser_parses_lines_without_space_after_date() -> None:
     assert result.transactions[0].amount_native < 0
 
 
+def test_boursobank_parser_parses_one_digit_dates_without_space_after_date() -> None:
+    parser = BoursobankParser()
+    text = """
+     7/10/2020PRLV SEPA FREE MOBILE        7/10/2020       2,00
+    """
+
+    result = parser.parse(Path("Releve-compte-30-10-2020.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-2.00")
+
+
 def test_boursobank_parser_uses_column_position_for_sign_and_balance_markers() -> None:
     parser = BoursobankParser()
     text = """
@@ -230,6 +242,23 @@ def test_boursobank_parser_uses_column_position_for_sign_and_balance_markers() -
         Decimal("-19.99"),
         Decimal("1200.00"),
     ]
+    assert result.validation is not None
+    assert result.validation.status == "pass"
+
+
+def test_boursobank_parser_treats_boundary_credit_column_as_positive() -> None:
+    parser = BoursobankParser()
+    text = """
+    MOUVEMENTS EN EUR
+    SOLDE AU : 30/11/2020             7.002,71
+    29/12/2020VIR SEPA FORSEE POWER       29/12/2020                 3.811,37
+    Nouveau solde en EUR :                        10.814,08
+    """
+
+    result = parser.parse(Path("Releve-compte-31-12-2020.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("3811.37")
     assert result.validation is not None
     assert result.validation.status == "pass"
 

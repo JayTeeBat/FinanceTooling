@@ -66,9 +66,13 @@ def resolve_staged_transactions_path(
     if candidate.exists():
         return candidate
     if staged_path is None and candidate.name == INGEST_STAGED_TRANSACTIONS_FILENAME:
-        legacy_path = candidate.with_name(LEGACY_STAGED_TRANSACTIONS_FILENAME)
-        if legacy_path.exists():
-            return legacy_path
+        for legacy_path in (
+            candidate.with_name(LEGACY_STAGED_TRANSACTIONS_FILENAME),
+            settings.processed_path / LEGACY_STAGED_TRANSACTIONS_FILENAME,
+            settings.summary_json_path.parent / LEGACY_STAGED_TRANSACTIONS_FILENAME,
+        ):
+            if legacy_path.exists():
+                return legacy_path
     return candidate
 
 

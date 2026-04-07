@@ -41,7 +41,7 @@ from finance_tooling.workflow.ingest_stage import (
 )
 from finance_tooling.workflow.staging import write_staged_transactions
 from finance_tooling.workflow.transform_stage import load_cached_transform_result, run_transform
-from finance_tooling.workflow.types import EnrichmentResult, HsbcMergeResult, IngestResult
+from finance_tooling.workflow.types import EnrichmentResult, HsbcDiagnosticsResult, IngestResult
 from finance_tooling.workflow.update_stage import run_update, run_workflow
 from finance_tooling.workflow_status import build_pipeline_state
 
@@ -1591,10 +1591,8 @@ def test_run_ingest_creates_staged_backup_run(tmp_path: Path, monkeypatch) -> No
         ),
     )
     monkeypatch.setattr(
-        "finance_tooling.workflow.ingest_stage.merge_hsbc_sources",
-        lambda *_args, **_kwargs: HsbcMergeResult(
-            transactions=[],
-            validations=[],
+        "finance_tooling.workflow.ingest_stage.analyze_hsbc_parser_outputs",
+        lambda *_args, **_kwargs: HsbcDiagnosticsResult(
             warnings=[],
             metrics={},
             selection_diagnostics=[],
