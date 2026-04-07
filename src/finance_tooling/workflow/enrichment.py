@@ -200,7 +200,11 @@ def enrich_transactions(transactions: list[Transaction], settings: Settings) -> 
         rules=category_rules,
     )
     projected = assign_projects_to_transactions(classified, project_config)
-    overridden = apply_transaction_overrides(projected, transaction_overrides)
+    overridden = apply_transaction_overrides(
+        projected,
+        transaction_overrides,
+        classification_rules=category_rules,
+    )
     carry_forward = apply_manual_category_carry_forward(
         overridden,
         master_parquet_path=settings.master_parquet_path,

@@ -102,7 +102,7 @@ def test_resolve_cashflow_types_internal_to_internal_becomes_transfer(tmp_path: 
     assert warnings == []
     assert result.dataframe.loc[0, "cashflow_type"] == "transfer"
     assert result.account_transfer_override_count == 1
-    assert result.account_transfer_conflict_count == 1
+    assert result.account_transfer_conflict_count == 0
 
 
 def test_resolve_cashflow_types_explicit_override_beats_internal_transfer(tmp_path: Path) -> None:
@@ -225,6 +225,64 @@ def test_resolve_cashflow_types_falls_back_to_sign_for_positive_unmapped_rows(
     assert warnings == []
     assert result.dataframe.loc[0, "cashflow_type"] == "in"
     assert result.unknown_count == 0
+
+
+def test_resolve_cashflow_types_uses_sign_for_positive_income_category_rows(
+    tmp_path: Path,
+) -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Salary credit",
+        amount_native=Decimal("125.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Income",
+        subcategory="Salary",
+        amount_eur=Decimal("125.00"),
+    )
+    override_path = tmp_path / "transaction_overrides.yaml"
+    override_path.write_text("overrides: []\n", encoding="utf-8")
+    override_store, warnings = load_transaction_override_store(override_path)
+
+    result = resolve_cashflow_types_for_dataframe(
+        _dataframe_for(tx),
+        classification_rules=_rules(),
+        transaction_override_store=override_store,
+    )
+
+    assert warnings == []
+    assert result.dataframe.loc[0, "cashflow_type"] == "in"
+
+
+def test_resolve_cashflow_types_uses_sign_for_positive_refund_rows(
+    tmp_path: Path,
+) -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Health insurance reimbursement",
+        amount_native=Decimal("42.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Refunds",
+        subcategory="Unmapped Refund",
+        amount_eur=Decimal("42.00"),
+    )
+    override_path = tmp_path / "transaction_overrides.yaml"
+    override_path.write_text("overrides: []\n", encoding="utf-8")
+    override_store, warnings = load_transaction_override_store(override_path)
+
+    result = resolve_cashflow_types_for_dataframe(
+        _dataframe_for(tx),
+        classification_rules=_rules(),
+        transaction_override_store=override_store,
+    )
+
+    assert warnings == []
+    assert result.dataframe.loc[0, "cashflow_type"] == "in"
 
 
 def test_resolve_cashflow_types_falls_back_to_sign_for_negative_unmapped_rows(
@@ -367,6 +425,30 @@ def test_resolve_economic_roles_keeps_legacy_refund_bucket_as_expense_when_not_i
     result = resolve_economic_roles_for_dataframe(
         _dataframe_for(tx),
         account_inference_config=_account_config(),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "expense"
+
+
+def test_resolve_economic_roles_keeps_positive_health_refund_as_expense() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Health insurance reimbursement",
+        amount_native=Decimal("11.85"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Refunds",
+        subcategory="Unmapped Refund",
+        cashflow_type="in",
+        amount_eur=Decimal("11.85"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+        classification_rules=_rules(),
     )
 
     assert result.dataframe.loc[0, "economic_role"] == "expense"

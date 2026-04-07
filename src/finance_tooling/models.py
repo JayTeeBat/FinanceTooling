@@ -20,6 +20,8 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "fx_rate_date",
     "fx_source",
     "amount_eur",
+    "category_id",
+    "reporting_category_id",
     "category",
     "subcategory",
     "category_confidence",
@@ -57,6 +59,8 @@ class Transaction:
     source_file: Path
     bank: str
     parser: str
+    category_id: str | None = None
+    reporting_category_id: str | None = None
     category: str = "Uncategorized"
     subcategory: str | None = None
     category_confidence: float | None = None

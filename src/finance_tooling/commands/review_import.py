@@ -99,6 +99,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 def handle(args: argparse.Namespace) -> int:
     """Execute the review-import command from parsed CLI arguments."""
     try:
+        settings = load_settings_from_env()
         review_path, transaction_overrides_path, review_state_path = resolve_review_import_paths(
             args.review_path,
             args.transaction_overrides_path,
@@ -126,6 +127,7 @@ def handle(args: argparse.Namespace) -> int:
             backup=bool(args.backup),
             transaction_backup_path=args.backup_path,
             review_state_path=review_state_path,
+            category_rules_path=settings.category_rules_path,
         )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Review import error: {exc}")
@@ -136,7 +138,6 @@ def handle(args: argparse.Namespace) -> int:
             print("Transaction backup: created")
         if args.run_transform:
             try:
-                settings = load_settings_from_env()
                 workflow_result = run_transform(settings)
             except (FileNotFoundError, RuntimeError, ValueError) as exc:
                 print(f"Transform error after review import: {exc}")

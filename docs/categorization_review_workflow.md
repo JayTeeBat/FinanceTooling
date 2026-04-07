@@ -78,19 +78,30 @@ Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
 - Keep `description`, `bank`, `account_label` unchanged.
 - Set `category` and optional `subcategory` when a category correction is needed.
 - Use `normalized_description` as a read-only normalized search/grouping helper.
+- `original_category_id` is a read-only durable category-assignment reference.
+- `original_reporting_category_id` is a read-only active taxonomy target.
 - Use extra transaction columns (for example `booking_date`, `amount_native`,
   `currency`, `source_file`) to disambiguate similar descriptions when needed.
 - Use `reviewed` to mark a transaction as reviewed.
 - Use `review_comment` for freeform reviewer notes.
 - Category/subcategory edits always write into `transaction_overrides.yaml`.
+- Review edits stay label-based for humans, but import resolves them to durable
+  `category_id` under the active taxonomy.
+- If category/subcategory labels are unchanged from export, `review-import`
+  preserves the original durable `category_id`.
 - Use `project_tags` for manual project tagging on unique transactions.
   - `project_tags` is independent from category edits.
   - Leave blank to skip project tagging.
   - Requires `transaction_id`.
 - `cashflow_type` is intentionally not part of the review workbook in v1.
-  - Reusable defaults come from category taxonomy in `category_rules.yaml`.
+  - `cashflow_type` is derived by the pipeline from exclusion policy,
+    household-account transfer detection, and transaction sign.
   - Rare transaction-level exceptions can be edited directly in
     `transaction_overrides.yaml`.
+- `economic_role` is shown as read-only context.
+  - True income comes from taxonomy semantics.
+  - Refunds remain `economic_role = expense` even when the transaction is a
+    positive inflow.
 - account-boundary fields are also intentionally not part of the review workbook
   in v1.
   - Reusable internal/counterparty inference comes from `account_rules.yaml`.
@@ -156,6 +167,13 @@ Use `${FINANCE_STATEMENTS_PATH}/../config/transaction_overrides.yaml` for direct
 one-off edits or bulk edits outside the review workbook.
 
 Use `${FINANCE_STATEMENTS_PATH}/../config/category_rules.yaml` for reusable
+categorization rules:
+
+- taxonomy entries define stable `category_id`, labels, and semantics
+- rules should emit `category_id`
+- deprecated IDs should use `deprecated_to` rather than silently rewriting
+  history
+
 If you are upgrading from a corpus generated before `source_record_index` was
 part of transaction identity, rerun `ingest` against the raw source corpus
 first. Any migration of old ID-keyed manual state should be handled as a

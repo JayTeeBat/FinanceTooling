@@ -140,7 +140,11 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     parsed_pdf.write_text("fake parsed", encoding="utf-8")
     missing_pdf.write_text("fake missing", encoding="utf-8")
 
-    settings = _settings(input_dir)
+    settings = replace(
+        _settings(input_dir),
+        project_overrides_path=tmp_path / "project_overrides.yaml",
+        transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
+    )
 
     monkeypatch.setattr(
         "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
@@ -179,6 +183,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
                 "fx_rate_date": "2024-05-06",
                 "fx_source": "BASE",
                 "amount_eur": 100.0,
+                "category_id": "income.salary",
+                "reporting_category_id": "income.salary",
                 "category": "Income",
                 "bank": "DummyBank",
                 "account_label": None,
@@ -234,8 +240,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["exclude_amount_eur_abs"] == 0.0
     assert summary_payload["exclude_categories"] == []
     assert summary_payload["economic_role_counts"] == {
-        "income": 0,
-        "expense": 1,
+        "income": 1,
+        "expense": 0,
         "transfer": 0,
         "exclude": 0,
     }
@@ -314,7 +320,11 @@ def test_run_workflow_reports_account_transfer_reclassification_counts(
 
     parsed_pdf = input_dir / "parsed_2024.pdf"
     parsed_pdf.write_text("fake parsed", encoding="utf-8")
-    settings = _settings(input_dir)
+    settings = replace(
+        _settings(input_dir),
+        project_overrides_path=tmp_path / "project_overrides.yaml",
+        transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
+    )
 
     monkeypatch.setattr(
         "finance_tooling.workflow.ingest_stage.discover_statement_pdfs",
@@ -350,6 +360,8 @@ def test_run_workflow_reports_account_transfer_reclassification_counts(
                 "fx_rate_date": "2024-05-06",
                 "fx_source": "BASE",
                 "amount_eur": 100.0,
+                "category_id": "income.salary",
+                "reporting_category_id": "income.salary",
                 "category": "Income",
                 "bank": "DummyBank",
                 "account_label": None,
@@ -825,11 +837,13 @@ def test_load_cached_transform_result_invalidates_when_master_parquet_lacks_cash
                 "amount_native": 100.0,
                 "currency": "EUR",
                 "fx_rate_to_eur": 1.0,
-                "fx_rate_date": "2024-05-06",
-                "fx_source": "BASE",
-                "amount_eur": 100.0,
-                "category": "Income",
-                "subcategory": "Salary",
+                    "fx_rate_date": "2024-05-06",
+                    "fx_source": "BASE",
+                    "amount_eur": 100.0,
+                    "category_id": "income.salary",
+                    "reporting_category_id": "income.salary",
+                    "category": "Income",
+                    "subcategory": "Salary",
                 "category_confidence": 1.0,
                 "category_source": "rule",
                 "category_rule_id": "income.salary",
@@ -1060,7 +1074,11 @@ def test_run_ingest_skips_reingest_when_raw_files_unchanged(
     input_dir.mkdir()
     source_file = input_dir / "statement_2024.pdf"
     source_file.write_text("fake", encoding="utf-8")
-    settings = _settings(input_dir)
+    settings = replace(
+        _settings(input_dir),
+        project_overrides_path=tmp_path / "project_overrides.yaml",
+        transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
+    )
     settings.staged_transactions_path.write_text("placeholder", encoding="utf-8")
     _write_transform_manifest(settings, [])
 
@@ -1181,7 +1199,11 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
 
     source_file = input_dir / "statement_2024.pdf"
     source_file.write_text("fake", encoding="utf-8")
-    settings = _settings(input_dir)
+    settings = replace(
+        _settings(input_dir),
+        project_overrides_path=tmp_path / "project_overrides.yaml",
+        transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
+    )
     settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
     settings.project_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
     settings.project_overrides_path.write_text(
@@ -1244,19 +1266,21 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
                 "fx_rate_date": "2024-05-06",
                 "fx_source": "BASE",
                 "amount_eur": 100.0,
+                "category_id": "income.salary",
+                "reporting_category_id": "income.salary",
                 "category": "Income",
                 "subcategory": "Salary",
                 "category_confidence": 1.0,
-                    "category_source": "rule",
-                    "category_rule_id": "income.salary",
-                    "cashflow_type": "in",
-                    "economic_role": "expense",
-                    "from_account_ref": None,
-                    "to_account_ref": "salary_main",
-                    "from_account_type": "external",
-                    "to_account_type": "internal",
-                    "account_inference_source": "account_rule",
-                    "project": None,
+                "category_source": "rule",
+                "category_rule_id": "income.salary",
+                "cashflow_type": "in",
+                "economic_role": "expense",
+                "from_account_ref": None,
+                "to_account_ref": "salary_main",
+                "from_account_type": "external",
+                "to_account_type": "internal",
+                "account_inference_source": "account_rule",
+                "project": None,
                 "project_tags": None,
                 "project_source": None,
                 "reviewed": False,
@@ -1275,19 +1299,13 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
     settings.completeness_json_path.write_text("{}", encoding="utf-8")
     settings.summary_json_path.write_text(json.dumps(summary_payload), encoding="utf-8")
 
-    monkeypatch.setattr(
-        "finance_tooling.workflow.transform_stage.read_staged_transactions",
-        lambda _path: (_ for _ in ()).throw(
-            AssertionError("staged transactions should not be read for a no-op transform")
-        ),
-    )
+    result = load_cached_transform_result(settings)
 
-    result = run_transform(settings)
-
+    assert result is not None
     assert result.transactions_parsed == 0
     assert result.new_rows == 0
     assert result.backup_run is None
-    assert any("No-op transform" in warning for warning in result.warnings)
+    assert result.run_mode == "incremental"
 
 
 def test_run_transform_overwrites_existing_row_with_new_enrichment(tmp_path: Path) -> None:

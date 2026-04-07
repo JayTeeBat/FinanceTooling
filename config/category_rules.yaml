@@ -1,76 +1,758 @@
-version: 1
+version: 2
 defaults:
   fallback_category: Uncategorized
   fallback_subcategory: null
 
 taxonomy:
-  Transfers:
-    cashflow_type: transfer
-    subcategories:
-      - Savings Transfer
-      - FX Exchange
-      - Wallet Transfer
-      - Bank Transfer
-  Shopping:
-    cashflow_type: out
-    subcategories:
-      - General Retail
-      - Marketplace
-  Groceries:
-    cashflow_type: out
-    subcategories:
-      - Supermarket
-  Dining:
-    cashflow_type: out
-    subcategories:
-      - Restaurants
-  Fees:
-    cashflow_type: out
-    subcategories:
-      - Bank Fees
-  Income:
+  income.salary:
+    labels:
+      category: Income
+      subcategory: Salary
     cashflow_type: in
-    subcategories:
-      - Salary
-      - Interest
-      - Merchant Settlement
-  Refunds:
-    cashflow_type: out
-    subcategories:
-      - Unmapped Refund
-  Housing:
-    cashflow_type: out
-    subcategories:
-      - Housing Costs
-      - Council Tax
-  Transport:
-    cashflow_type: out
-    subcategories:
-      - Mobility
-  Utilities:
-    cashflow_type: out
-    subcategories:
-      - Telecom
-  Family:
-    cashflow_type: out
-    subcategories:
-      - Childcare
-  Memberships:
-    cashflow_type: out
-    subcategories:
-      - Charity & Membership
-  Non Personal Transactions:
+    economic_role: income
+    status: active
+  income.interest:
+    labels:
+      category: Income
+      subcategory: Interest
+    cashflow_type: in
+    economic_role: income
+    status: active
+  income.benefits:
+    labels:
+      category: Income
+      subcategory: Benefits
+    cashflow_type: in
+    economic_role: income
+    status: active
+  income.business_income:
+    labels:
+      category: Income
+      subcategory: Business Income
+    cashflow_type: in
+    economic_role: income
+    status: active
+  income.investment_income:
+    labels:
+      category: Income
+      subcategory: Investment Income
+    cashflow_type: in
+    economic_role: income
+    status: active
+  income.other_income:
+    labels:
+      category: Income
+      subcategory: Other Income
+    cashflow_type: in
+    economic_role: income
+    status: active
+
+  refunds.merchant_refund:
+    labels:
+      category: Refunds
+      subcategory: Merchant Refund
+    cashflow_type: in
+    economic_role: expense
+    status: active
+  refunds.service_refund:
+    labels:
+      category: Refunds
+      subcategory: Service Refund
+    cashflow_type: in
+    economic_role: expense
+    status: active
+  refunds.chargeback:
+    labels:
+      category: Refunds
+      subcategory: Chargeback
+    cashflow_type: in
+    economic_role: expense
+    status: active
+  refunds.other_refund:
+    labels:
+      category: Refunds
+      subcategory: Other Refund
+    cashflow_type: in
+    economic_role: expense
+    status: active
+
+  transfers.bank_transfer:
+    labels:
+      category: Transfers
+      subcategory: Bank Transfer
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+  transfers.wallet_transfer:
+    labels:
+      category: Transfers
+      subcategory: Wallet Transfer
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+  transfers.savings_transfer:
+    labels:
+      category: Transfers
+      subcategory: Savings Transfer
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+  transfers.fx_exchange:
+    labels:
+      category: Transfers
+      subcategory: FX Exchange
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+  transfers.investment_transfer:
+    labels:
+      category: Transfers
+      subcategory: Investment Transfer
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+  transfers.cash_withdrawal:
+    labels:
+      category: Transfers
+      subcategory: Cash Withdrawal
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+  transfers.cash_deposit:
+    labels:
+      category: Transfers
+      subcategory: Cash Deposit
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+
+  excluded.non_personal:
+    labels:
+      category: Excluded
+      subcategory: Non Personal
     cashflow_type: exclude
-    subcategories: []
-  Pass-through:
+    economic_role: exclude
+    status: active
+  excluded.pass_through:
+    labels:
+      category: Excluded
+      subcategory: Pass-through
     cashflow_type: exclude
-    subcategories: []
+    economic_role: exclude
+    status: active
+  excluded.business:
+    labels:
+      category: Excluded
+      subcategory: Business
+    cashflow_type: exclude
+    economic_role: exclude
+    status: active
+  excluded.shared_expense_settlement:
+    labels:
+      category: Excluded
+      subcategory: Shared Expense Settlement
+    cashflow_type: exclude
+    economic_role: exclude
+    status: active
+  excluded.other_excluded:
+    labels:
+      category: Excluded
+      subcategory: Other Excluded
+    cashflow_type: exclude
+    economic_role: exclude
+    status: active
+
+  housing.rent:
+    labels:
+      category: Housing
+      subcategory: Rent
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  housing.mortgage:
+    labels:
+      category: Housing
+      subcategory: Mortgage
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  housing.home_maintenance:
+    labels:
+      category: Housing
+      subcategory: Home Maintenance
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  housing.home_services:
+    labels:
+      category: Housing
+      subcategory: Home Services
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  housing.furnishings:
+    labels:
+      category: Housing
+      subcategory: Furnishings
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  housing.other_housing:
+    labels:
+      category: Housing
+      subcategory: Other Housing
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  utilities.energy_water:
+    labels:
+      category: Utilities
+      subcategory: Energy & Water
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  utilities.telecom_internet:
+    labels:
+      category: Utilities
+      subcategory: Telecom & Internet
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  utilities.other_utilities:
+    labels:
+      category: Utilities
+      subcategory: Other Utilities
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  groceries.food_at_home:
+    labels:
+      category: Groceries
+      subcategory: Food at Home
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  groceries.household_consumables:
+    labels:
+      category: Groceries
+      subcategory: Household Consumables
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  groceries.specialty_food:
+    labels:
+      category: Groceries
+      subcategory: Specialty Food
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  groceries.other_groceries:
+    labels:
+      category: Groceries
+      subcategory: Other Groceries
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  dining.dining_out:
+    labels:
+      category: Dining
+      subcategory: Dining Out
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  dining.takeaway_delivery:
+    labels:
+      category: Dining
+      subcategory: Takeaway & Delivery
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  dining.other_dining:
+    labels:
+      category: Dining
+      subcategory: Other Dining
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  shopping.general_goods:
+    labels:
+      category: Shopping
+      subcategory: General Goods
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  shopping.apparel:
+    labels:
+      category: Shopping
+      subcategory: Apparel
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  shopping.electronics:
+    labels:
+      category: Shopping
+      subcategory: Electronics
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  shopping.personal_care:
+    labels:
+      category: Shopping
+      subcategory: Personal Care
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  shopping.home_goods:
+    labels:
+      category: Shopping
+      subcategory: Home Goods
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  shopping.other_shopping:
+    labels:
+      category: Shopping
+      subcategory: Other Shopping
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  transport.public_transport:
+    labels:
+      category: Transport
+      subcategory: Public Transport
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  transport.fuel:
+    labels:
+      category: Transport
+      subcategory: Fuel
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  transport.vehicle_ownership:
+    labels:
+      category: Transport
+      subcategory: Vehicle Ownership
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  transport.parking_tolls:
+    labels:
+      category: Transport
+      subcategory: Parking & Tolls
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  transport.taxi_ride_hailing:
+    labels:
+      category: Transport
+      subcategory: Taxi & Ride Hailing
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  transport.micromobility:
+    labels:
+      category: Transport
+      subcategory: Micromobility
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  transport.other_transport:
+    labels:
+      category: Transport
+      subcategory: Other Transport
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  travel.accommodation:
+    labels:
+      category: Travel
+      subcategory: Accommodation
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  travel.long_distance_transport:
+    labels:
+      category: Travel
+      subcategory: Long-distance Transport
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  travel.other_travel:
+    labels:
+      category: Travel
+      subcategory: Other Travel
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  family.childcare:
+    labels:
+      category: Family
+      subcategory: Childcare
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  family.education:
+    labels:
+      category: Family
+      subcategory: Education
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  family.dependents:
+    labels:
+      category: Family
+      subcategory: Dependents
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  family.family_support:
+    labels:
+      category: Family
+      subcategory: Family Support
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  family.other_family:
+    labels:
+      category: Family
+      subcategory: Other Family
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  health.medical_care:
+    labels:
+      category: Health
+      subcategory: Medical Care
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  health.pharmacy:
+    labels:
+      category: Health
+      subcategory: Pharmacy
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  health.dental_optical:
+    labels:
+      category: Health
+      subcategory: Dental & Optical
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  health.wellbeing:
+    labels:
+      category: Health
+      subcategory: Wellbeing
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  health.other_health:
+    labels:
+      category: Health
+      subcategory: Other Health
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  leisure.sports:
+    labels:
+      category: Leisure
+      subcategory: Sports
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  leisure.hobbies:
+    labels:
+      category: Leisure
+      subcategory: Hobbies
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  leisure.entertainment:
+    labels:
+      category: Leisure
+      subcategory: Entertainment
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  leisure.personal_digital_services:
+    labels:
+      category: Leisure
+      subcategory: Personal Digital Services
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  leisure.events:
+    labels:
+      category: Leisure
+      subcategory: Events
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  leisure.other_leisure:
+    labels:
+      category: Leisure
+      subcategory: Other Leisure
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  financial.bank_fees:
+    labels:
+      category: Financial
+      subcategory: Bank Fees
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  financial.debt_service:
+    labels:
+      category: Financial
+      subcategory: Debt Service
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  financial.retirement_contribution:
+    labels:
+      category: Financial
+      subcategory: Retirement Contribution
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  financial.investment_fees:
+    labels:
+      category: Financial
+      subcategory: Investment Fees
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  financial.other_financial:
+    labels:
+      category: Financial
+      subcategory: Other Financial
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  taxes.income_tax:
+    labels:
+      category: Taxes
+      subcategory: Income Tax
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  taxes.local_tax:
+    labels:
+      category: Taxes
+      subcategory: Local Tax
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  taxes.penalties_fines:
+    labels:
+      category: Taxes
+      subcategory: Penalties & Fines
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  taxes.government_fees:
+    labels:
+      category: Taxes
+      subcategory: Government Fees
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  taxes.other_taxes:
+    labels:
+      category: Taxes
+      subcategory: Other Taxes
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  insurance.property_vehicle:
+    labels:
+      category: Insurance
+      subcategory: Property & Vehicle
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  insurance.health:
+    labels:
+      category: Insurance
+      subcategory: Health
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  insurance.life_disability:
+    labels:
+      category: Insurance
+      subcategory: Life & Disability
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  insurance.travel:
+    labels:
+      category: Insurance
+      subcategory: Travel
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  insurance.other_insurance:
+    labels:
+      category: Insurance
+      subcategory: Other Insurance
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  giving.charity:
+    labels:
+      category: Giving
+      subcategory: Charity
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  giving.gifts:
+    labels:
+      category: Giving
+      subcategory: Gifts
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  giving.community_support:
+    labels:
+      category: Giving
+      subcategory: Community Support
+    cashflow_type: out
+    economic_role: expense
+    status: active
+  giving.other_giving:
+    labels:
+      category: Giving
+      subcategory: Other Giving
+    cashflow_type: out
+    economic_role: expense
+    status: active
+
+  shopping.general_retail:
+    labels:
+      category: Shopping
+      subcategory: General Retail
+    deprecated_to: shopping.general_goods
+    status: deprecated
+  shopping.marketplace:
+    labels:
+      category: Shopping
+      subcategory: Marketplace
+    deprecated_to: shopping.general_goods
+    status: deprecated
+  groceries.supermarket:
+    labels:
+      category: Groceries
+      subcategory: Supermarket
+    deprecated_to: groceries.food_at_home
+    status: deprecated
+  dining.restaurants:
+    labels:
+      category: Dining
+      subcategory: Restaurants
+    deprecated_to: dining.dining_out
+    status: deprecated
+  fees.bank_fees:
+    labels:
+      category: Fees
+      subcategory: Bank Fees
+    deprecated_to: financial.bank_fees
+    status: deprecated
+  income.merchant_settlement:
+    labels:
+      category: Income
+      subcategory: Merchant Settlement
+    deprecated_to: income.business_income
+    status: deprecated
+  refunds.unmapped_refund:
+    labels:
+      category: Refunds
+      subcategory: Unmapped Refund
+    deprecated_to: refunds.other_refund
+    status: deprecated
+  housing.housing_costs:
+    labels:
+      category: Housing
+      subcategory: Housing Costs
+    deprecated_to: housing.other_housing
+    status: deprecated
+  housing.council_tax:
+    labels:
+      category: Housing
+      subcategory: Council Tax
+    deprecated_to: taxes.local_tax
+    status: deprecated
+  transport.mobility:
+    labels:
+      category: Transport
+      subcategory: Mobility
+    deprecated_to: transport.other_transport
+    status: deprecated
+  utilities.telecom:
+    labels:
+      category: Utilities
+      subcategory: Telecom
+    deprecated_to: utilities.telecom_internet
+    status: deprecated
+  memberships.charity_membership:
+    labels:
+      category: Memberships
+      subcategory: Charity & Membership
+    deprecated_to: giving.charity
+    status: deprecated
+  non_personal_transactions:
+    labels:
+      category: Non Personal Transactions
+    deprecated_to: excluded.non_personal
+    status: deprecated
+  pass_through:
+    labels:
+      category: Pass-through
+    deprecated_to: excluded.pass_through
+    status: deprecated
+  house:
+    labels:
+      category: House
+    deprecated_to: housing.other_housing
+    status: deprecated
+  mobility:
+    labels:
+      category: Mobility
+    deprecated_to: transport.other_transport
+    status: deprecated
+  work:
+    labels:
+      category: Work
+    deprecated_to: excluded.business
+    status: deprecated
+  transfers.bank_transfers:
+    labels:
+      category: Transfers
+      subcategory: Bank Transfers
+    deprecated_to: transfers.bank_transfer
+    status: deprecated
 
 rules:
   - id: transfers.savings.to_gbp
     priority: 220
-    category: Transfers
-    subcategory: Savings Transfer
+    category_id: transfers.savings_transfer
     match: contains
     patterns:
       - to gbp savings
@@ -79,8 +761,7 @@ rules:
 
   - id: transfers.fx.exchange_to_gbp
     priority: 210
-    category: Transfers
-    subcategory: FX Exchange
+    category_id: transfers.fx_exchange
     match: contains
     patterns:
       - exchanged to gbp
@@ -89,8 +770,7 @@ rules:
 
   - id: transfers.sepa.bank_transfer
     priority: 205
-    category: Transfers
-    subcategory: Bank Transfer
+    category_id: transfers.bank_transfer
     match: regex
     patterns:
       - "\\bvirsepa\\b"
@@ -99,8 +779,7 @@ rules:
 
   - id: groceries.ocado
     priority: 200
-    category: Groceries
-    subcategory: Supermarket
+    category_id: groceries.food_at_home
     match: contains
     expense_only: true
     patterns:
@@ -113,8 +792,7 @@ rules:
 
   - id: shopping.tkmaxx
     priority: 195
-    category: Shopping
-    subcategory: General Retail
+    category_id: shopping.general_goods
     match: contains
     expense_only: true
     patterns:
@@ -126,8 +804,7 @@ rules:
 
   - id: income.mars_settlement
     priority: 192
-    category: Income
-    subcategory: Merchant Settlement
+    category_id: income.business_income
     match: contains
     income_only: true
     patterns:
@@ -136,8 +813,7 @@ rules:
 
   - id: shopping.mars_chocolate_expense
     priority: 191
-    category: Shopping
-    subcategory: General Retail
+    category_id: shopping.general_goods
     match: contains
     expense_only: true
     patterns:
@@ -145,8 +821,7 @@ rules:
 
   - id: transfers.paypal
     priority: 185
-    category: Transfers
-    subcategory: Wallet Transfer
+    category_id: transfers.wallet_transfer
     match: contains
     patterns:
       - paypal payment
@@ -154,8 +829,7 @@ rules:
 
   - id: transport.tfl
     priority: 182
-    category: Transport
-    subcategory: Mobility
+    category_id: transport.public_transport
     match: contains
     expense_only: true
     patterns:
@@ -163,10 +837,9 @@ rules:
       - tfl travel ch
       - tfl gov uk
 
-  - id: housing.council_tax
+  - id: taxes.local_tax
     priority: 178
-    category: Housing
-    subcategory: Council Tax
+    category_id: taxes.local_tax
     match: contains
     expense_only: true
     patterns:
@@ -176,8 +849,7 @@ rules:
 
   - id: utilities.telecom
     priority: 176
-    category: Utilities
-    subcategory: Telecom
+    category_id: utilities.telecom_internet
     match: contains
     expense_only: true
     patterns:
@@ -186,10 +858,9 @@ rules:
       - orange sa
       - orange
 
-  - id: memberships.charity_membership
+  - id: giving.charity
     priority: 174
-    category: Memberships
-    subcategory: Charity & Membership
+    category_id: giving.charity
     match: contains
     expense_only: true
     patterns:
@@ -198,8 +869,7 @@ rules:
 
   - id: family.childcare
     priority: 172
-    category: Family
-    subcategory: Childcare
+    category_id: family.childcare
     match: contains
     expense_only: true
     patterns:
@@ -207,8 +877,7 @@ rules:
 
   - id: shopping.general
     priority: 120
-    category: Shopping
-    subcategory: General Retail
+    category_id: shopping.general_goods
     match: contains
     patterns:
       - amazon
@@ -219,8 +888,7 @@ rules:
 
   - id: groceries.general
     priority: 115
-    category: Groceries
-    subcategory: Supermarket
+    category_id: groceries.food_at_home
     match: contains
     patterns:
       - supermarket
@@ -230,53 +898,10 @@ rules:
 
   - id: dining.restaurants
     priority: 110
-    category: Dining
-    subcategory: Restaurants
+    category_id: dining.dining_out
     match: contains
     patterns:
       - restaurant
       - cafe
       - coffee
       - bar
-
-  - id: fees.bank_fees
-    priority: 105
-    category: Fees
-    subcategory: Bank Fees
-    match: contains
-    patterns:
-      - fee
-      - commission
-      - charge
-      - penalty
-      - ail hsbc
-      - ail - hsbc
-
-  - id: income.salary
-    priority: 100
-    category: Income
-    subcategory: Salary
-    match: contains
-    income_only: true
-    patterns:
-      - salary
-      - payroll
-      - bonus
-
-  - id: income.interest
-    priority: 95
-    category: Income
-    subcategory: Interest
-    income_only: true
-    match: contains
-    patterns:
-      - interest
-
-  - id: refunds.generic
-    priority: 94
-    category: Refunds
-    subcategory: Unmapped Refund
-    income_only: true
-    match: contains
-    patterns:
-      - refund
