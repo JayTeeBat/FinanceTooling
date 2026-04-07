@@ -3,17 +3,15 @@ defaults:
   fallback_category: Uncategorized
   fallback_subcategory: null
 
+# Starter taxonomy and example reusable rules.
+# This repo copy is intentionally generic and should serve as a template, not as
+# a mirror of any operator's personal finance setup.
+
 taxonomy:
   income.salary:
     labels:
       category: Income
       subcategory: Salary
-    economic_role: income
-    status: active
-  income.interest:
-    labels:
-      category: Income
-      subcategory: Interest
     economic_role: income
     status: active
   income.benefits:
@@ -28,12 +26,6 @@ taxonomy:
       subcategory: Business Income
     economic_role: income
     status: active
-  income.investment_income:
-    labels:
-      category: Income
-      subcategory: Investment Income
-    economic_role: income
-    status: active
   income.other_income:
     labels:
       category: Income
@@ -45,6 +37,13 @@ taxonomy:
     labels:
       category: Transfers
       subcategory: Account Transfer
+    cashflow_type: transfer
+    economic_role: transfer
+    status: active
+  transfers.investment_transfer:
+    labels:
+      category: Transfers
+      subcategory: Investment Transfer
     cashflow_type: transfer
     economic_role: transfer
     status: active
@@ -62,46 +61,11 @@ taxonomy:
     cashflow_type: transfer
     economic_role: transfer
     status: active
-  transfers.investment_transfer:
-    labels:
-      category: Transfers
-      subcategory: Investment Transfer
-    cashflow_type: transfer
-    economic_role: transfer
-    status: active
-  transfers.cash_deposit:
-    labels:
-      category: Transfers
-      subcategory: Cash Deposit
-    cashflow_type: transfer
-    economic_role: transfer
-    status: active
 
   excluded.non_personal:
     labels:
       category: Excluded
       subcategory: Non Personal
-    cashflow_type: exclude
-    economic_role: exclude
-    status: active
-  excluded.pass_through:
-    labels:
-      category: Excluded
-      subcategory: Pass-through
-    cashflow_type: exclude
-    economic_role: exclude
-    status: active
-  excluded.business:
-    labels:
-      category: Excluded
-      subcategory: Business
-    cashflow_type: exclude
-    economic_role: exclude
-    status: active
-  excluded.shared_expense_settlement:
-    labels:
-      category: Excluded
-      subcategory: Shared Expense Settlement
     cashflow_type: exclude
     economic_role: exclude
     status: active
@@ -112,31 +76,11 @@ taxonomy:
     cashflow_type: exclude
     economic_role: exclude
     status: active
-  excluded.other_excluded:
-    labels:
-      category: Excluded
-      subcategory: Other Excluded
-    cashflow_type: exclude
-    economic_role: exclude
-    status: active
-
-  cash.cash:
-    labels:
-      category: Cash
-      subcategory: Cash
-    economic_role: expense
-    status: active
 
   housing.rent:
     labels:
       category: Housing
       subcategory: Rent
-    economic_role: expense
-    status: active
-  housing.mortgage:
-    labels:
-      category: Housing
-      subcategory: Mortgage
     economic_role: expense
     status: active
   housing.home_improvements:
@@ -149,18 +93,6 @@ taxonomy:
     labels:
       category: Housing
       subcategory: Home Services
-    economic_role: expense
-    status: active
-  housing.furnishings:
-    labels:
-      category: Housing
-      subcategory: Furnishings
-    economic_role: expense
-    status: active
-  housing.other_housing:
-    labels:
-      category: Housing
-      subcategory: Other Housing
     economic_role: expense
     status: active
 
@@ -189,44 +121,13 @@ taxonomy:
       subcategory: Food at Home
     economic_role: expense
     status: active
-  groceries.household_consumables:
-    labels:
-      category: Groceries
-      subcategory: Household Consumables
-    economic_role: expense
-    status: active
-  groceries.other_groceries:
-    labels:
-      category: Groceries
-      subcategory: Other Groceries
-    economic_role: expense
-    status: active
-
   dining.dining_out:
     labels:
       category: Dining
       subcategory: Dining Out
     economic_role: expense
     status: active
-  dining.takeaway_delivery:
-    labels:
-      category: Dining
-      subcategory: Takeaway & Delivery
-    economic_role: expense
-    status: active
-  dining.other_dining:
-    labels:
-      category: Dining
-      subcategory: Other Dining
-    economic_role: expense
-    status: active
 
-  shopping.general_goods:
-    labels:
-      category: Shopping
-      subcategory: General Goods
-    economic_role: expense
-    status: active
   shopping.clothing:
     labels:
       category: Shopping
@@ -239,30 +140,19 @@ taxonomy:
       subcategory: Marketplace
     economic_role: expense
     status: active
-  shopping.electronics:
+  shopping.general_goods:
     labels:
       category: Shopping
-      subcategory: Electronics
+      subcategory: General Goods
     economic_role: expense
     status: active
-  shopping.personal_care:
+  shopping.apparel:
     labels:
       category: Shopping
-      subcategory: Personal Care
+      subcategory: Apparel
     economic_role: expense
-    status: active
-  shopping.home_goods:
-    labels:
-      category: Shopping
-      subcategory: Home Goods
-    economic_role: expense
-    status: active
-  shopping.other_shopping:
-    labels:
-      category: Shopping
-      subcategory: Other Shopping
-    economic_role: expense
-    status: active
+    deprecated_to: shopping.clothing
+    status: deprecated
 
   transport.public_transport:
     labels:
@@ -276,24 +166,6 @@ taxonomy:
       subcategory: Car
     economic_role: expense
     status: active
-  transport.parking_tolls:
-    labels:
-      category: Transport
-      subcategory: Parking & Tolls
-    economic_role: expense
-    status: active
-  transport.taxi_ride_hailing:
-    labels:
-      category: Transport
-      subcategory: Taxi & Ride Hailing
-    economic_role: expense
-    status: active
-  transport.bike:
-    labels:
-      category: Transport
-      subcategory: Bike
-    economic_role: expense
-    status: active
   transport.other_transport:
     labels:
       category: Transport
@@ -301,159 +173,23 @@ taxonomy:
     economic_role: expense
     status: active
 
-  travel.accommodation:
-    labels:
-      category: Travel
-      subcategory: Accommodation
-    economic_role: expense
-    status: active
-  travel.long_distance_transport:
-    labels:
-      category: Travel
-      subcategory: Long-distance Transport
-    economic_role: expense
-    status: active
-  travel.other_travel:
-    labels:
-      category: Travel
-      subcategory: Other Travel
-    economic_role: expense
-    status: active
-
-  family.childcare:
-    labels:
-      category: Family
-      subcategory: Childcare
-    economic_role: expense
-    status: active
   family.education:
     labels:
       category: Family
       subcategory: Education
     economic_role: expense
     status: active
-  family.family_support:
+  family.childcare:
     labels:
       category: Family
-      subcategory: Family Support
-    economic_role: expense
-    status: active
-  family.other_family:
-    labels:
-      category: Family
-      subcategory: Other Family
+      subcategory: Childcare
     economic_role: expense
     status: active
 
-  health.medical_care:
-    labels:
-      category: Health
-      subcategory: Medical Care
-    economic_role: expense
-    status: active
-  health.pharmacy:
-    labels:
-      category: Health
-      subcategory: Pharmacy
-    economic_role: expense
-    status: active
-  health.dental_optical:
-    labels:
-      category: Health
-      subcategory: Dental & Optical
-    economic_role: expense
-    status: active
-  health.wellbeing:
-    labels:
-      category: Health
-      subcategory: Wellbeing
-    economic_role: expense
-    status: active
-  health.other_health:
-    labels:
-      category: Health
-      subcategory: Other Health
-    economic_role: expense
-    status: active
-
-  leisure.sports:
-    labels:
-      category: Leisure
-      subcategory: Sports
-    economic_role: expense
-    status: active
-  leisure.hobbies:
-    labels:
-      category: Leisure
-      subcategory: Hobbies
-    economic_role: expense
-    status: active
-  leisure.entertainment:
-    labels:
-      category: Leisure
-      subcategory: Entertainment
-    economic_role: expense
-    status: active
-  leisure.events:
-    labels:
-      category: Leisure
-      subcategory: Events
-    economic_role: expense
-    status: active
-  leisure.other_leisure:
-    labels:
-      category: Leisure
-      subcategory: Other Leisure
-    economic_role: expense
-    status: active
-
-  financial.bank_fees:
-    labels:
-      category: Financial
-      subcategory: Bank Fees
-    economic_role: expense
-    status: active
-  financial.retirement_contribution:
-    labels:
-      category: Financial
-      subcategory: Retirement Contribution
-    economic_role: expense
-    status: active
-  financial.investment_fees:
-    labels:
-      category: Financial
-      subcategory: Investment Fees
-    economic_role: expense
-    status: active
-  financial.other_financial:
-    labels:
-      category: Financial
-      subcategory: Other Financial
-    economic_role: expense
-    status: active
-
-  taxes.income_tax:
-    labels:
-      category: Taxes
-      subcategory: Income Tax
-    economic_role: expense
-    status: active
   taxes.local_tax:
     labels:
       category: Taxes
       subcategory: Local Tax
-    economic_role: expense
-    status: active
-  taxes.penalties_fines:
-    labels:
-      category: Taxes
-      subcategory: Penalties & Fines
-    economic_role: expense
-    status: active
-  taxes.government_fees:
-    labels:
-      category: Taxes
-      subcategory: Government Fees
     economic_role: expense
     status: active
   taxes.other_taxes:
@@ -469,433 +205,195 @@ taxonomy:
       subcategory: Property & Vehicle
     economic_role: expense
     status: active
-  insurance.health:
-    labels:
-      category: Insurance
-      subcategory: Health
-    economic_role: expense
-    status: active
-  insurance.life_disability:
-    labels:
-      category: Insurance
-      subcategory: Life & Disability
-    economic_role: expense
-    status: active
-  insurance.travel:
-    labels:
-      category: Insurance
-      subcategory: Travel
-    economic_role: expense
-    status: active
-  insurance.other_insurance:
-    labels:
-      category: Insurance
-      subcategory: Other Insurance
-    economic_role: expense
-    status: active
 
-  giving.charity:
-    labels:
-      category: Giving
-      subcategory: Charity
-    economic_role: expense
-    status: active
-  giving.gifts:
-    labels:
-      category: Giving
-      subcategory: Gifts
-    economic_role: expense
-    status: active
-  giving.community_support:
-    labels:
-      category: Giving
-      subcategory: Community Support
-    economic_role: expense
-    status: active
-  giving.other_giving:
-    labels:
-      category: Giving
-      subcategory: Other Giving
-    economic_role: expense
-    status: active
-
-  shopping.general_retail:
-    labels:
-      category: Shopping
-      subcategory: General Retail
-    deprecated_to: shopping.general_goods
-    status: deprecated
-  groceries.supermarket:
-    labels:
-      category: Groceries
-      subcategory: Supermarket
-    deprecated_to: groceries.food_at_home
-    status: deprecated
-  groceries.specialty_food:
-    labels:
-      category: Groceries
-      subcategory: Specialty Food
-    deprecated_to: groceries.other_groceries
-    status: deprecated
-  dining.restaurants:
-    labels:
-      category: Dining
-      subcategory: Restaurants
-    deprecated_to: dining.dining_out
-    status: deprecated
-  transfers.bank_transfer:
-    labels:
-      category: Transfers
-      subcategory: Bank Transfer
-    deprecated_to: transfers.account_transfer
-    status: deprecated
-  transfers.wallet_transfer:
-    labels:
-      category: Transfers
-      subcategory: Wallet Transfer
-    deprecated_to: transfers.account_transfer
-    status: deprecated
-  fees.bank_fees:
-    labels:
-      category: Fees
-      subcategory: Bank Fees
-    deprecated_to: financial.bank_fees
-    status: deprecated
-  income.merchant_settlement:
-    labels:
-      category: Income
-      subcategory: Merchant Settlement
-    deprecated_to: income.business_income
-    status: deprecated
-  refunds.unmapped_refund:
-    labels:
-      category: Refunds
-      subcategory: Unmapped Refund
-    deprecated_to: refunds.other_refund
-    status: deprecated
-  housing.housing_costs:
-    labels:
-      category: Housing
-      subcategory: Housing Costs
-    deprecated_to: housing.other_housing
-    status: deprecated
-  housing.council_tax:
-    labels:
-      category: Housing
-      subcategory: Council Tax
-    deprecated_to: taxes.local_tax
-    status: deprecated
-  transport.mobility:
-    labels:
-      category: Transport
-      subcategory: Mobility
-    deprecated_to: transport.other_transport
-    status: deprecated
-  utilities.telecom:
-    labels:
-      category: Utilities
-      subcategory: Telecom
-    deprecated_to: utilities.telecom_internet
-    status: deprecated
-  memberships.charity_membership:
-    labels:
-      category: Memberships
-      subcategory: Charity & Membership
-    deprecated_to: giving.charity
-    status: deprecated
-  non_personal_transactions:
-    labels:
-      category: Non Personal Transactions
-    deprecated_to: excluded.non_personal
-    status: deprecated
-  pass_through:
-    labels:
-      category: Pass-through
-    deprecated_to: excluded.pass_through
-    status: deprecated
-  house:
-    labels:
-      category: House
-    deprecated_to: housing.other_housing
-    status: deprecated
-  house.mortgage:
-    labels:
-      category: House
-      subcategory: Mortgage
-    deprecated_to: housing.mortgage
-    status: deprecated
-  house.cleaning:
-    labels:
-      category: House
-      subcategory: Cleaning
-    deprecated_to: housing.home_services
-    status: deprecated
-  mobility:
-    labels:
-      category: Mobility
-    deprecated_to: transport.other_transport
-    status: deprecated
-  mobility.car:
-    labels:
-      category: Mobility
-      subcategory: Car
-    deprecated_to: transport.car
-    status: deprecated
-  work:
-    labels:
-      category: Work
-    deprecated_to: excluded.business
-    status: deprecated
-  work.expenses:
-    labels:
-      category: Work
-      subcategory: Expenses
-    deprecated_to: excluded.business
-    status: deprecated
-  transfers.bank_transfers:
-    labels:
-      category: Transfers
-      subcategory: Bank Transfers
-    deprecated_to: transfers.account_transfer
-    status: deprecated
-  transfers.cash_withdrawal:
-    labels:
-      category: Transfers
-      subcategory: Cash Withdrawal
-    deprecated_to: cash.cash
-    status: deprecated
-  housing.home_maintenance:
-    labels:
-      category: Housing
-      subcategory: Home Maintenance
-    deprecated_to: housing.home_improvements
-    status: deprecated
-  shopping.apparel:
-    labels:
-      category: Shopping
-      subcategory: Apparel
-    deprecated_to: shopping.clothing
-    status: deprecated
-  transport.fuel:
-    labels:
-      category: Transport
-      subcategory: Fuel
-    deprecated_to: transport.car
-    status: deprecated
-  transport.vehicle_ownership:
-    labels:
-      category: Transport
-      subcategory: Vehicle Ownership
-    deprecated_to: transport.car
-    status: deprecated
-  transport.micromobility:
-    labels:
-      category: Transport
-      subcategory: Micromobility
-    deprecated_to: transport.bike
-    status: deprecated
-  family.dependents:
-    labels:
-      category: Family
-      subcategory: Dependents
-    deprecated_to: family.other_family
-    status: deprecated
-  leisure.personal_digital_services:
+  leisure.entertainment:
     labels:
       category: Leisure
-      subcategory: Personal Digital Services
-    deprecated_to: leisure.other_leisure
-    status: deprecated
-  financial.debt_service:
-    labels:
-      category: Financial
-      subcategory: Debt Service
-    deprecated_to: financial.other_financial
-    status: deprecated
-  admin.government_fees:
-    labels:
-      category: Admin
-      subcategory: Government Fees
-    deprecated_to: taxes.government_fees
-    status: deprecated
-  retirement.pension_contribution:
-    labels:
-      category: Retirement
-      subcategory: Pension Contribution
-    deprecated_to: financial.retirement_contribution
-    status: deprecated
-  insurance.life_insurance:
-    labels:
-      category: Insurance
-      subcategory: Life Insurance
-    deprecated_to: insurance.life_disability
-    status: deprecated
-  non_personal_transactions.apel:
-    labels:
-      category: Non Personal Transactions
-      subcategory: APEL
-    deprecated_to: excluded.non_personal
-    status: deprecated
-  non_personal_transactions.work:
-    labels:
-      category: Non Personal Transactions
-      subcategory: Work
-    deprecated_to: excluded.non_personal
-    status: deprecated
+      subcategory: Entertainment
+    economic_role: expense
+    status: active
 
 rules:
-  - id: transfers.savings.to_gbp
-    priority: 220
-    category_id: transfers.savings_transfer
-    match: contains
-    patterns:
-      - to gbp savings
-      - depositing savings
-      - new bike savings
-
-  - id: transfers.fx.exchange_to_gbp
-    priority: 210
-    category_id: transfers.fx_exchange
-    match: contains
-    patterns:
-      - exchanged to gbp
-      - exchange to gbp
-      - to gbp
-
-  - id: transfers.sepa.account_transfer
-    priority: 205
-    category_id: transfers.account_transfer
-    match: regex
-    patterns:
-      - "\\bvirsepa\\b"
-      - "\\bvirsepac\\b"
-      - "\\bprlvsepa\\b"
-
-  - id: groceries.ocado
+  - id: income.salary.example
     priority: 200
-    category_id: groceries.food_at_home
+    category_id: income.salary
     match: contains
-    expense_only: true
+    income_only: true
     patterns:
-      - ocado
-      - co op group
-      - coop
-      - co-op
-      - co op
-      - tesco
+      - acme payroll
+      - employer payroll
+      - salary payment
 
-  - id: shopping.tkmaxx
+  - id: income.business_income.example
     priority: 195
-    category_id: shopping.general_goods
-    match: contains
-    expense_only: true
-    patterns:
-      - t k maxx
-      - tk maxx
-      - tkmaxx
-      - marks spencer
-      - marks&spencer
-
-  - id: income.mars_settlement
-    priority: 192
     category_id: income.business_income
     match: contains
     income_only: true
     patterns:
-      - mars chocolate uk
-      - mars chocolate uk slough
+      - freelance client ltd
+      - consulting invoice
 
-  - id: shopping.mars_chocolate_expense
-    priority: 191
-    category_id: shopping.general_goods
+  - id: income.benefits.example
+    priority: 190
+    category_id: income.benefits
     match: contains
-    expense_only: true
+    income_only: true
     patterns:
-      - mars chocolate
+      - benefits office
+      - childcare support
 
-  - id: transfers.paypal
+  - id: transfers.account_transfer.example
     priority: 185
     category_id: transfers.account_transfer
     match: contains
     patterns:
-      - paypal payment
-      - paypal
+      - internal account transfer
+      - wallet top up
 
-  - id: transport.tfl
-    priority: 182
-    category_id: transport.public_transport
+  - id: transfers.investment_transfer.example
+    priority: 180
+    category_id: transfers.investment_transfer
     match: contains
-    expense_only: true
     patterns:
-      - transport for london
-      - tfl travel ch
-      - tfl gov uk
+      - broker funding
+      - investment platform
 
-  - id: taxes.local_tax
-    priority: 178
-    category_id: taxes.local_tax
+  - id: utilities.energy_water.example
+    priority: 175
+    category_id: utilities.energy_water
     match: contains
-    expense_only: true
     patterns:
-      - lb ealing
-      - ealing broadway ss
-      - ealing broadway ce
+      - city energy
+      - water utility
 
-  - id: utilities.telecom
-    priority: 176
+  - id: utilities.telecom_internet.example
+    priority: 170
     category_id: utilities.telecom_internet
     match: contains
     expense_only: true
     patterns:
-      - vodafone
-      - h3g
-      - orange sa
-      - orange
+      - mobile telecom
+      - home broadband
 
-  - id: giving.charity
-    priority: 174
-    category_id: giving.charity
-    match: contains
-    expense_only: true
-    patterns:
-      - national trust mem
-      - fidesco
-
-  - id: family.childcare
-    priority: 172
-    category_id: family.childcare
-    match: contains
-    expense_only: true
-    patterns:
-      - tax free childcare
-
-  - id: shopping.general
-    priority: 120
-    category_id: shopping.marketplace
-    match: contains
-    patterns:
-      - amazon
-      - shop
-      - store
-      - mall
-      - ecommerce
-
-  - id: groceries.general
-    priority: 115
+  - id: groceries.food_at_home.example
+    priority: 165
     category_id: groceries.food_at_home
     match: contains
+    expense_only: true
     patterns:
-      - supermarket
-      - grocery
-      - carrefour
-      - market
+      - neighborhood market
+      - local grocery
 
-  - id: dining.restaurants
-    priority: 110
+  - id: dining.dining_out.example
+    priority: 160
     category_id: dining.dining_out
     match: contains
+    expense_only: true
     patterns:
-      - restaurant
-      - cafe
-      - coffee
-      - bar
+      - pizza place
+      - coffee bar
+
+  - id: shopping.marketplace.example
+    priority: 155
+    category_id: shopping.marketplace
+    match: contains
+    expense_only: true
+    patterns:
+      - online marketplace
+      - ecommerce order
+
+  - id: shopping.clothing.example
+    priority: 150
+    category_id: shopping.clothing
+    match: contains
+    expense_only: true
+    patterns:
+      - clothing store
+      - apparel shop
+
+  - id: transport.public_transport.example
+    priority: 145
+    category_id: transport.public_transport
+    match: contains
+    expense_only: true
+    patterns:
+      - city metro
+      - rail ticket
+
+  - id: transport.car.example
+    priority: 140
+    category_id: transport.car
+    match: contains
+    expense_only: true
+    patterns:
+      - auto payment
+      - garage service
+
+  - id: housing.rent.example
+    priority: 135
+    category_id: housing.rent
+    match: contains
+    expense_only: true
+    patterns:
+      - rent agency
+      - landlord payment
+
+  - id: housing.home_improvements.example
+    priority: 130
+    category_id: housing.home_improvements
+    match: contains
+    expense_only: true
+    patterns:
+      - renovation contractor
+      - home improvement
+
+  - id: housing.home_services.example
+    priority: 125
+    category_id: housing.home_services
+    match: contains
+    expense_only: true
+    patterns:
+      - property manager
+      - building services
+
+  - id: family.education.example
+    priority: 120
+    category_id: family.education
+    match: contains
+    expense_only: true
+    patterns:
+      - school tuition
+      - music lessons
+
+  - id: family.childcare.example
+    priority: 115
+    category_id: family.childcare
+    match: contains
+    patterns:
+      - nursery payment
+      - tax free childcare
+
+  - id: taxes.other_taxes.example
+    priority: 110
+    category_id: taxes.other_taxes
+    match: contains
+    patterns:
+      - tax office
+      - revenue agency
+
+  - id: insurance.property_vehicle.example
+    priority: 105
+    category_id: insurance.property_vehicle
+    match: contains
+    patterns:
+      - car insurance
+      - home insurance
+
+  - id: leisure.entertainment.example
+    priority: 100
+    category_id: leisure.entertainment
+    match: contains
+    expense_only: true
+    patterns:
+      - streaming service
+      - movie tickets

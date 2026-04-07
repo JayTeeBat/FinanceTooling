@@ -11,9 +11,14 @@ version: 1
 #
 # You can also group selectors under `match: { ... }`.
 # Assignment fields:
-# - category
-# - subcategory
+# - category_id
+# - category / subcategory (legacy-compatible, category_id preferred)
 # - project
 # - project_tags
 
 overrides: []
+
+# Example:
+# overrides:
+#   - transaction_id: 0123456789abcdef
+#     category_id: transport.car

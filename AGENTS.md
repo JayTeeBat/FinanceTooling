@@ -182,6 +182,20 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-04-07 - codex
+- Branch: `codex/example-config-starters`
+- Completed:
+  - Reframed the repo `category_rules.yaml` and `transaction_overrides.yaml` copies as generic starter examples instead of personal production config, including a leaner sample taxonomy/rule set.
+  - Updated the README language to make the starter-config intent explicit and added focused tests for generic example-rule classification plus deprecated category-id migration.
+- Checks:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check tests/test_category_id_migrate_live.py tests/test_classify.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check tests/test_category_id_migrate_live.py tests/test_classify.py`: pass
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_category_id_migrate_live.py tests/test_classify.py`: pass
+- Open items:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q` still fails on the pre-existing `tests/test_cli_dispatch.py::test_review_import_runs_transform_by_default` fixture/setup mismatch outside this PR's scope.
+- Next action:
+  - Publish the starter-config cleanup as a draft PR and decide whether to fix the unrelated full-suite `review-import` test in a separate follow-up.
+
 ### 2026-04-05 - codex
 - Branch: `main`
 - Completed:
@@ -208,16 +222,3 @@ Success target for the 2026 validation campaign:
   - Refreshing the persisted `workflow_pipeline_state.json` still depends on the processed mount being writable to `workflow-status`.
 - Next action:
   - Publish the focused drift-monitoring fix as a draft PR and refresh the saved workflow-status snapshot once the processed mount is writable.
-
-### 2026-04-03 - codex
-- Branch: `codex/clean-command-output`
-- Completed:
-  - Changed `review-import` so successful non-dry-run imports run `transform` by default, with `--no-run-transform` as the opt-out and `--dry-run` remaining preview-only.
-  - Updated the README, categorization review workflow doc, and CLI coverage to match the new default behavior.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/commands/review_import.py tests/test_cli_dispatch.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_cli_dispatch.py`: pass
-- Open items:
-  - The broader command-output cleanup on this branch is still waiting to be packaged into a focused PR.
-- Next action:
-  - Package the command-output cleanup, including the new `review-import` default, into a focused PR.

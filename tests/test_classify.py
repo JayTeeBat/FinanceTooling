@@ -232,3 +232,97 @@ def test_load_classification_rules_infers_cashflow_type_from_legacy_taxonomy_lis
     assert resolve_taxonomy_cashflow_type("Income", rules=rules) == "in"
     assert resolve_taxonomy_cashflow_type("Transfers", rules=rules) == "transfer"
     assert resolve_taxonomy_cashflow_type("Shopping", rules=rules) == "out"
+
+
+def test_repo_example_config_categorizes_generic_example_fingerprints() -> None:
+    rules, warnings = load_classification_rules(Path("config/category_rules.yaml"))
+
+    assert warnings == []
+
+    cases = [
+        ("ACME PAYROLL APRIL", "income.salary", "Income", "Salary"),
+        ("Benefits Office Payment", "income.benefits", "Income", "Benefits"),
+        (
+            "Freelance Client Ltd Invoice 42",
+            "income.business_income",
+            "Income",
+            "Business Income",
+        ),
+        (
+            "Internal Account Transfer to Savings",
+            "transfers.account_transfer",
+            "Transfers",
+            "Account Transfer",
+        ),
+        (
+            "Broker Funding Transfer",
+            "transfers.investment_transfer",
+            "Transfers",
+            "Investment Transfer",
+        ),
+        ("City Energy Monthly Bill", "utilities.energy_water", "Utilities", "Energy & Water"),
+        (
+            "Home Broadband Direct Debit",
+            "utilities.telecom_internet",
+            "Utilities",
+            "Telecom & Internet",
+        ),
+        ("Neighborhood Market", "groceries.food_at_home", "Groceries", "Food at Home"),
+        ("Pizza Place Friday Night", "dining.dining_out", "Dining", "Dining Out"),
+        ("Online Marketplace Order", "shopping.marketplace", "Shopping", "Marketplace"),
+        ("Clothing Store Purchase", "shopping.clothing", "Shopping", "Clothing"),
+        ("City Metro Reload", "transport.public_transport", "Transport", "Public Transport"),
+        ("Auto Payment Annual Service", "transport.car", "Transport", "Car"),
+        ("Rent Agency August", "housing.rent", "Housing", "Rent"),
+        (
+            "Renovation Contractor Deposit",
+            "housing.home_improvements",
+            "Housing",
+            "Home Improvements",
+        ),
+        ("Property Manager Monthly Fee", "housing.home_services", "Housing", "Home Services"),
+        ("School Tuition Term 1", "family.education", "Family", "Education"),
+        ("Tax Free Childcare Credit", "family.childcare", "Family", "Childcare"),
+        ("Revenue Agency Rebate", "taxes.other_taxes", "Taxes", "Other Taxes"),
+        ("Car Insurance Renewal", "insurance.property_vehicle", "Insurance", "Property & Vehicle"),
+        ("Streaming Service Subscription", "leisure.entertainment", "Leisure", "Entertainment"),
+        (
+            "Home Insurance Premium",
+            "insurance.property_vehicle",
+            "Insurance",
+            "Property & Vehicle",
+        ),
+    ]
+
+    transactions = []
+    for description, category_id, _category, _subcategory in cases:
+        transactions.append(
+            Transaction(
+                booking_date=date(2026, 2, 1),
+                description=description,
+                amount_native=(
+                    Decimal("17.50")
+                    if (
+                        category_id.startswith("income.")
+                        or description == "Benefits Office Payment"
+                        or description == "Tax Free Childcare Credit"
+                        or description == "Revenue Agency Rebate"
+                    )
+                    else Decimal("-17.50")
+                ),
+                currency="EUR",
+                source_file=Path("stmt.pdf"),
+                bank="Boursobank",
+                parser="boursobank",
+            )
+        )
+
+    classified = classify_transactions(transactions, rules=rules)
+
+    paired_results = zip(classified, cases, strict=True)
+    for tx, (_description, category_id, category, subcategory) in paired_results:
+        assert tx.category_id == category_id
+        assert tx.reporting_category_id == category_id
+        assert tx.category == category
+        assert tx.subcategory == subcategory
+        assert tx.category_source == "rule"
