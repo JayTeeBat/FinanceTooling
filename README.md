@@ -159,8 +159,12 @@ Canonical categorization is now durable-ID based:
 - `category` / `subcategory`: current display labels derived from taxonomy
 
 Rules and transaction overrides should now prefer `category_id`. Display labels
-remain a derived reporting layer and review-workflow UX layer. See
-`docs/category_id_model.md` and `docs/taxonomy_guide.md`.
+remain a derived reporting layer and review-workflow UX layer. See:
+
+- `docs/category_id_model.md` for the technical durable-ID model
+- `docs/taxonomy_guide.md` for the quick bucket-picking guide
+- `docs/taxonomy_spec.md` for evolving taxonomy philosophy, edge cases, and
+  change-review criteria
 
 Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
 - `cashflow_type = in`: contributes to income
@@ -174,8 +178,8 @@ Practical policy:
 - excluded categories become `cashflow_type = exclude`
 - otherwise positive rows are `cashflow_type = in` and negative rows are
   `cashflow_type = out`
-- refunds are not income; positive refund rows therefore remain
-  `economic_role = expense`
+- positive expense-side inflows such as refunds are not income; they therefore
+  remain `economic_role = expense`
 - if a transaction-level exception is needed, set `cashflow_type` directly in
   `transaction_overrides.yaml`
 

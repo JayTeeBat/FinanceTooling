@@ -61,6 +61,12 @@ categorization, and reporting.
 - For every work package that changes commands, workflow behavior, defaults, or
   user-facing setup/run steps, update `README.md` in the same package before
   opening a PR.
+- For taxonomy philosophy changes, bucket-boundary decisions, or important
+  categorization edge-case rulings, update `docs/taxonomy_spec.md` in the same
+  package so the design rationale stays current.
+- Taxonomy-facing work should check `docs/taxonomy_spec.md`,
+  `docs/taxonomy_guide.md`, and `docs/category_id_model.md` together before
+  changing `config/category_rules.yaml` or taxonomy semantics.
 
 ## Metrics Log Protocol
 

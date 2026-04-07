@@ -52,11 +52,12 @@ def migrate_canonical_dataframe(
             migrated.at[index, "reporting_category_id"] = None
             continue
 
+        target_category_id = reporting_category_id or resolved_category_id
         resolved_category, resolved_subcategory = resolve_taxonomy_labels(
-            reporting_category_id or resolved_category_id,
+            target_category_id,
             rules=rules,
         )
-        migrated.at[index, "category_id"] = resolved_category_id
+        migrated.at[index, "category_id"] = target_category_id
         migrated.at[index, "reporting_category_id"] = reporting_category_id
         migrated.at[index, "category"] = resolved_category
         migrated.at[index, "subcategory"] = resolved_subcategory
@@ -90,10 +91,11 @@ def migrate_override_store(
                 f"{entry.transaction_id or entry.override_id or entry.fingerprint or '<unknown>'}"
             )
 
+        target_category_id = _reporting_category_id or resolved_category_id
         migrated_entries.append(
             replace(
                 entry,
-                category_id=resolved_category_id,
+                category_id=target_category_id,
                 set_category_id=True,
                 category=None,
                 set_category=False,

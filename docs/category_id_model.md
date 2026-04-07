@@ -35,7 +35,8 @@ Semantic split:
   - otherwise sign-based: positive => `in`, negative => `out`
 - `economic_role` describes economic meaning
   - `income` for true income categories
-  - `expense` for ordinary spend and refunds
+  - `expense` for ordinary spend and expense-side inflows such as refunds or
+    reimbursements
   - `transfer` / `exclude` follow final `cashflow_type`
 
 ## Config Model
@@ -90,7 +91,23 @@ This preserves trust:
 - historical meaning does not silently change when rules evolve
 
 For the human decision process when choosing buckets, see
-`docs/taxonomy_guide.md`.
+`docs/taxonomy_guide.md`. For the higher-level taxonomy philosophy and known
+target-vs-current divergences, see `docs/taxonomy_spec.md`.
+
+## Current Note On Refunds
+
+The durable-ID architecture supports taxonomy evolution, including cases where
+the current executable taxonomy is not yet the preferred target philosophy.
+
+At the moment:
+
+- the executable taxonomy still includes `refunds.*`
+- the target philosophy documented in `docs/taxonomy_spec.md` is to keep
+  refunds in the original purpose bucket whenever that purpose is known
+
+That disagreement is a taxonomy-policy issue, not a flaw in the category-ID
+model itself. It can be resolved later through deprecation plus an explicit
+migration.
 
 ## Review Workflow
 
