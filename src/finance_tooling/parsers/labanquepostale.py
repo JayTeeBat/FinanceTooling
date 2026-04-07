@@ -66,8 +66,6 @@ _CONTINUATION_NOISE_PREFIXES = (
     "SITUATION DE VOTRE CCP",
     "IBAN",
     "BIC",
-    "MR ",
-    "MME ",
     "SERVICE CLIENTS",
     "VIREMENT DEPUIS ",
 )

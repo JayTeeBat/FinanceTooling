@@ -124,6 +124,39 @@ def test_labanquepostale_parser_keeps_virement_a_negative() -> None:
     assert result.transactions[0].amount_native == Decimal("-200.00")
 
 
+def test_labanquepostale_parser_keeps_beneficiary_lines_for_consecutive_transfers() -> None:
+    parser = LaBanquePostaleParser()
+    lines = [
+        "24/01 VIREMENT DE MME THOMAZO MARION                                        8 281,39",
+        "      DEFAULT REFERENCE : 0181023590030687",
+        "24/01 VIREMENT POUR                                                       1 000,00",
+        "      MME THOMAZO COLOMBE COMPTE FR9710011000207559958312S77 DEFAULT",
+        "      REFERENCE : 0329023515430303",
+        "24/01 VIREMENT POUR                                                       1 000,00",
+        "      M THOMAZO HENRY COMPTE FR2010011000207559958299C76 DEFAULT",
+        "      REFERENCE : 0329023515430050",
+        "24/01 VIREMENT POUR                                                       1 000,00",
+        "      MME THOMAZO ISAURE COMPTE FR5910011000207559958306K63 DEFAULT",
+        "      REFERENCE : 0329023515430172",
+        "                           Total des opérations           29 153,80 24 368,35",
+    ]
+    text = "\n".join(lines)
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20250124.pdf"), text)
+
+    assert len(result.transactions) == 4
+    assert result.transactions[1].description.startswith(
+        "VIREMENT POUR MME THOMAZO COLOMBE COMPTE"
+    )
+    assert "REFERENCE : 0329023515430303" in result.transactions[1].description
+    assert result.transactions[2].description.startswith(
+        "VIREMENT POUR M THOMAZO HENRY COMPTE"
+    )
+    assert result.transactions[3].description.startswith(
+        "VIREMENT POUR MME THOMAZO ISAURE COMPTE"
+    )
+
+
 def test_registry_selects_lbp_parser() -> None:
     parser = select_parser(
         Path("LaBanquePostale Jacques releve_CCP1126215Y027_20241224.pdf"),

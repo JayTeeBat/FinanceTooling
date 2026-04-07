@@ -55,6 +55,11 @@ def _normalize_text(value: object) -> str:
     return text
 
 
+def _is_distinctive_prefix(text: str) -> bool:
+    tokens = [token for token in text.split() if token]
+    return len(tokens) >= 4 or len(text) >= 20
+
+
 def _to_amount_key(value: object) -> str:
     text = _normalize_text(value)
     if not text:
@@ -121,8 +126,16 @@ def _pick_candidate(
         normalized_existing = normalize_description(_normalize_text(candidate.get("description")))
         if not normalized_existing:
             continue
-        if normalized_existing.startswith(normalized_tx) or normalized_tx.startswith(
+        shorter = (
             normalized_existing
+            if len(normalized_existing) <= len(normalized_tx)
+            else normalized_tx
+        )
+        if not _is_distinctive_prefix(shorter):
+            continue
+        if (
+            normalized_existing.startswith(normalized_tx)
+            or normalized_tx.startswith(normalized_existing)
         ):
             prefix.append(candidate)
     if len(prefix) == 1:
