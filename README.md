@@ -424,13 +424,16 @@ set, the workflow expects:
 - `<FINANCE_STATEMENTS_PATH>/../config/project_overrides.yaml`
 - `<FINANCE_STATEMENTS_PATH>/../config/transaction_overrides.yaml`
 
-The repository includes starter templates:
+The repository includes starter templates and examples:
 
 - `config/category_rules.yaml`
 - `config/project_rules.yaml`
 - `config/budget_targets.yaml`
 - `config/project_overrides.yaml`
 - `config/transaction_overrides.yaml`
+
+These repo copies are intentionally generic and should be treated as example
+starting points, not as production-ready personal finance configs.
 
 Supported formats for all five config files are YAML (`.yaml`/`.yml`) and JSON (`.json`).
 Project assignment rules are loaded from `FINANCE_PROJECT_RULES_PATH` and budgets
