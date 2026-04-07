@@ -555,9 +555,36 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     }
     .cashflow-table table {
       min-width: 0;
+      table-layout: fixed;
     }
     .monthly-balance-table table {
       min-width: 0;
+      table-layout: fixed;
+    }
+    .cashflow-table th,
+    .cashflow-table td,
+    .monthly-balance-table th,
+    .monthly-balance-table td {
+      padding: 9px 8px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .cashflow-table th:first-child,
+    .cashflow-table td:first-child,
+    .monthly-balance-table th:first-child,
+    .monthly-balance-table td:first-child {
+      width: 92px;
+    }
+    .cashflow-table .th-wrap,
+    .monthly-balance-table .th-wrap {
+      display: inline-block;
+      line-height: 1.2;
+      white-space: normal;
+    }
+    .table-total-row td {
+      font-weight: 600;
+      border-top: 2px solid var(--border);
+      background: var(--surface-2);
     }
     .summary-note {
       font-size: 13px;
@@ -595,6 +622,17 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       table {
         min-width: 640px;
       }
+      .cashflow-table table,
+      .monthly-balance-table table {
+        min-width: 0;
+      }
+      .cashflow-table th,
+      .cashflow-table td,
+      .monthly-balance-table th,
+      .monthly-balance-table td {
+        padding: 8px 6px;
+        font-size: 11px;
+      }
     }
     @media (max-width: 980px) {
       .cashflow-grid {
@@ -625,6 +663,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                   <th>Expenses</th>
                   <th>Net Cashflow</th>
                   <th>Margin</th>
+                  <th><span class="th-wrap">Transfer Vol</span></th>
+                  <th><span class="th-wrap">Uncat Vol</span></th>
                 </tr>
               </thead>
               <tbody id="cashflow-yoy-body"></tbody>
@@ -701,6 +741,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                 <th>Expenses</th>
                 <th>Balance</th>
                 <th>Margin</th>
+                <th><span class="th-wrap">Transfer Vol</span></th>
+                <th><span class="th-wrap">Uncat Vol</span></th>
               </tr>
             </thead>
             <tbody id="monthly-balance-body"></tbody>
@@ -1057,18 +1099,38 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.amountEur === null) {
             continue;
           }
-          const existing = totals.get(tx.month) || { income: 0, expenses: 0 };
+          const existing = totals.get(tx.month) || {
+            income: 0,
+            expenses: 0,
+            transferVolume: 0,
+            uncategorizedVolume: 0,
+          };
           if (tx.economicRole === "income") {
             existing.income += tx.amountEur;
           } else if (tx.economicRole === "expense") {
             existing.expenses += -tx.amountEur;
+          } else if (tx.cashflowType === "transfer") {
+            existing.transferVolume += Math.abs(tx.amountEur);
+          }
+          if (tx.category === "Uncategorized") {
+            existing.uncategorizedVolume += Math.abs(tx.amountEur);
           }
           totals.set(tx.month, existing);
         }
         return monthKeysBetween(state.startDate, state.endDate).map((month) => ({
           month,
-          income: (totals.get(month) || { income: 0, expenses: 0 }).income,
-          expenses: (totals.get(month) || { income: 0, expenses: 0 }).expenses,
+          income: (
+            totals.get(month) || { income: 0, expenses: 0, transferVolume: 0, uncategorizedVolume: 0 }
+          ).income,
+          expenses: (
+            totals.get(month) || { income: 0, expenses: 0, transferVolume: 0, uncategorizedVolume: 0 }
+          ).expenses,
+          transferVolume: (
+            totals.get(month) || { income: 0, expenses: 0, transferVolume: 0, uncategorizedVolume: 0 }
+          ).transferVolume,
+          uncategorizedVolume: (
+            totals.get(month) || { income: 0, expenses: 0, transferVolume: 0, uncategorizedVolume: 0 }
+          ).uncategorizedVolume,
         }));
       }
 
@@ -1108,8 +1170,23 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           : [];
         if (!yearlyRows.length) {
           cashflowYoyBody.innerHTML =
-            "<tr><td colspan=\\"5\\"><span class=\\"empty\\">Not enough completed years to show year-over-year cashflow yet.</span></td></tr>";
+            "<tr><td colspan=\\"7\\"><span class=\\"empty\\">Not enough completed years to show year-over-year cashflow yet.</span></td></tr>";
         } else {
+          const totals = yearlyRows.reduce(
+            (acc, row) => {
+              acc.income += toNumber(row.income) || 0;
+              acc.expenses += toNumber(row.expenses) || 0;
+              acc.netCashflow += toNumber(row.net_cashflow) || 0;
+              acc.transferVolume += toNumber(row.transfer_volume) || 0;
+              acc.uncategorizedVolume += toNumber(row.uncategorized_volume) || 0;
+              return acc;
+            },
+            { income: 0, expenses: 0, netCashflow: 0, transferVolume: 0, uncategorizedVolume: 0 }
+          );
+          const totalMargin = totals.income > 0 ? totals.netCashflow / totals.income : null;
+          const totalNetClass = totals.netCashflow > 0
+            ? "delta-positive"
+            : (totals.netCashflow < 0 ? "delta-negative" : "delta-neutral");
           cashflowYoyBody.innerHTML = yearlyRows
             .map((row) => {
               const netValue = toNumber(row.net_cashflow) || 0;
@@ -1123,10 +1200,25 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                     escapeHtml(money.format(netValue)) +
                   "</td>" +
                   "<td>" + escapeHtml(formatPercent(toNumber(row.cashflow_margin))) + "</td>" +
+                  "<td>" + escapeHtml(money.format(toNumber(row.transfer_volume) || 0)) + "</td>" +
+                  "<td>" + escapeHtml(money.format(toNumber(row.uncategorized_volume) || 0)) + "</td>" +
                 "</tr>"
               );
             })
-            .join("");
+            .join("") +
+            (
+              "<tr class=\\"table-total-row\\">" +
+                "<td>TOTAL</td>" +
+                "<td>" + escapeHtml(money.format(totals.income)) + "</td>" +
+                "<td>" + escapeHtml(money.format(totals.expenses)) + "</td>" +
+                "<td class=\\"" + totalNetClass + "\\">" +
+                  escapeHtml(money.format(totals.netCashflow)) +
+                "</td>" +
+                "<td>" + escapeHtml(formatPercent(totalMargin)) + "</td>" +
+                "<td>" + escapeHtml(money.format(totals.transferVolume)) + "</td>" +
+                "<td>" + escapeHtml(money.format(totals.uncategorizedVolume)) + "</td>" +
+              "</tr>"
+            );
         }
 
         const ytd = payload.cashflow_yoy && typeof payload.cashflow_yoy.current_ytd === "object"
@@ -1198,13 +1290,30 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function renderMonthlyBalance(rows) {
         if (!rows.length) {
           monthlyBalanceBody.innerHTML =
-            "<tr><td colspan=\\"5\\"><span class=\\"empty\\">No monthly balance rows for the current filters.</span></td></tr>";
+            "<tr><td colspan=\\"7\\"><span class=\\"empty\\">No monthly balance rows for the current filters.</span></td></tr>";
           return;
         }
+        const totals = rows.reduce(
+          (acc, row) => {
+            acc.income += row.income || 0;
+            acc.expenses += row.expenses || 0;
+            acc.transferVolume += row.transferVolume || 0;
+            acc.uncategorizedVolume += row.uncategorizedVolume || 0;
+            return acc;
+          },
+          { income: 0, expenses: 0, transferVolume: 0, uncategorizedVolume: 0 }
+        );
+        totals.balance = totals.income - totals.expenses;
+        totals.margin = totals.income > 0 ? totals.balance / totals.income : null;
+        const totalBalanceClass = totals.balance > 0
+          ? "delta-positive"
+          : (totals.balance < 0 ? "delta-negative" : "delta-neutral");
         monthlyBalanceBody.innerHTML = rows
           .map((row) => {
             const income = row.income || 0;
             const expenses = row.expenses || 0;
+            const transfers = row.transferVolume || 0;
+            const uncategorized = row.uncategorizedVolume || 0;
             const balance = income - expenses;
             const balanceClass = balance > 0 ? "delta-positive" : (balance < 0 ? "delta-negative" : "delta-neutral");
             const margin = income > 0 ? balance / income : null;
@@ -1215,10 +1324,23 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
                 "<td>" + escapeHtml(money.format(expenses)) + "</td>" +
                 "<td class=\\"" + balanceClass + "\\">" + escapeHtml(money.format(balance)) + "</td>" +
                 "<td>" + escapeHtml(formatPercent(margin)) + "</td>" +
+                "<td>" + escapeHtml(money.format(transfers)) + "</td>" +
+                "<td>" + escapeHtml(money.format(uncategorized)) + "</td>" +
               "</tr>"
             );
           })
-          .join("");
+          .join("") +
+          (
+            "<tr class=\\"table-total-row\\">" +
+              "<td>TOTAL</td>" +
+              "<td>" + escapeHtml(money.format(totals.income)) + "</td>" +
+              "<td>" + escapeHtml(money.format(totals.expenses)) + "</td>" +
+              "<td class=\\"" + totalBalanceClass + "\\">" + escapeHtml(money.format(totals.balance)) + "</td>" +
+              "<td>" + escapeHtml(formatPercent(totals.margin)) + "</td>" +
+              "<td>" + escapeHtml(money.format(totals.transferVolume)) + "</td>" +
+              "<td>" + escapeHtml(money.format(totals.uncategorizedVolume)) + "</td>" +
+            "</tr>"
+          );
       }
 
       function refreshDashboard() {

@@ -26,7 +26,7 @@ def test_render_dashboard_html_embeds_transactions_and_projects(tmp_path: Path) 
     frame = pd.DataFrame(
         [
             {
-                "booking_date": "2026-01-03",
+                "booking_date": "2025-01-03",
                 "description": "Transport for London",
                 "amount_native": -12.50,
                 "amount_eur": -12.50,
@@ -36,7 +36,7 @@ def test_render_dashboard_html_embeds_transactions_and_projects(tmp_path: Path) 
                 "account_label": None,
             },
             {
-                "booking_date": "2026-01-08",
+                "booking_date": "2025-01-08",
                 "description": "Salary",
                 "amount_native": 1000.0,
                 "amount_eur": 1000.0,
@@ -46,12 +46,22 @@ def test_render_dashboard_html_embeds_transactions_and_projects(tmp_path: Path) 
                 "account_label": None,
             },
             {
-                "booking_date": "2026-01-10",
+                "booking_date": "2025-01-10",
                 "description": "Transfer to savings",
                 "amount_native": -300.0,
                 "amount_eur": -300.0,
                 "category": "Transfers",
                 "cashflow_type": "transfer",
+                "bank": "HSBC",
+                "account_label": None,
+            },
+            {
+                "booking_date": "2025-01-11",
+                "description": "Mystery debit",
+                "amount_native": -75.0,
+                "amount_eur": -75.0,
+                "category": "Uncategorized",
+                "cashflow_type": "out",
                 "bank": "HSBC",
                 "account_label": None,
             },
@@ -96,6 +106,8 @@ def test_render_dashboard_html_embeds_transactions_and_projects(tmp_path: Path) 
     assert "Last 5 Years" in html
     assert "Last 10 Years" in html
     assert ">Transfers<" in html
+    assert "Transfer Vol" in html
+    assert "Uncat Vol" in html
     assert "Full History" in html
     assert "Specific Year" in html
     assert 'id="specific-year"' in html
@@ -104,6 +116,9 @@ def test_render_dashboard_html_embeds_transactions_and_projects(tmp_path: Path) 
     cashflow_yoy = payload["cashflow_yoy"]
     assert isinstance(cashflow_yoy, dict)
     assert "years" in cashflow_yoy
+    years = cast(list[dict[str, object]], cashflow_yoy["years"])
+    assert years[0]["transfer_volume"] == 300.0
+    assert years[0]["uncategorized_volume"] == 75.0
     transactions_raw = payload["transactions"]
     assert isinstance(transactions_raw, list)
     transactions = cast(list[dict[str, object]], transactions_raw)
