@@ -198,6 +198,65 @@ def test_build_cashflow_yoy_summary_excludes_exclude_rows_from_metrics() -> None
     assert years[0]["net_cashflow"] == 800.0
 
 
+def test_build_cashflow_yoy_summary_includes_transfer_and_uncategorized_volumes() -> None:
+    transactions = [
+        Transaction(
+            booking_date=date(2025, 1, 3),
+            description="Salary",
+            amount_native=Decimal("1000.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Income",
+            cashflow_type="in",
+            amount_eur=Decimal("1000.00"),
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 10),
+            description="Groceries",
+            amount_native=Decimal("-200.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Shopping",
+            cashflow_type="out",
+            amount_eur=Decimal("-200.00"),
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 11),
+            description="Transfer to savings",
+            amount_native=Decimal("-300.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Transfers",
+            cashflow_type="transfer",
+            amount_eur=Decimal("-300.00"),
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 12),
+            description="Mystery debit",
+            amount_native=Decimal("-75.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Uncategorized",
+            cashflow_type="out",
+            amount_eur=Decimal("-75.00"),
+        ),
+    ]
+
+    summary = build_cashflow_yoy_summary(_frame_from_transactions(transactions))
+    years = summary["years"]
+
+    assert years[0]["transfer_volume"] == 300.0
+    assert years[0]["uncategorized_volume"] == 75.0
+
+
 def test_resolve_cashflow_types_falls_back_to_sign_for_positive_unmapped_rows(
     tmp_path: Path,
 ) -> None:

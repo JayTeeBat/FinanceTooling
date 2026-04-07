@@ -380,17 +380,25 @@ def _period_metrics(rows: pd.DataFrame) -> dict[str, float | None]:
             "expenses": 0.0,
             "net_cashflow": 0.0,
             "cashflow_margin": None,
+            "transfer_volume": 0.0,
+            "uncategorized_volume": 0.0,
         }
 
     economic_role = _normalize_economic_role_series(rows)
+    cashflow_type = _normalize_cashflow_type_series(rows)
+    category = _normalized_string_series(rows, "category", default="Uncategorized").str.casefold()
     income_total = float(rows.loc[economic_role.eq("income"), "amount_eur"].sum())
     expense_total = float((-rows.loc[economic_role.eq("expense"), "amount_eur"]).sum())
+    transfer_total = float(rows.loc[cashflow_type.eq("transfer"), "amount_eur"].abs().sum())
+    uncategorized_total = float(rows.loc[category.eq("uncategorized"), "amount_eur"].abs().sum())
     net_cashflow = income_total - expense_total
     return {
         "income": round(income_total, 2),
         "expenses": round(expense_total, 2),
         "net_cashflow": round(net_cashflow, 2),
         "cashflow_margin": round(net_cashflow / income_total, 4) if income_total else None,
+        "transfer_volume": round(transfer_total, 2),
+        "uncategorized_volume": round(uncategorized_total, 2),
     }
 
 
