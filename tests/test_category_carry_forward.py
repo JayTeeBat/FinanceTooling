@@ -104,3 +104,49 @@ def test_apply_manual_category_carry_forward_skips_ambiguous_matches(tmp_path: P
     assert result.transactions[0].category == "Uncategorized"
     assert result.transactions[0].category_source == "uncategorized"
     assert result.warnings
+
+
+def test_apply_manual_category_carry_forward_skips_generic_transfer_prefix_matches(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "lbp.pdf"
+    source.write_text("x", encoding="utf-8")
+    master = tmp_path / "transactions_master.parquet"
+
+    base = Transaction(
+        booking_date=date(2025, 1, 24),
+        description="VIREMENT POUR REFERENCE : 0329023515430172",
+        amount_native=Decimal("-1000.00"),
+        currency="EUR",
+        source_file=source,
+        bank="LaBanquePostale",
+        parser="labanquepostale",
+        category="Transfers",
+        subcategory="Savings Transfer",
+        category_source="transaction_override",
+    )
+    another = replace(
+        base,
+        description="VIREMENT POUR REFERENCE : 0329023515430303",
+    )
+    upsert_transactions(master, [base, another])
+
+    incoming = replace(
+        base,
+        description=(
+            "VIREMENT POUR M THOMAZO HENRY COMPTE FR2010011000207559958299C76 "
+            "DEFAULT REFERENCE : 0329023515430050"
+        ),
+        category="Transfers",
+        subcategory="Account Transfer",
+        category_source="rule",
+    )
+
+    result = apply_manual_category_carry_forward([incoming], master_parquet_path=master)
+
+    assert result.diagnostics.applied_count == 0
+    assert result.diagnostics.ambiguous_skipped_count == 0
+    assert result.transactions[0].category == "Transfers"
+    assert result.transactions[0].subcategory == "Account Transfer"
+    assert result.transactions[0].category_source == "rule"
+    assert result.warnings == []
