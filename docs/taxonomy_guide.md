@@ -2,6 +2,10 @@
 
 This guide explains how to pick a durable `category_id` bucket.
 
+For the deeper taxonomy philosophy, edge-case reasoning, and future-change
+checklist, see
+[`docs/taxonomy_spec.md`](/home/thomazo/dev/FinanceTooling/docs/taxonomy_spec.md).
+
 ## Principles
 
 - Classify by purpose first.
@@ -18,8 +22,11 @@ This guide explains how to pick a durable `category_id` bucket.
    - Use `transfers.*`.
 3. Is this true income?
    - Use `income.*`.
-4. Is this a refund offsetting earlier spend?
-   - Use `refunds.*`.
+4. Is this a refund or reimbursement?
+   - If the original purpose is known, keep the original purpose bucket and let
+     sign plus `economic_role` express the refund semantics.
+   - Use refund-like fallback buckets only when the original purpose truly
+     cannot be recovered.
 5. Otherwise, classify by the purpose of the spend.
 
 ## Semantic Layers
@@ -44,8 +51,8 @@ This guide explains how to pick a durable `category_id` bucket.
 
 Important example:
 
-- a health insurance reimbursement is:
-  - `category_id = refunds.service_refund`
+- a health insurance reimbursement for direct care should normally stay in a
+  `health.*` bucket
   - `cashflow_type = in`
   - `economic_role = expense`
 
@@ -171,13 +178,22 @@ True income only:
 - business income
 - investment income
 
-### `refunds.*`
+### Refunds and reimbursements
 
-Use for spend offsets, not true income:
-- merchant refund
-- insurer reimbursement
-- chargeback
-- service refund
+Target policy:
+- keep refunds in the original purpose bucket whenever the purpose is known
+- do not create a standalone refund bucket by default when that would break net
+  spend reporting by purpose
+
+Examples:
+- grocery refund => `groceries.*`
+- health reimbursement for care => `health.*`
+- clothing return refund => `shopping.apparel`
+
+Note:
+- current executable taxonomy may still contain `refunds.*` for compatibility;
+  see [`docs/taxonomy_spec.md`](/home/thomazo/dev/FinanceTooling/docs/taxonomy_spec.md)
+  for the target philosophy and known divergence
 
 ### `excluded.*`
 
