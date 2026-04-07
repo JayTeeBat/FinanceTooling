@@ -152,6 +152,8 @@ def _is_transform_output_current(
     except Exception:
         return False
     required_columns = {
+        "category_id",
+        "reporting_category_id",
         "cashflow_type",
         "economic_role",
         "from_account_ref",

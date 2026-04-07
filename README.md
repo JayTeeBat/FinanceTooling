@@ -147,10 +147,20 @@ diagnostics, and the year-over-year cashflow block used by the primary finance
 dashboard.
 
 Canonical transaction outputs now include `cashflow_type`, derived during
-`transform` from category taxonomy and optional transaction-level overrides.
+`transform` from household-account boundary, exclusion policy, transaction sign,
+and optional transaction-level overrides.
 Canonical outputs also now include inferred account-boundary fields:
 `from_account_ref`, `to_account_ref`, `from_account_type`,
 `to_account_type`, and `account_inference_source`.
+Canonical categorization is now durable-ID based:
+
+- `category_id`: stored semantic category assignment
+- `reporting_category_id`: active taxonomy target after deprecation mapping
+- `category` / `subcategory`: current display labels derived from taxonomy
+
+Rules and transaction overrides should now prefer `category_id`. Display labels
+remain a derived reporting layer and review-workflow UX layer. See
+`docs/category_id_model.md` and `docs/taxonomy_guide.md`.
 
 Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
 - `cashflow_type = in`: contributes to income
@@ -160,16 +170,21 @@ Cashflow definitions used by the finance dashboard and `cashflow_yoy` summary:
 - `Net cashflow = Income - Expense`
 
 Practical policy:
-- refunds are not income; positive refund rows reduce expense
-- non-personal and pass-through flows should use `cashflow_type = exclude`
-- interest remains income
+- household-owned counterparty movements become `cashflow_type = transfer`
+- excluded categories become `cashflow_type = exclude`
+- otherwise positive rows are `cashflow_type = in` and negative rows are
+  `cashflow_type = out`
+- refunds are not income; positive refund rows therefore remain
+  `economic_role = expense`
 - if a transaction-level exception is needed, set `cashflow_type` directly in
   `transaction_overrides.yaml`
 
 Canonical outputs also include `economic_role`, which the primary dashboard now
 uses for displayed income/expenses balance metrics:
-- `economic_role = income`: employer-identified payments plus interest
-- `economic_role = expense`: everything not identified as income/transfer/exclude
+- `economic_role = income`: true income categories such as salary, interest,
+  benefits, or business income
+- `economic_role = expense`: everything not identified as income/transfer/exclude,
+  including refunds
 - `economic_role = transfer`: excluded from the income/expenses balance
 - `economic_role = exclude`: ignored in the income/expenses balance
 

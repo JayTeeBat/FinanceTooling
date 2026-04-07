@@ -16,7 +16,9 @@ from finance_tooling.models import Transaction
 
 MatchType = Literal["contains", "exact", "regex"]
 CashflowType = Literal["in", "out", "transfer", "exclude"]
+EconomicRoleType = Literal["income", "expense", "transfer", "exclude"]
 _VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
+_VALID_ECONOMIC_ROLES = frozenset({"income", "expense", "transfer", "exclude"})
 
 
 def _legacy_cashflow_type_for_category(category: str) -> CashflowType | None:
@@ -32,20 +34,238 @@ def _legacy_cashflow_type_for_category(category: str) -> CashflowType | None:
     return None
 
 
+def _legacy_economic_role_for_category(
+    category: str,
+    *,
+    cashflow_type: CashflowType | None,
+) -> EconomicRoleType:
+    if cashflow_type == "transfer":
+        return "transfer"
+    if cashflow_type == "exclude":
+        return "exclude"
+    if category.strip().casefold() == "income":
+        return "income"
+    return "expense"
+
+
+def _normalize_category_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().casefold()
+    if not normalized:
+        return None
+    normalized = re.sub(r"[^a-z0-9.]+", "_", normalized)
+    normalized = re.sub(r"_+", "_", normalized)
+    normalized = re.sub(r"\.+", ".", normalized).strip("._")
+    segments = [segment.strip("_") for segment in normalized.split(".") if segment.strip("_")]
+    if not segments:
+        return None
+    return ".".join(segments)
+
+
+def _build_legacy_category_id(category: str, subcategory: str | None) -> str:
+    category_id = _normalize_category_id(category) or "uncategorized"
+    subcategory_id = _normalize_category_id(subcategory) if subcategory else None
+    return f"{category_id}.{subcategory_id}" if subcategory_id else category_id
+
+
+def _normalize_economic_role(value: object) -> EconomicRoleType | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().casefold()
+    if normalized in _VALID_ECONOMIC_ROLES:
+        return cast(EconomicRoleType, normalized)
+    return None
+
+
+def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCategory]:
+    entries: dict[str, TaxonomyCategory] = {}
+    for raw_key, raw_entry in rules.taxonomy.items():
+        key = _normalize_category_id(raw_key)
+        if key is None:
+            continue
+
+        if (
+            raw_entry.category_label is not None
+            or raw_entry.subcategory_label is not None
+            or raw_entry.deprecated_to is not None
+            or raw_entry.economic_role is not None
+            or raw_entry.status != "active"
+        ):
+            category_label = raw_entry.category_label or raw_entry.name
+            entries[key] = TaxonomyCategory(
+                name=raw_entry.name,
+                subcategories=raw_entry.subcategories,
+                cashflow_type=raw_entry.cashflow_type,
+                economic_role=raw_entry.economic_role
+                or _legacy_economic_role_for_category(
+                    category_label,
+                    cashflow_type=raw_entry.cashflow_type,
+                ),
+                category_label=category_label,
+                subcategory_label=raw_entry.subcategory_label,
+                deprecated_to=_normalize_category_id(raw_entry.deprecated_to),
+                status=raw_entry.status,
+            )
+            continue
+
+        if raw_entry.subcategories:
+            for subcategory in raw_entry.subcategories:
+                entry_id = _build_legacy_category_id(raw_entry.name, subcategory)
+                entries[entry_id] = TaxonomyCategory(
+                    name=raw_entry.name,
+                    subcategories=(),
+                    cashflow_type=raw_entry.cashflow_type,
+                    economic_role=raw_entry.economic_role
+                    or _legacy_economic_role_for_category(
+                        raw_entry.name,
+                        cashflow_type=raw_entry.cashflow_type,
+                    ),
+                    category_label=raw_entry.name,
+                    subcategory_label=subcategory,
+                )
+        else:
+            entries[key] = TaxonomyCategory(
+                name=raw_entry.name,
+                subcategories=(),
+                cashflow_type=raw_entry.cashflow_type,
+                economic_role=raw_entry.economic_role
+                or _legacy_economic_role_for_category(
+                    raw_entry.name,
+                    cashflow_type=raw_entry.cashflow_type,
+                ),
+                category_label=raw_entry.name,
+                subcategory_label=None,
+            )
+    return entries
+
+
+def _taxonomy_label_index(
+    rules: ClassificationRules,
+    *,
+    active_only: bool,
+) -> dict[tuple[str, str | None], str]:
+    index: dict[tuple[str, str | None], str] = {}
+    for category_id, entry in _taxonomy_entries_by_id(rules).items():
+        if active_only and entry.status != "active":
+            continue
+        category_label = (entry.category_label or entry.name).strip()
+        if not category_label:
+            continue
+        subcategory_label = entry.subcategory_label.strip() if entry.subcategory_label else None
+        label_key = (
+            category_label.casefold(),
+            subcategory_label.casefold() if subcategory_label else None,
+        )
+        index[label_key] = category_id
+    return index
+
+
+def resolve_reporting_category_id(
+    category_id: str | None,
+    *,
+    rules: ClassificationRules,
+) -> str | None:
+    normalized = _normalize_category_id(category_id)
+    if normalized is None:
+        return None
+    entries = _taxonomy_entries_by_id(rules)
+    current = normalized
+    seen: set[str] = set()
+    while current not in seen:
+        seen.add(current)
+        entry = entries.get(current)
+        if entry is None or not entry.deprecated_to:
+            return current
+        current = entry.deprecated_to
+    return current
+
+
+def resolve_category_id_from_labels(
+    category: str | None,
+    subcategory: str | None,
+    *,
+    rules: ClassificationRules,
+    prefer_active: bool = False,
+) -> str | None:
+    if category is None:
+        return None
+    normalized_category = category.strip()
+    if not normalized_category or normalized_category.casefold() == "uncategorized":
+        return None
+    normalized_subcategory = subcategory.strip() if isinstance(subcategory, str) else None
+    raw_key = (
+        normalized_category.casefold(),
+        normalized_subcategory.casefold() if normalized_subcategory else None,
+    )
+    index = _taxonomy_label_index(rules, active_only=prefer_active)
+    resolved = index.get(raw_key)
+    if resolved is not None:
+        return resolved
+    if prefer_active:
+        resolved = _taxonomy_label_index(rules, active_only=False).get(raw_key)
+        if resolved is not None:
+            return resolve_reporting_category_id(resolved, rules=rules)
+    return _build_legacy_category_id(normalized_category, normalized_subcategory)
+
+
+def resolve_taxonomy_labels(
+    category_id: str | None,
+    *,
+    rules: ClassificationRules,
+) -> tuple[str | None, str | None]:
+    reporting_id = resolve_reporting_category_id(category_id, rules=rules)
+    if reporting_id is None:
+        return None, None
+    entry = _taxonomy_entries_by_id(rules).get(reporting_id)
+    if entry is None:
+        return None, None
+    return entry.category_label or entry.name, entry.subcategory_label
+
+
+def resolve_taxonomy_cashflow_type_for_category_id(
+    category_id: str | None,
+    *,
+    rules: ClassificationRules,
+) -> CashflowType | None:
+    reporting_id = resolve_reporting_category_id(category_id, rules=rules)
+    if reporting_id is None:
+        return None
+    entry = _taxonomy_entries_by_id(rules).get(reporting_id)
+    if entry is None:
+        return None
+    return entry.cashflow_type
+
+
+def resolve_taxonomy_economic_role_for_category_id(
+    category_id: str | None,
+    *,
+    rules: ClassificationRules,
+) -> EconomicRoleType | None:
+    reporting_id = resolve_reporting_category_id(category_id, rules=rules)
+    if reporting_id is None:
+        return None
+    entry = _taxonomy_entries_by_id(rules).get(reporting_id)
+    if entry is None:
+        return None
+    return entry.economic_role
+
+
 @dataclass(frozen=True)
 class CategoryRule:
     """A single deterministic categorization rule."""
 
     rule_id: str
     priority: int
-    category: str
-    subcategory: str | None
-    match_type: MatchType
-    patterns: tuple[str, ...]
-    expense_only: bool
-    income_only: bool
-    banks: tuple[str, ...]
-    account_labels: tuple[str, ...]
+    category_id: str | None = None
+    category: str = "Uncategorized"
+    subcategory: str | None = None
+    match_type: MatchType = "contains"
+    patterns: tuple[str, ...] = ()
+    expense_only: bool = False
+    income_only: bool = False
+    banks: tuple[str, ...] = ()
+    account_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -63,6 +283,11 @@ class TaxonomyCategory:
     name: str
     subcategories: tuple[str, ...]
     cashflow_type: CashflowType | None
+    economic_role: EconomicRoleType | None = None
+    category_label: str | None = None
+    subcategory_label: str | None = None
+    deprecated_to: str | None = None
+    status: str = "active"
 
 
 @dataclass(frozen=True)
@@ -166,6 +391,7 @@ def _default_rules() -> ClassificationRules:
             CategoryRule(
                 rule_id=rule_id,
                 priority=100 - index,
+                category_id=_build_legacy_category_id(category, subcategory),
                 category=category,
                 subcategory=subcategory,
                 match_type="contains",
@@ -177,55 +403,93 @@ def _default_rules() -> ClassificationRules:
             )
         )
     default_taxonomy = {
-        "groceries": TaxonomyCategory(
+        "groceries.general": TaxonomyCategory(
             name="Groceries",
-            subcategories=("General",),
+            subcategories=(),
             cashflow_type="out",
+            economic_role="expense",
+            category_label="Groceries",
+            subcategory_label="General",
         ),
-        "dining": TaxonomyCategory(
+        "dining.restaurants": TaxonomyCategory(
             name="Dining",
-            subcategories=("Restaurants",),
+            subcategories=(),
             cashflow_type="out",
+            economic_role="expense",
+            category_label="Dining",
+            subcategory_label="Restaurants",
         ),
-        "transport": TaxonomyCategory(
+        "transport.mobility": TaxonomyCategory(
             name="Transport",
-            subcategories=("Mobility",),
+            subcategories=(),
             cashflow_type="out",
+            economic_role="expense",
+            category_label="Transport",
+            subcategory_label="Mobility",
         ),
-        "housing": TaxonomyCategory(
+        "housing.housing_costs": TaxonomyCategory(
             name="Housing",
-            subcategories=("Housing Costs",),
+            subcategories=(),
             cashflow_type="out",
+            economic_role="expense",
+            category_label="Housing",
+            subcategory_label="Housing Costs",
         ),
-        "shopping": TaxonomyCategory(
+        "shopping.general": TaxonomyCategory(
             name="Shopping",
-            subcategories=("General",),
+            subcategories=(),
             cashflow_type="out",
+            economic_role="expense",
+            category_label="Shopping",
+            subcategory_label="General",
         ),
-        "income": TaxonomyCategory(
+        "income.salary": TaxonomyCategory(
             name="Income",
-            subcategories=("Salary", "Interest"),
+            subcategories=(),
             cashflow_type="in",
+            economic_role="income",
+            category_label="Income",
+            subcategory_label="Salary",
         ),
-        "fees": TaxonomyCategory(
+        "income.refunds": TaxonomyCategory(
+            name="Income",
+            subcategories=(),
+            cashflow_type="in",
+            economic_role="income",
+            category_label="Income",
+            subcategory_label="Refunds & Interest",
+        ),
+        "fees.bank_fees": TaxonomyCategory(
             name="Fees",
-            subcategories=("Bank Fees",),
+            subcategories=(),
             cashflow_type="out",
+            economic_role="expense",
+            category_label="Fees",
+            subcategory_label="Bank Fees",
         ),
-        "transfers": TaxonomyCategory(
+        "transfers.internal": TaxonomyCategory(
             name="Transfers",
-            subcategories=("Internal/External",),
+            subcategories=(),
             cashflow_type="transfer",
+            economic_role="transfer",
+            category_label="Transfers",
+            subcategory_label="Internal/External",
         ),
-        "non personal transactions": TaxonomyCategory(
+        "non_personal_transactions": TaxonomyCategory(
             name="Non Personal Transactions",
             subcategories=(),
             cashflow_type="exclude",
+            economic_role="exclude",
+            category_label="Non Personal Transactions",
+            subcategory_label=None,
         ),
-        "pass-through": TaxonomyCategory(
+        "pass_through": TaxonomyCategory(
             name="Pass-through",
             subcategories=(),
             cashflow_type="exclude",
+            economic_role="exclude",
+            category_label="Pass-through",
+            subcategory_label=None,
         ),
     }
     return ClassificationRules(rules=tuple(rules), taxonomy=default_taxonomy)
@@ -282,6 +546,7 @@ def _parse_rules_payload(payload: object) -> ClassificationRules:
         if not patterns:
             continue
         rule_id_raw = raw_rule.get("rule_id", raw_rule.get("id"))
+        category_id_raw = raw_rule.get("category_id")
         category_raw = raw_rule.get("category")
         subcategory_raw = raw_rule.get("subcategory")
         banks_raw = raw_rule.get("banks")
@@ -294,6 +559,22 @@ def _parse_rules_payload(payload: object) -> ClassificationRules:
                     else f"rule_{index + 1}"
                 ),
                 priority=_to_int(raw_rule.get("priority"), default=0),
+                category_id=(
+                    _normalize_category_id(category_id_raw)
+                    if category_id_raw is not None
+                    else (
+                        _build_legacy_category_id(str(category_raw), str(subcategory_raw).strip())
+                        if isinstance(category_raw, str)
+                        and str(category_raw).strip()
+                        and isinstance(subcategory_raw, str)
+                        and str(subcategory_raw).strip()
+                        else (
+                            _build_legacy_category_id(str(category_raw), None)
+                            if isinstance(category_raw, str) and str(category_raw).strip()
+                            else None
+                        )
+                    )
+                ),
                 category=(
                     str(category_raw).strip()
                     if isinstance(category_raw, str) and str(category_raw).strip()
@@ -339,30 +620,97 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
 
     taxonomy: dict[str, TaxonomyCategory] = {}
     for raw_category, raw_value in cast(dict[object, object], raw_taxonomy).items():
-        category = str(raw_category).strip()
-        if not category:
+        raw_key = str(raw_category).strip()
+        if not raw_key:
             continue
 
-        subcategories: tuple[str, ...] = ()
-        cashflow_type: CashflowType | None = None
         if isinstance(raw_value, list):
+            category_label = raw_key
             subcategories = tuple(str(item).strip() for item in raw_value if str(item).strip())
-            cashflow_type = _legacy_cashflow_type_for_category(category)
-        elif isinstance(raw_value, dict):
-            typed_value = cast(dict[str, object], raw_value)
-            raw_subcategories = typed_value.get("subcategories")
-            if isinstance(raw_subcategories, list):
-                subcategories = tuple(
-                    str(item).strip() for item in raw_subcategories if str(item).strip()
-                )
-            cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
-        else:
+            cashflow_type = _legacy_cashflow_type_for_category(category_label)
+            taxonomy[category_label.casefold()] = TaxonomyCategory(
+                name=category_label,
+                subcategories=subcategories,
+                cashflow_type=cashflow_type,
+                economic_role=_legacy_economic_role_for_category(
+                    category_label,
+                    cashflow_type=cashflow_type,
+                ),
+            )
+            continue
+        if not isinstance(raw_value, dict):
             continue
 
-        taxonomy[category.casefold()] = TaxonomyCategory(
-            name=category,
+        typed_value = cast(dict[str, object], raw_value)
+        raw_labels = typed_value.get("labels")
+        if (
+            isinstance(raw_labels, dict)
+            or "deprecated_to" in typed_value
+            or "status" in typed_value
+            or "economic_role" in typed_value
+            or "category_id" in typed_value
+        ):
+            label_object = (
+                cast(dict[str, object], raw_labels) if isinstance(raw_labels, dict) else {}
+            )
+            category_label = (
+                str(label_object.get("category")).strip()
+                if isinstance(label_object.get("category"), str)
+                and str(label_object.get("category")).strip()
+                else (
+                    str(typed_value.get("category")).strip()
+                    if isinstance(typed_value.get("category"), str)
+                    and str(typed_value.get("category")).strip()
+                    else raw_key
+                )
+            )
+            subcategory_label = (
+                str(label_object.get("subcategory")).strip()
+                if isinstance(label_object.get("subcategory"), str)
+                and str(label_object.get("subcategory")).strip()
+                else (
+                    str(typed_value.get("subcategory")).strip()
+                    if isinstance(typed_value.get("subcategory"), str)
+                    and str(typed_value.get("subcategory")).strip()
+                    else None
+                )
+            )
+            cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
+            economic_role = _normalize_economic_role(typed_value.get("economic_role"))
+            taxonomy[_normalize_category_id(raw_key) or raw_key.casefold()] = TaxonomyCategory(
+                name=category_label,
+                subcategories=(),
+                cashflow_type=cashflow_type,
+                economic_role=economic_role
+                or _legacy_economic_role_for_category(
+                    category_label,
+                    cashflow_type=cashflow_type,
+                ),
+                category_label=category_label,
+                subcategory_label=subcategory_label,
+                deprecated_to=_normalize_category_id(typed_value.get("deprecated_to")),
+                status=(
+                    str(typed_value.get("status")).strip().casefold()
+                    if isinstance(typed_value.get("status"), str)
+                    and str(typed_value.get("status")).strip()
+                    else "active"
+                ),
+            )
+            continue
+
+        raw_subcategories = typed_value.get("subcategories")
+        subcategories = (
+            tuple(str(item).strip() for item in raw_subcategories if str(item).strip())
+            if isinstance(raw_subcategories, list)
+            else ()
+        )
+        cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
+        taxonomy[raw_key.casefold()] = TaxonomyCategory(
+            name=raw_key,
             subcategories=subcategories,
             cashflow_type=cashflow_type,
+            economic_role=_normalize_economic_role(typed_value.get("economic_role"))
+            or _legacy_economic_role_for_category(raw_key, cashflow_type=cashflow_type),
         )
     return taxonomy
 
@@ -373,15 +721,22 @@ def resolve_taxonomy_cashflow_type(
     rules: ClassificationRules,
 ) -> CashflowType | None:
     """Resolve a category's cashflow type from taxonomy metadata."""
-    if category is None:
-        return None
-    normalized = category.strip().casefold()
-    if not normalized:
-        return None
-    entry = rules.taxonomy.get(normalized)
-    if entry is None:
-        return None
-    return entry.cashflow_type
+    category_id = resolve_category_id_from_labels(category, None, rules=rules, prefer_active=True)
+    if category_id is not None:
+        direct = resolve_taxonomy_cashflow_type_for_category_id(category_id, rules=rules)
+        if direct is not None:
+            return direct
+
+    normalized_category = (category or "").strip().casefold()
+    matching_types = {
+        entry.cashflow_type
+        for entry in _taxonomy_entries_by_id(rules).values()
+        if (entry.category_label or entry.name).strip().casefold() == normalized_category
+        and entry.cashflow_type is not None
+    }
+    if len(matching_types) == 1:
+        return next(iter(matching_types))
+    return None
 
 
 def _load_payload(path: Path) -> object:
@@ -407,6 +762,63 @@ def load_classification_rules(path: Path) -> tuple[ClassificationRules, list[str
         return _parse_rules_payload(payload), []
     except Exception as exc:
         return _default_rules(), [f"Failed to load classification rules from {path}: {exc}"]
+
+
+def resolve_reporting_categories_for_dataframe(
+    dataframe,
+    *,
+    rules: ClassificationRules,
+):
+    """Backfill durable and reporting category fields across the canonical dataframe."""
+    if dataframe.empty:
+        resolved = dataframe.copy()
+        for column in ("category_id", "reporting_category_id", "category", "subcategory"):
+            if column not in resolved.columns:
+                resolved[column] = []
+        return resolved
+
+    resolved = dataframe.copy()
+    category_ids: list[str | None] = []
+    reporting_category_ids: list[str | None] = []
+    categories: list[str] = []
+    subcategories: list[str | None] = []
+
+    for row in resolved.to_dict(orient="records"):
+        existing_category_id = _normalize_category_id(row.get("category_id"))
+        existing_category = (
+            str(row.get("category")).strip()
+            if row.get("category") is not None and str(row.get("category")).strip()
+            else None
+        )
+        existing_subcategory = (
+            str(row.get("subcategory")).strip()
+            if row.get("subcategory") is not None and str(row.get("subcategory")).strip()
+            else None
+        )
+        durable_category_id = existing_category_id or resolve_category_id_from_labels(
+            existing_category,
+            existing_subcategory,
+            rules=rules,
+            prefer_active=False,
+        )
+        reporting_category_id = resolve_reporting_category_id(durable_category_id, rules=rules)
+        category_label, subcategory_label = resolve_taxonomy_labels(
+            reporting_category_id or durable_category_id,
+            rules=rules,
+        )
+
+        category_ids.append(durable_category_id)
+        reporting_category_ids.append(reporting_category_id)
+        categories.append(category_label or existing_category or "Uncategorized")
+        subcategories.append(
+            subcategory_label if category_label is not None else existing_subcategory
+        )
+
+    resolved["category_id"] = category_ids
+    resolved["reporting_category_id"] = reporting_category_ids
+    resolved["category"] = categories
+    resolved["subcategory"] = subcategories
+    return resolved
 
 
 def load_override_store(path: Path) -> tuple[OverrideStore, list[str]]:
@@ -565,6 +977,8 @@ def classify_transactions_with_diagnostics(
             classified.append(
                 replace(
                     tx,
+                    category_id=None,
+                    reporting_category_id=None,
                     category="Uncategorized",
                     subcategory=None,
                     category_confidence=0.0,
@@ -574,11 +988,27 @@ def classify_transactions_with_diagnostics(
             )
             continue
 
+        durable_category_id = matched_rule.category_id or resolve_category_id_from_labels(
+            matched_rule.category,
+            matched_rule.subcategory,
+            rules=rules,
+        )
+        reporting_category_id = resolve_reporting_category_id(durable_category_id, rules=rules)
+        category_label, subcategory_label = resolve_taxonomy_labels(
+            reporting_category_id or durable_category_id,
+            rules=rules,
+        )
         classified.append(
             replace(
                 tx,
-                category=matched_rule.category,
-                subcategory=matched_rule.subcategory,
+                category_id=durable_category_id,
+                reporting_category_id=reporting_category_id,
+                category=category_label or matched_rule.category,
+                subcategory=(
+                    subcategory_label
+                    if category_label is not None
+                    else matched_rule.subcategory
+                ),
                 category_confidence=_rule_confidence(matched_rule),
                 category_source="rule",
                 category_rule_id=matched_rule.rule_id,

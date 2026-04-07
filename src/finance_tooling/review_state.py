@@ -165,6 +165,8 @@ def apply_review_state(transactions: list[Transaction], path: Path) -> list[Tran
                 source_file=transaction.source_file,
                 bank=transaction.bank,
                 parser=transaction.parser,
+                category_id=transaction.category_id,
+                reporting_category_id=transaction.reporting_category_id,
                 category=transaction.category,
                 subcategory=transaction.subcategory,
                 category_confidence=transaction.category_confidence,

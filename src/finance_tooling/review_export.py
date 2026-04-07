@@ -53,6 +53,8 @@ _EDITABLE_EXPORT_COLUMNS = (
 _PROVENANCE_EXPORT_COLUMNS = (
     FINGERPRINT_COLUMN,
     "account_label",
+    "original_category_id",
+    "original_reporting_category_id",
     "project_source",
     EXISTING_PROJECT_TAGS_COLUMN,
     "source_file",
@@ -317,6 +319,16 @@ def export_review_rows(
     for removable in ("category_source", "category_rule_id", "cashflow_type"):
         if removable in review_rows.columns:
             review_rows = review_rows.drop(columns=[removable])
+    if "category_id" in review_rows.columns:
+        review_rows["original_category_id"] = review_rows["category_id"]
+        review_rows = review_rows.drop(columns=["category_id"])
+    else:
+        review_rows["original_category_id"] = None
+    if "reporting_category_id" in review_rows.columns:
+        review_rows["original_reporting_category_id"] = review_rows["reporting_category_id"]
+        review_rows = review_rows.drop(columns=["reporting_category_id"])
+    else:
+        review_rows["original_reporting_category_id"] = None
 
     if preserve_review_state and review_output_path.exists():
         review_rows = _apply_existing_review_values(review_rows, read_table(review_output_path))

@@ -12,7 +12,12 @@ from finance_tooling.account_inference import (
     AccountInferenceConfig,
     transaction_matches_identified_employer,
 )
-from finance_tooling.classify import ClassificationRules, resolve_taxonomy_cashflow_type
+from finance_tooling.classify import (
+    ClassificationRules,
+    resolve_category_id_from_labels,
+    resolve_taxonomy_cashflow_type_for_category_id,
+    resolve_taxonomy_economic_role_for_category_id,
+)
 from finance_tooling.models import CANONICAL_TRANSACTION_COLUMNS
 from finance_tooling.store import transactions_from_dataframe
 from finance_tooling.transaction_overrides import (
@@ -77,10 +82,18 @@ def _normalize_economic_role_series(dataframe: pd.DataFrame) -> pd.Series:
     normalized = values.astype("string").fillna("").str.strip().str.casefold()
     valid = normalized.where(normalized.isin(_VALID_ECONOMIC_ROLES))
     cashflow_type = _normalize_cashflow_type_series(dataframe)
+    category = _normalized_string_series(dataframe, "category", default="").str.casefold()
+    subcategory = _normalized_string_series(dataframe, "subcategory", default="").str.casefold()
     fallback = pd.Series("expense", index=dataframe.index, dtype="string")
     fallback = fallback.mask(cashflow_type.eq("transfer"), "transfer")
     fallback = fallback.mask(cashflow_type.eq("exclude"), "exclude")
-    fallback = fallback.mask(cashflow_type.eq("in"), "income")
+    fallback = fallback.mask(category.eq("transfers"), "transfer")
+    fallback = fallback.mask(
+        category.isin({"non personal transactions", "pass-through", "excluded"}),
+        "exclude",
+    )
+    fallback = fallback.mask(category.eq("income"), "income")
+    fallback = fallback.mask(subcategory.isin({"salary", "interest"}), "income")
     return valid.fillna(fallback)
 
 
@@ -129,6 +142,7 @@ def resolve_cashflow_types_for_dataframe(
         )
 
     normalized_frame = dataframe.copy()
+    active_rules = classification_rules
     for column in CANONICAL_TRANSACTION_COLUMNS:
         if column not in normalized_frame.columns:
             normalized_frame[column] = None
@@ -143,7 +157,16 @@ def resolve_cashflow_types_for_dataframe(
             if entry.set_cashflow_type and entry.cashflow_type is not None:
                 override_cashflow_type = cast(str, entry.cashflow_type)
 
-        taxonomy_type = resolve_taxonomy_cashflow_type(tx.category, rules=classification_rules)
+        category_id = tx.reporting_category_id or tx.category_id or resolve_category_id_from_labels(
+            tx.category,
+            tx.subcategory,
+            rules=active_rules,
+            prefer_active=False,
+        )
+        taxonomy_type = resolve_taxonomy_cashflow_type_for_category_id(
+            category_id,
+            rules=active_rules,
+        )
         from_account_type = (tx.from_account_type or "").strip().casefold()
         to_account_type = (tx.to_account_type or "").strip().casefold()
         internal_to_internal = from_account_type == "internal" and to_account_type == "internal"
@@ -155,8 +178,8 @@ def resolve_cashflow_types_for_dataframe(
             account_transfer_override_count += 1
             if taxonomy_type not in {None, "transfer"}:
                 account_transfer_conflict_count += 1
-        elif taxonomy_type is not None:
-            resolved_type = taxonomy_type
+        elif taxonomy_type == "exclude":
+            resolved_type = "exclude"
         elif tx.amount_eur is not None and tx.amount_eur > 0:
             resolved_type = "in"
         elif tx.amount_eur is not None and tx.amount_eur < 0:
@@ -194,6 +217,7 @@ def resolve_economic_roles_for_dataframe(
     dataframe: pd.DataFrame,
     *,
     account_inference_config: AccountInferenceConfig,
+    classification_rules: ClassificationRules | None = None,
 ) -> EconomicRoleResolutionResult:
     """Resolve persisted economic roles from account rules, interest, and cashflow semantics."""
     if dataframe.empty:
@@ -205,6 +229,7 @@ def resolve_economic_roles_for_dataframe(
         )
 
     normalized_frame = dataframe.copy()
+    active_rules = classification_rules or ClassificationRules(rules=(), taxonomy={})
     for column in CANONICAL_TRANSACTION_COLUMNS:
         if column not in normalized_frame.columns:
             normalized_frame[column] = None
@@ -213,22 +238,37 @@ def resolve_economic_roles_for_dataframe(
     resolved_roles: list[str] = []
     for tx in transactions:
         cashflow_type = (tx.cashflow_type or "").strip().casefold()
-        category = (tx.category or "").strip().casefold()
-        subcategory = (tx.subcategory or "").strip().casefold()
+        category_id = tx.reporting_category_id or tx.category_id or resolve_category_id_from_labels(
+            tx.category,
+            tx.subcategory,
+            rules=active_rules,
+            prefer_active=False,
+        )
         if cashflow_type == "transfer":
             resolved_role = "transfer"
         elif cashflow_type == "exclude":
             resolved_role = "exclude"
-        elif subcategory == "salary":
-            resolved_role = "income"
-        elif transaction_matches_identified_employer(tx, config=account_inference_config):
-            resolved_role = "income"
-        elif category == "income" and subcategory == "interest":
-            resolved_role = "income"
-        elif subcategory == "refunds & interest" and _looks_like_interest_payment(tx.description):
-            resolved_role = "income"
         else:
-            resolved_role = "expense"
+            taxonomy_role = resolve_taxonomy_economic_role_for_category_id(
+                category_id,
+                rules=active_rules,
+            )
+            category = (tx.category or "").strip().casefold()
+            subcategory = (tx.subcategory or "").strip().casefold()
+            if taxonomy_role in {"income", "transfer", "exclude"}:
+                resolved_role = taxonomy_role
+            elif subcategory == "salary":
+                resolved_role = "income"
+            elif transaction_matches_identified_employer(tx, config=account_inference_config):
+                resolved_role = "income"
+            elif category == "income" and subcategory == "interest":
+                resolved_role = "income"
+            elif subcategory == "refunds & interest" and _looks_like_interest_payment(
+                tx.description
+            ):
+                resolved_role = "income"
+            else:
+                resolved_role = "expense"
         resolved_roles.append(resolved_role)
 
     resolved = normalized_frame.copy()

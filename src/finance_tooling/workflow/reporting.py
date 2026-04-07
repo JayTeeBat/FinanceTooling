@@ -18,10 +18,15 @@ from finance_tooling.cashflow import (
     resolve_cashflow_types_for_dataframe,
     resolve_economic_roles_for_dataframe,
 )
+from finance_tooling.category_normalization import (
+    normalize_categories_for_dataframe,
+    write_categorization_consolidation_delta,
+)
 from finance_tooling.classify import (
     ClassificationDiagnostics,
     ClassificationRules,
     normalize_description,
+    resolve_reporting_categories_for_dataframe,
 )
 from finance_tooling.completeness import build_completeness_report_from_dataframe
 from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
@@ -186,14 +191,39 @@ def _build_category_metrics_from_dataframe(
         dataframe.get("amount_eur", pd.Series(0.0, index=dataframe.index)),
         errors="coerce",
     ).fillna(0.0)
-    cashflow_type_series = (
-        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+    subcategory_series = (
+        dataframe.get("subcategory", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+    )
+    economic_role_series = (
+        dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
         .astype("string")
         .fillna("")
         .str.strip()
         .str.casefold()
     )
-    income_mask = cashflow_type_series.eq("in") & amount_series.gt(0)
+    economic_role_series = economic_role_series.mask(
+        economic_role_series.eq(""),
+        pd.Series("expense", index=dataframe.index, dtype="string"),
+    )
+    economic_role_series = economic_role_series.mask(
+        category_series.str.casefold().eq("income")
+        | subcategory_series.str.casefold().isin({"salary", "interest"}),
+        "income",
+    )
+    economic_role_series = economic_role_series.mask(
+        category_series.str.casefold().eq("transfers"),
+        "transfer",
+    )
+    economic_role_series = economic_role_series.mask(
+        category_series.str.casefold().isin(
+            {"non personal transactions", "pass-through", "excluded"}
+        ),
+        "exclude",
+    )
+    income_mask = economic_role_series.eq("income") & amount_series.gt(0)
     absolute_amount_series = amount_series.abs()
     uncategorized_mask = category_series.str.casefold().eq("uncategorized") | (
         category_source_series.str.casefold().eq("uncategorized")
@@ -424,6 +454,22 @@ def persist_and_report(
     upsert = upsert_transactions_fn(settings.master_parquet_path, transactions)
     dataframe, fx_warnings = recompute_dataframe_fx(upsert.dataframe, settings)
     warnings = [*warnings, *fx_warnings]
+    dataframe = resolve_reporting_categories_for_dataframe(
+        dataframe,
+        rules=classification_rules,
+    )
+    normalization = normalize_categories_for_dataframe(
+        dataframe,
+        rules=classification_rules,
+    )
+    dataframe = normalization.dataframe
+    if normalization.changed_row_count > 0:
+        warnings.append(
+            "Applied category normalization to "
+            f"{normalization.changed_row_count} canonical rows "
+            f"({normalization.changed_category_count} category changes, "
+            f"{normalization.changed_subcategory_count} subcategory changes)."
+        )
     cashflow_resolution = resolve_cashflow_types_for_dataframe(
         dataframe,
         classification_rules=classification_rules,
@@ -432,9 +478,14 @@ def persist_and_report(
     economic_role_resolution = resolve_economic_roles_for_dataframe(
         cashflow_resolution.dataframe,
         account_inference_config=account_inference_config,
+        classification_rules=classification_rules,
     )
     dataframe = economic_role_resolution.dataframe
     write_canonical_dataframe(settings.master_parquet_path, dataframe)
+    write_categorization_consolidation_delta(
+        settings=settings,
+        current_dataframe=dataframe,
+    )
     classification_diagnostics: ClassificationDiagnostics = (
         _build_classification_diagnostics_from_dataframe(dataframe)
     )

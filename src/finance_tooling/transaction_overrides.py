@@ -12,7 +12,14 @@ from typing import cast
 import yaml
 
 from finance_tooling.account_inference import _normalize_account_type
-from finance_tooling.classify import _normalize_cashflow_type, normalize_description
+from finance_tooling.classify import (
+    ClassificationRules,
+    _normalize_cashflow_type,
+    normalize_description,
+    resolve_category_id_from_labels,
+    resolve_reporting_category_id,
+    resolve_taxonomy_labels,
+)
 from finance_tooling.models import Transaction
 from finance_tooling.store import compute_transaction_id
 
@@ -29,14 +36,16 @@ class TransactionOverrideEntry:
     currency: str | None
     bank: str | None
     account_label: str | None
-    category: str | None
-    set_category: bool
-    subcategory: str | None
-    set_subcategory: bool
-    project: str | None
-    set_project: bool
-    project_tags: tuple[str, ...]
-    set_project_tags: bool
+    category_id: str | None = None
+    set_category_id: bool = False
+    category: str | None = None
+    set_category: bool = False
+    subcategory: str | None = None
+    set_subcategory: bool = False
+    project: str | None = None
+    set_project: bool = False
+    project_tags: tuple[str, ...] = ()
+    set_project_tags: bool = False
     cashflow_type: str | None = None
     set_cashflow_type: bool = False
     from_account_ref: str | None = None
@@ -230,6 +239,7 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
         return None
 
     set_category = "category" in raw_override
+    set_category_id = "category_id" in raw_override
     set_subcategory = "subcategory" in raw_override
     set_cashflow_type = "cashflow_type" in raw_override
     set_from_account_ref = "from_account_ref" in raw_override
@@ -241,6 +251,7 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
     if not any(
         (
             set_category,
+            set_category_id,
             set_subcategory,
             set_cashflow_type,
             set_from_account_ref,
@@ -253,6 +264,7 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
     ):
         return None
 
+    category_id_value = _optional_str(raw_override.get("category_id")) if set_category_id else None
     category_value = _optional_str(raw_override.get("category")) if set_category else None
     subcategory_value = _optional_str(raw_override.get("subcategory")) if set_subcategory else None
     cashflow_type_value = (
@@ -288,6 +300,8 @@ def _parse_override_entry(raw_override: dict[str, object]) -> TransactionOverrid
         currency=currency_raw.upper() if currency_raw is not None else None,
         bank=bank_raw.upper() if bank_raw is not None else None,
         account_label=account_label_raw.upper() if account_label_raw is not None else None,
+        category_id=category_id_value,
+        set_category_id=set_category_id,
         category=category_value,
         set_category=set_category,
         subcategory=subcategory_value,
@@ -358,6 +372,8 @@ def merge_transaction_override_entries(
     )
     if incoming.set_category:
         merged = replace(merged, category=incoming.category, set_category=True)
+    if incoming.set_category_id:
+        merged = replace(merged, category_id=incoming.category_id, set_category_id=True)
     if incoming.set_subcategory:
         merged = replace(merged, subcategory=incoming.subcategory, set_subcategory=True)
     if incoming.set_cashflow_type:
@@ -453,6 +469,8 @@ def write_transaction_override_store(path: Path, store: TransactionOverrideStore
             row["bank"] = entry.bank
         if entry.account_label is not None:
             row["account_label"] = entry.account_label
+        if entry.set_category_id:
+            row["category_id"] = entry.category_id
         if entry.set_category:
             row["category"] = entry.category
         if entry.set_subcategory:
@@ -521,16 +539,21 @@ def iter_matching_override_entries(
 def apply_transaction_overrides(
     transactions: list[Transaction],
     store: TransactionOverrideStore,
+    *,
+    classification_rules: ClassificationRules | None = None,
 ) -> list[Transaction]:
     """Apply transaction-level overrides with last-match-wins semantics."""
     if not store.entries:
         return list(transactions)
 
     updated: list[Transaction] = []
+    active_rules = classification_rules or ClassificationRules(rules=(), taxonomy={})
     for tx in transactions:
         current = tx
         for entry in iter_matching_override_entries(current, store):
             category = current.category
+            category_id = current.category_id
+            reporting_category_id = current.reporting_category_id
             subcategory = current.subcategory
             category_confidence = current.category_confidence
             category_source = current.category_source
@@ -546,13 +569,40 @@ def apply_transaction_overrides(
             project_source = current.project_source
 
             category_override_applied = False
+            if entry.set_category_id:
+                category_id = entry.category_id
+                category_override_applied = True
             if entry.set_category:
                 category = entry.category or "Uncategorized"
+                if not entry.set_category_id:
+                    category_id = None
+                    reporting_category_id = None
                 category_override_applied = True
             if entry.set_subcategory:
                 subcategory = entry.subcategory
+                if not entry.set_category_id:
+                    category_id = None
+                    reporting_category_id = None
                 category_override_applied = True
             if category_override_applied:
+                if category_id is None:
+                    category_id = resolve_category_id_from_labels(
+                    category,
+                    subcategory,
+                    rules=active_rules,
+                    prefer_active=True,
+                )
+                reporting_category_id = resolve_reporting_category_id(
+                    category_id,
+                    rules=active_rules,
+                )
+                resolved_category, resolved_subcategory = resolve_taxonomy_labels(
+                    reporting_category_id or category_id,
+                    rules=active_rules,
+                )
+                if resolved_category is not None:
+                    category = resolved_category
+                    subcategory = resolved_subcategory
                 category_confidence = 1.0
                 category_source = "transaction_override"
                 category_rule_id = None
@@ -586,6 +636,8 @@ def apply_transaction_overrides(
 
             current = replace(
                 current,
+                category_id=category_id,
+                reporting_category_id=reporting_category_id,
                 category=category,
                 subcategory=subcategory,
                 category_confidence=category_confidence,

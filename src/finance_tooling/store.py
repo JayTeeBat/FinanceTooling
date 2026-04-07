@@ -104,6 +104,8 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "fx_rate_date": tx.fx_rate_date.isoformat() if tx.fx_rate_date else None,
             "fx_source": tx.fx_source,
             "amount_eur": float(tx.amount_eur) if tx.amount_eur is not None else None,
+            "category_id": tx.category_id,
+            "reporting_category_id": tx.reporting_category_id,
             "category": tx.category,
             "subcategory": tx.subcategory,
             "category_confidence": tx.category_confidence,
@@ -170,6 +172,17 @@ def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
                 source_file=Path(str(row["source_file"])),
                 bank=str(row["bank"]),
                 parser=str(row["parser"]),
+                category_id=(
+                    str(row["category_id"])
+                    if row.get("category_id") is not None and not pd.isna(row["category_id"])
+                    else None
+                ),
+                reporting_category_id=(
+                    str(row["reporting_category_id"])
+                    if row.get("reporting_category_id") is not None
+                    and not pd.isna(row["reporting_category_id"])
+                    else None
+                ),
                 category=str(row["category"])
                 if row.get("category") is not None
                 else "Uncategorized",

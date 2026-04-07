@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from finance_tooling.backup import create_backup
+from finance_tooling.classify import load_classification_rules, resolve_category_id_from_labels
+from finance_tooling.config import load_settings_from_env
 from finance_tooling.review_common import (
     ORIGINAL_CATEGORY_COLUMN,
     ORIGINAL_SUBCATEGORY_COLUMN,
@@ -56,6 +58,8 @@ def _backup_override_store(path: Path, backup_path: Path | None) -> Path | None:
 
 def _parse_category_transaction_override_row(
     row: dict[str, object],
+    *,
+    category_rules_path: Path | None,
 ) -> TransactionOverrideEntry | None:
     category = normalize_optional_text(row.get("category"))
     if category is None or category.lower() == "uncategorized":
@@ -69,8 +73,26 @@ def _parse_category_transaction_override_row(
         return None
 
     subcategory = normalize_optional_text(row.get("subcategory"))
+    original_category_id = normalize_optional_text(row.get("original_category_id"))
     if category == original_category and subcategory == original_subcategory:
         return None
+
+    resolved_category_id = None
+    resolved_category_rules_path = category_rules_path
+    if resolved_category_rules_path is None:
+        try:
+            resolved_category_rules_path = load_settings_from_env().category_rules_path
+        except Exception:
+            resolved_category_rules_path = None
+    if resolved_category_rules_path is not None:
+        classification_rules, _warnings = load_classification_rules(resolved_category_rules_path)
+        resolved_category_id = resolve_category_id_from_labels(
+            category,
+            subcategory,
+            rules=classification_rules,
+            prefer_active=True,
+        )
+
     return TransactionOverrideEntry(
         override_id=None,
         transaction_id=transaction_id,
@@ -80,6 +102,8 @@ def _parse_category_transaction_override_row(
         currency=None,
         bank=None,
         account_label=None,
+        category_id=resolved_category_id or original_category_id,
+        set_category_id=resolved_category_id is not None,
         category=category,
         set_category=True,
         subcategory=subcategory,
@@ -107,6 +131,8 @@ def _parse_project_transaction_override_row(
         currency=None,
         bank=None,
         account_label=None,
+        category_id=None,
+        set_category_id=False,
         category=None,
         set_category=False,
         subcategory=None,
@@ -124,6 +150,7 @@ def import_review_into_overrides(
     transaction_overrides_path: Path | None = None,
     existing_transaction_store: TransactionOverrideStore | None = None,
     review_state_path: Path | None = None,
+    category_rules_path: Path | None = None,
     dry_run: bool = False,
     backup: bool = True,
     transaction_backup_path: Path | None = None,
@@ -154,7 +181,10 @@ def import_review_into_overrides(
             invalid_rows.add(index)
             invalid_category_rows.add(index)
         elif category is not None:
-            parsed_transaction = _parse_category_transaction_override_row(row)
+            parsed_transaction = _parse_category_transaction_override_row(
+                row,
+                category_rules_path=category_rules_path,
+            )
             if parsed_transaction is None:
                 original_category = normalize_optional_text(row.get(ORIGINAL_CATEGORY_COLUMN))
                 original_subcategory = normalize_optional_text(row.get(ORIGINAL_SUBCATEGORY_COLUMN))
