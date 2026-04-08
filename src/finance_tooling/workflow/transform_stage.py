@@ -14,7 +14,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from finance_tooling.account_inference import infer_accounts_for_transactions
-from finance_tooling.backup import create_stage_backup_run
+from finance_tooling.backup import BackupRunResult, create_stage_backup_run
 from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
 from finance_tooling.dashboard import render_dashboard_html
 from finance_tooling.fx import FX_RATE_SEMANTICS_VERSION
@@ -456,6 +456,7 @@ def run_transform(
     staged_path: Path | None = None,
     ingest_result: IngestExecutionResult | None = None,
     backup_command: str = "transform",
+    backup_run: BackupRunResult | None = None,
 ) -> WorkflowResult:
     """Execute transform stage from staged transaction artifact."""
     cached_result = None
@@ -491,24 +492,26 @@ def run_transform(
         leave=False,
     )
     progress.set_postfix_str("backup")
-    try:
-        backup_run = create_stage_backup_run(
-            stage="transform",
-            command=backup_command,
-            processed_dir=settings.processed_path,
-            processed_targets=(settings.master_parquet_path,),
-            config_dir=settings.category_rules_path.parent,
-            config_targets=(
-                settings.category_rules_path,
-                settings.project_rules_path,
-                settings.account_rules_path,
-                settings.project_overrides_path,
-                settings.transaction_overrides_path,
-            ),
-        )
-    except OSError as exc:
-        progress.close()
-        raise RuntimeError("Failed to back up transform inputs before transform.") from exc
+    if backup_run is None:
+        try:
+            backup_run = create_stage_backup_run(
+                stage="transform",
+                command=backup_command,
+                processed_dir=settings.processed_path,
+                processed_targets=(settings.master_parquet_path,),
+                config_dir=settings.category_rules_path.parent,
+                config_targets=(
+                    settings.category_rules_path,
+                    settings.project_rules_path,
+                    settings.budget_targets_path,
+                    settings.account_rules_path,
+                    settings.project_overrides_path,
+                    settings.transaction_overrides_path,
+                ),
+            )
+        except OSError as exc:
+            progress.close()
+            raise RuntimeError("Failed to back up transform inputs before transform.") from exc
     progress.update()
     progress.set_postfix_str("load staged batch")
     staged_transactions = read_staged_transactions(input_staged_path)

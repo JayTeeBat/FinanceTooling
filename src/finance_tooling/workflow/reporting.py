@@ -615,6 +615,31 @@ def persist_and_report(
         "account_boundary_unknown_side_count": account_boundary_unknown_side_count,
         "account_inference_source_counts": account_inference_source_counts,
         "cashflow_yoy": cashflow_yoy,
+        "backup_run_id": backup_run.run_id if backup_run is not None else None,
+        "backup_root": (
+            str(backup_run.backup_root) if backup_run and backup_run.backup_root else None
+        ),
+        "backup_snapshot_dir": (
+            str(backup_run.snapshot_dir) if backup_run and backup_run.snapshot_dir else None
+        ),
+        "backup_processed_dir": (
+            str(backup_run.processed_backup_dir)
+            if backup_run is not None and backup_run.processed_backup_dir is not None
+            else None
+        ),
+        "backup_config_dir": (
+            str(backup_run.config_backup_dir)
+            if backup_run is not None and backup_run.config_backup_dir is not None
+            else None
+        ),
+        "backup_manifest_paths": (
+            [str(path) for path in backup_run.manifest_paths] if backup_run is not None else []
+        ),
+        "backup_copied_file_count": len(backup_run.copied_files) if backup_run is not None else 0,
+        "backup_missing_file_count": (
+            len(backup_run.skipped_missing_files) if backup_run is not None else 0
+        ),
+        "backup_pruned_run_ids": list(backup_run.pruned_run_ids) if backup_run is not None else [],
     }
     write_json(settings.summary_json_path, summary_payload)
 

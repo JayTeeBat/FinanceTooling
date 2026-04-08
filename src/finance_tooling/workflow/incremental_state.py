@@ -12,6 +12,7 @@ from typing import Any, Literal
 
 import pandas as pd
 
+from finance_tooling.backup import backup_root_from_processed_dir
 from finance_tooling.config import (
     LEGACY_STAGED_TRANSACTIONS_FILENAME,
     TRANSFORM_SOURCE_REGISTRY_FILENAME,
@@ -274,23 +275,6 @@ def compute_config_fingerprint(settings: Settings) -> str:
     return compute_transform_input_fingerprint(settings)
 
 
-def _run_id_from_timestamp(timestamp: str) -> str | None:
-    """Convert an ISO timestamp into the stage-backup run-id format."""
-    try:
-        parsed = datetime.fromisoformat(timestamp)
-    except ValueError:
-        return None
-    return parsed.astimezone(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-
-
-def _datetime_from_run_id(run_id: str) -> datetime | None:
-    """Parse a stage-backup run-id into a UTC datetime."""
-    try:
-        return datetime.strptime(run_id, "%Y%m%dT%H%M%S%fZ").replace(tzinfo=UTC)
-    except ValueError:
-        return None
-
-
 def _last_full_refresh_rule_fingerprint_from_backup(
     settings: Settings,
     *,
@@ -303,13 +287,13 @@ def _last_full_refresh_rule_fingerprint_from_backup(
         target_timestamp = datetime.fromisoformat(last_full_refresh_at).astimezone(UTC)
     except ValueError:
         return None
-    backup_root = settings.category_rules_path.parent / "backup" / "transform"
+    backup_root = backup_root_from_processed_dir(settings.processed_path)
     candidate_dirs: list[tuple[datetime, Path]] = []
     if backup_root.exists():
         for child in backup_root.iterdir():
-            if not child.is_dir():
+            if not child.is_dir() or child.name == "legacy":
                 continue
-            manifest_path = child / "backup_manifest.json"
+            manifest_path = child / "manifest.json"
             created_at: datetime | None = None
             if manifest_path.exists():
                 try:
@@ -320,20 +304,18 @@ def _last_full_refresh_rule_fingerprint_from_backup(
                 except (OSError, ValueError, json.JSONDecodeError):
                     created_at = None
             if created_at is None:
-                created_at = _datetime_from_run_id(child.name)
+                continue
             if created_at is not None and created_at <= target_timestamp:
                 candidate_dirs.append((created_at, child))
 
     if candidate_dirs:
         _created_at, backup_dir = max(candidate_dirs, key=lambda item: item[0])
     else:
-        run_id = _run_id_from_timestamp(last_full_refresh_at)
-        if run_id is None:
-            return None
-        backup_dir = backup_root / run_id
+        return None
 
-    category_rules_path = backup_dir / settings.category_rules_path.name
-    project_rules_path = backup_dir / settings.project_rules_path.name
+    config_backup_dir = backup_dir / "config"
+    category_rules_path = config_backup_dir / settings.category_rules_path.name
+    project_rules_path = config_backup_dir / settings.project_rules_path.name
     if not category_rules_path.exists() and not project_rules_path.exists():
         return None
     return _compute_labeled_paths_fingerprint(
@@ -766,7 +748,7 @@ def build_full_refresh_preflight(
         ),
         estimated_pruned_row_count=estimated_pruned_row_count,
         estimated_reprocessed_row_count=estimated_reprocessed_row_count,
-        processed_backup_root=settings.summary_json_path.parent / "backup",
-        config_backup_root=settings.category_rules_path.parent / "backup",
+        processed_backup_root=backup_root_from_processed_dir(settings.processed_path),
+        config_backup_root=backup_root_from_processed_dir(settings.processed_path),
         stale_reasons=tuple(stale_reasons),
     )

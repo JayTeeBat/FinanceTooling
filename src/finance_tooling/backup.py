@@ -1,4 +1,4 @@
-"""Backup helpers for config artifacts and pipeline stage snapshots."""
+"""Unified snapshot backup helpers for mutable pipeline state."""
 
 from __future__ import annotations
 
@@ -9,12 +9,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-BackupRootKind = Literal["processed", "config"]
+BackupRootKind = Literal["processed", "config", "legacy"]
+RETENTION_DAY_KEEP_COUNT = 7
+RETENTION_SNAPSHOTS_PER_DAY = 3
 
 
 @dataclass(frozen=True)
 class BackupSnapshotFile:
-    """Single file captured in a stage backup snapshot."""
+    """Single file captured in a backup snapshot."""
 
     source_path: Path
     destination_path: Path
@@ -23,7 +25,7 @@ class BackupSnapshotFile:
 
 @dataclass(frozen=True)
 class BackupRunResult:
-    """Result metadata for a stage-scoped backup snapshot."""
+    """Result metadata for a unified backup snapshot."""
 
     run_id: str
     stage: str
@@ -35,62 +37,163 @@ class BackupRunResult:
     copied_files: tuple[BackupSnapshotFile, ...]
     skipped_missing_files: tuple[Path, ...]
     pruned_run_ids: tuple[str, ...]
+    backup_root: Path | None = None
+    snapshot_dir: Path | None = None
+    retention_day_local: str | None = None
+    migrated_legacy_paths: tuple[tuple[Path, Path], ...] = ()
 
 
-def default_backup_path(path: Path) -> Path:
-    """Build a default timestamped backup path under the sibling backup folder."""
-    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    return path.parent / "backup" / f"{path.name}.{timestamp}.bak"
+def backup_root_from_processed_dir(processed_dir: Path) -> Path:
+    """Return the unified backup root for a processed tree."""
+    return processed_dir.resolve().parent / "backup"
 
 
-def create_backup(path: Path, backup_path: Path | None = None, *, keep: int = 10) -> Path | None:
-    """Create a backup copy for a path and prune older backups with FIFO retention."""
-    if not path.exists():
-        return None
-    destination = backup_path or default_backup_path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(path, destination)
-    prune_backups(path, destination.parent, keep=keep)
-    return destination
+def _make_snapshot_id(now_local: datetime) -> str:
+    return now_local.strftime("%Y%m%d-%H%M%S-%f")
 
 
-def prune_backups(path: Path, backup_dir: Path, *, keep: int = 10) -> None:
-    """Keep only the latest backups for a file family in the backup directory."""
-    if keep < 1 or not backup_dir.exists():
-        return
-    candidates = sorted(
-        (
+def _copy_tree_files(source_dir: Path, destination_dir: Path) -> list[BackupSnapshotFile]:
+    copied_files: list[BackupSnapshotFile] = []
+    if not source_dir.exists():
+        return copied_files
+    for source_path in sorted(source_dir.rglob("*")):
+        if source_path.is_dir():
+            continue
+        relative_path = source_path.relative_to(source_dir)
+        destination_path = destination_dir / relative_path
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination_path)
+        copied_files.append(
+            BackupSnapshotFile(
+                source_path=source_path,
+                destination_path=destination_path,
+                root_kind="processed",
+            )
+        )
+    return copied_files
+
+
+def _copy_config_files(
+    targets: tuple[Path, ...],
+    destination_dir: Path,
+) -> tuple[list[BackupSnapshotFile], list[Path]]:
+    copied_files: list[BackupSnapshotFile] = []
+    skipped_missing_files: list[Path] = []
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    for target in targets:
+        if not target.exists():
+            skipped_missing_files.append(target)
+            continue
+        destination_path = destination_dir / target.name
+        shutil.copy2(target, destination_path)
+        copied_files.append(
+            BackupSnapshotFile(
+                source_path=target,
+                destination_path=destination_path,
+                root_kind="config",
+            )
+        )
+    return copied_files, skipped_missing_files
+
+
+def _iter_legacy_file_backups(target: Path) -> list[Path]:
+    candidates: list[Path] = []
+    for pattern in (f"{target.name}*.bak",):
+        candidates.extend(
             candidate
-            for candidate in backup_dir.iterdir()
+            for candidate in target.parent.glob(pattern)
             if candidate.is_file()
-            and candidate.name.startswith(path.name)
-            and ".bak" in candidate.name
-        ),
-        key=lambda candidate: candidate.name,
-    )
-    for candidate in candidates[:-keep]:
-        candidate.unlink(missing_ok=True)
+        )
+    return sorted(set(candidates))
 
 
-def _make_run_id() -> str:
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+def _legacy_destination_name(source: Path) -> str:
+    resolved = source.expanduser().resolve()
+    parts = [part for part in resolved.parts if part not in {resolved.anchor, ""}]
+    return "__".join(parts[-4:]) or source.name
 
 
-def _stage_backup_root(base_dir: Path, stage: str) -> Path:
-    return base_dir / "backup" / stage
-
-
-def _run_manifest_payload(
+def _migrate_legacy_backups(
     *,
-    result: BackupRunResult,
-    scoped_copied_files: list[BackupSnapshotFile],
-    scoped_skipped_missing_files: list[Path],
-) -> dict[str, object]:
+    backup_root: Path,
+    processed_dir: Path,
+    config_targets: tuple[Path, ...],
+) -> tuple[tuple[Path, Path], ...]:
+    migration_pairs: list[tuple[Path, Path]] = []
+    legacy_root = backup_root / "legacy"
+    legacy_root.mkdir(parents=True, exist_ok=True)
+
+    candidate_dirs = [processed_dir / "backup"]
+    candidate_dirs.extend(target.parent / "backup" for target in config_targets)
+    seen_dirs: set[Path] = set()
+    for source_dir in candidate_dirs:
+        resolved_source = source_dir.expanduser().resolve()
+        if resolved_source == backup_root.resolve():
+            continue
+        if resolved_source in seen_dirs or not source_dir.exists():
+            continue
+        seen_dirs.add(resolved_source)
+        destination = legacy_root / _legacy_destination_name(source_dir)
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.move(str(source_dir), str(destination))
+        migration_pairs.append((source_dir, destination))
+
+    seen_files: set[Path] = set()
+    for target in config_targets:
+        for source_file in _iter_legacy_file_backups(target):
+            resolved_source = source_file.expanduser().resolve()
+            if resolved_source in seen_files:
+                continue
+            seen_files.add(resolved_source)
+            destination_dir = legacy_root / _legacy_destination_name(source_file.parent)
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            destination = destination_dir / source_file.name
+            if destination.exists():
+                destination.unlink()
+            shutil.move(str(source_file), str(destination))
+            migration_pairs.append((source_file, destination))
+
+    if migration_pairs:
+        migration_manifest_path = legacy_root / "migration_manifest.json"
+        existing_payload: list[dict[str, str]] = []
+        if migration_manifest_path.exists():
+            try:
+                payload = json.loads(migration_manifest_path.read_text(encoding="utf-8"))
+                if isinstance(payload, list):
+                    existing_payload = [
+                        item
+                        for item in payload
+                        if isinstance(item, dict)
+                        and isinstance(item.get("source"), str)
+                        and isinstance(item.get("destination"), str)
+                    ]
+            except (OSError, json.JSONDecodeError):
+                existing_payload = []
+        existing_payload.extend(
+            {
+                "migrated_at": datetime.now(UTC).isoformat(),
+                "source": str(source),
+                "destination": str(destination),
+            }
+            for source, destination in migration_pairs
+        )
+        migration_manifest_path.write_text(
+            json.dumps(existing_payload, indent=2),
+            encoding="utf-8",
+        )
+    return tuple(migration_pairs)
+
+
+def _snapshot_manifest_payload(result: BackupRunResult) -> dict[str, object]:
     return {
         "run_id": result.run_id,
         "stage": result.stage,
         "command": result.command,
         "created_at": result.created_at,
+        "retention_day_local": result.retention_day_local,
+        "backup_root": str(result.backup_root) if result.backup_root is not None else None,
+        "snapshot_dir": str(result.snapshot_dir) if result.snapshot_dir is not None else None,
         "processed_backup_dir": (
             str(result.processed_backup_dir) if result.processed_backup_dir is not None else None
         ),
@@ -103,63 +206,59 @@ def _run_manifest_payload(
                 "source_path": str(copy.source_path),
                 "destination_path": str(copy.destination_path),
             }
-            for copy in scoped_copied_files
+            for copy in result.copied_files
         ],
-        "skipped_missing_files": [str(path) for path in scoped_skipped_missing_files],
+        "skipped_missing_files": [str(path) for path in result.skipped_missing_files],
         "pruned_run_ids": list(result.pruned_run_ids),
+        "migrated_legacy_paths": [
+            {"source": str(source), "destination": str(destination)}
+            for source, destination in result.migrated_legacy_paths
+        ],
     }
 
 
-def _write_manifest(
-    manifest_path: Path,
-    *,
-    result: BackupRunResult,
-    root_kind: BackupRootKind,
-) -> None:
-    copied_files = [copy for copy in result.copied_files if copy.root_kind == root_kind]
+def _write_manifest(manifest_path: Path, result: BackupRunResult) -> None:
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
-        json.dumps(
-            _run_manifest_payload(
-                result=result,
-                scoped_copied_files=copied_files,
-                scoped_skipped_missing_files=list(result.skipped_missing_files),
-            ),
-            indent=2,
-        ),
+        json.dumps(_snapshot_manifest_payload(result), indent=2),
         encoding="utf-8",
     )
 
 
-def _prune_stage_runs(
-    *,
-    stage: str,
-    keep: int,
-    processed_base_dir: Path | None,
-    config_base_dir: Path | None,
-) -> tuple[str, ...]:
-    if keep < 1:
+def _load_retention_day(snapshot_dir: Path) -> str | None:
+    manifest_path = snapshot_dir / "manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    retention_day = payload.get("retention_day_local")
+    return str(retention_day) if isinstance(retention_day, str) and retention_day else None
+
+
+def _prune_snapshot_runs(backup_root: Path) -> tuple[str, ...]:
+    if not backup_root.exists():
         return ()
 
-    candidate_run_ids: set[str] = set()
-    for base_dir in (processed_base_dir, config_base_dir):
-        if base_dir is None:
+    snapshots_by_day: dict[str, list[Path]] = {}
+    for child in backup_root.iterdir():
+        if not child.is_dir() or child.name == "legacy":
             continue
-        stage_root = _stage_backup_root(base_dir, stage)
-        if not stage_root.exists():
+        retention_day = _load_retention_day(child)
+        if retention_day is None:
             continue
-        candidate_run_ids.update(
-            child.name for child in stage_root.iterdir() if child.is_dir() and child.name
-        )
+        snapshots_by_day.setdefault(retention_day, []).append(child)
 
-    run_ids = sorted(candidate_run_ids)
-    pruned = tuple(run_ids[:-keep])
-    for run_id in pruned:
-        for base_dir in (processed_base_dir, config_base_dir):
-            if base_dir is None:
-                continue
-            shutil.rmtree(_stage_backup_root(base_dir, stage) / run_id, ignore_errors=True)
-    return pruned
+    retained_days = sorted(snapshots_by_day.keys(), reverse=True)[:RETENTION_DAY_KEEP_COUNT]
+    pruned_run_ids: list[str] = []
+    for retention_day, snapshots in snapshots_by_day.items():
+        sorted_snapshots = sorted(snapshots, key=lambda snapshot: snapshot.name, reverse=True)
+        keep_count = RETENTION_SNAPSHOTS_PER_DAY if retention_day in retained_days else 0
+        for snapshot_dir in sorted_snapshots[keep_count:]:
+            pruned_run_ids.append(snapshot_dir.name)
+            shutil.rmtree(snapshot_dir, ignore_errors=True)
+    return tuple(sorted(pruned_run_ids))
 
 
 def create_stage_backup_run(
@@ -172,93 +271,72 @@ def create_stage_backup_run(
     config_targets: tuple[Path, ...] = (),
     keep: int = 10,
 ) -> BackupRunResult:
-    """Create a stage-scoped backup snapshot with run-folder retention."""
-    run_id = _make_run_id()
+    """Create a unified snapshot backup for the current mutable pipeline state."""
+    del processed_targets, config_dir, keep
+    now_local = datetime.now().astimezone()
+    run_id = _make_snapshot_id(now_local)
     created_at = datetime.now(UTC).isoformat()
-    processed_backup_dir = _stage_backup_root(processed_dir, stage) / run_id
-    config_backup_dir = (
-        (_stage_backup_root(config_dir, stage) / run_id) if config_dir is not None else None
-    )
+    retention_day_local = now_local.date().isoformat()
+    backup_root = backup_root_from_processed_dir(processed_dir)
+    snapshot_dir = backup_root / run_id
+    processed_backup_dir = snapshot_dir / "processed"
+    config_backup_dir = snapshot_dir / "config"
+    manifest_path = snapshot_dir / "manifest.json"
 
     copied_files: list[BackupSnapshotFile] = []
     skipped_missing_files: list[Path] = []
-    manifest_paths: list[Path] = []
+    migrated_legacy_paths = _migrate_legacy_backups(
+        backup_root=backup_root,
+        processed_dir=processed_dir,
+        config_targets=config_targets,
+    )
+
     try:
-        if processed_targets:
-            processed_backup_dir.mkdir(parents=True, exist_ok=True)
-        if config_targets and config_backup_dir is not None:
-            config_backup_dir.mkdir(parents=True, exist_ok=True)
+        processed_backup_dir.mkdir(parents=True, exist_ok=True)
+        copied_files.extend(_copy_tree_files(processed_dir, processed_backup_dir))
+        config_copies, missing_config_targets = _copy_config_files(
+            config_targets,
+            config_backup_dir,
+        )
+        copied_files.extend(config_copies)
+        skipped_missing_files.extend(missing_config_targets)
 
-        for root_kind, targets, destination_dir in (
-            ("processed", processed_targets, processed_backup_dir),
-            ("config", config_targets, config_backup_dir),
-        ):
-            if destination_dir is None:
-                continue
-            for target in targets:
-                if not target.exists():
-                    skipped_missing_files.append(target)
-                    continue
-                destination = destination_dir / target.name
-                shutil.copy2(target, destination)
-                copied_files.append(
-                    BackupSnapshotFile(
-                        source_path=target,
-                        destination_path=destination,
-                        root_kind=root_kind,
-                    )
-                )
-
-        result = BackupRunResult(
+        provisional = BackupRunResult(
             run_id=run_id,
             stage=stage,
             command=command,
             created_at=created_at,
-            processed_backup_dir=processed_backup_dir if processed_targets else None,
-            config_backup_dir=config_backup_dir if config_targets else None,
+            processed_backup_dir=processed_backup_dir,
+            config_backup_dir=config_backup_dir,
             manifest_paths=(),
             copied_files=tuple(copied_files),
             skipped_missing_files=tuple(skipped_missing_files),
             pruned_run_ids=(),
+            backup_root=backup_root,
+            snapshot_dir=snapshot_dir,
+            retention_day_local=retention_day_local,
+            migrated_legacy_paths=migrated_legacy_paths,
         )
-
-        if processed_targets:
-            manifest_path = processed_backup_dir / "backup_manifest.json"
-            _write_manifest(manifest_path, result=result, root_kind="processed")
-            manifest_paths.append(manifest_path)
-        if config_targets and config_backup_dir is not None:
-            manifest_path = config_backup_dir / "backup_manifest.json"
-            _write_manifest(manifest_path, result=result, root_kind="config")
-            manifest_paths.append(manifest_path)
-
-        pruned_run_ids = _prune_stage_runs(
-            stage=stage,
-            keep=keep,
-            processed_base_dir=processed_dir if processed_targets else None,
-            config_base_dir=config_dir if config_targets else None,
-        )
+        _write_manifest(manifest_path, provisional)
+        pruned_run_ids = _prune_snapshot_runs(backup_root)
         finalized = BackupRunResult(
             run_id=run_id,
             stage=stage,
             command=command,
             created_at=created_at,
-            processed_backup_dir=processed_backup_dir if processed_targets else None,
-            config_backup_dir=config_backup_dir if config_targets else None,
-            manifest_paths=tuple(manifest_paths),
+            processed_backup_dir=processed_backup_dir,
+            config_backup_dir=config_backup_dir,
+            manifest_paths=(manifest_path,),
             copied_files=tuple(copied_files),
             skipped_missing_files=tuple(skipped_missing_files),
             pruned_run_ids=pruned_run_ids,
+            backup_root=backup_root,
+            snapshot_dir=snapshot_dir,
+            retention_day_local=retention_day_local,
+            migrated_legacy_paths=migrated_legacy_paths,
         )
-
-        for manifest_path in manifest_paths:
-            _write_manifest(
-                manifest_path,
-                result=finalized,
-                root_kind="processed" if manifest_path.parent == processed_backup_dir else "config",
-            )
+        _write_manifest(manifest_path, finalized)
         return finalized
     except OSError:
-        shutil.rmtree(processed_backup_dir, ignore_errors=True)
-        if config_backup_dir is not None:
-            shutil.rmtree(config_backup_dir, ignore_errors=True)
+        shutil.rmtree(snapshot_dir, ignore_errors=True)
         raise

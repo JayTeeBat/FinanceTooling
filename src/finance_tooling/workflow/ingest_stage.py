@@ -96,6 +96,7 @@ def run_ingest(
     backup_command: str = "ingest",
     run_mode: str = "incremental",
     emit_ingest_summary: bool = False,
+    backup_run: BackupRunResult | None = None,
 ) -> IngestExecutionResult:
     """Execute ingest stage and write staged transaction artifacts."""
     registry = load_source_registry(source_registry_path(settings))
@@ -141,6 +142,8 @@ def run_ingest(
                 "hsbc_csv_files_scanned": 0,
                 "parser_low_confidence_file_count": 0,
                 "backup_run_id": None,
+                "backup_root": None,
+                "backup_snapshot_dir": None,
                 "backup_processed_dir": None,
                 "backup_config_dir": None,
                 "backup_manifest_paths": [],
@@ -214,12 +217,21 @@ def run_ingest(
         leave=False,
     )
     progress.set_postfix_str("backup")
-    backup_run = create_stage_backup_run(
-        stage="ingest",
-        command=backup_command,
-        processed_dir=settings.processed_path,
-        processed_targets=(settings.staged_transactions_path,),
-    )
+    if backup_run is None:
+        backup_run = create_stage_backup_run(
+            stage="ingest",
+            command=backup_command,
+            processed_dir=settings.processed_path,
+            processed_targets=(settings.staged_transactions_path,),
+            config_targets=(
+                settings.category_rules_path,
+                settings.project_rules_path,
+                settings.budget_targets_path,
+                settings.account_rules_path,
+                settings.project_overrides_path,
+                settings.transaction_overrides_path,
+            ),
+        )
     progress.update()
     progress.set_postfix_str("selection plan")
     progress.update()
@@ -344,6 +356,10 @@ def run_ingest(
             "hsbc_csv_files_scanned": ingest.hsbc_csv_files_scanned,
             "parser_low_confidence_file_count": ingest.parser_low_confidence_file_count,
             "backup_run_id": backup_run.run_id,
+            "backup_root": str(backup_run.backup_root) if backup_run.backup_root else None,
+            "backup_snapshot_dir": (
+                str(backup_run.snapshot_dir) if backup_run.snapshot_dir else None
+            ),
             "backup_processed_dir": (
                 str(backup_run.processed_backup_dir) if backup_run.processed_backup_dir else None
             ),

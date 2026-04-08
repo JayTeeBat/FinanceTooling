@@ -578,6 +578,14 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
                 "run_id": (
                     summary_payload.get("backup_run_id") if summary_payload is not None else None
                 ),
+                "root": (
+                    summary_payload.get("backup_root") if summary_payload is not None else None
+                ),
+                "snapshot_dir": (
+                    summary_payload.get("backup_snapshot_dir")
+                    if summary_payload is not None
+                    else None
+                ),
                 "processed_dir": (
                     summary_payload.get("backup_processed_dir")
                     if summary_payload is not None

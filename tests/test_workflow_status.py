@@ -264,7 +264,6 @@ def test_legacy_full_refresh_fingerprint_ignores_override_only_drift(tmp_path: P
 
     last_full_refresh_at = registry.last_full_refresh_at
     assert last_full_refresh_at is not None
-    run_id = "20260321T120000000000Z"
     registry = registry.__class__(
         generated_at=registry.generated_at,
         last_run_mode=registry.last_run_mode,
@@ -274,13 +273,23 @@ def test_legacy_full_refresh_fingerprint_ignores_override_only_drift(tmp_path: P
     )
     write_source_registry(source_registry_path(settings), registry)
 
-    backup_dir = settings.category_rules_path.parent / "backup" / "transform" / run_id
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    (backup_dir / settings.category_rules_path.name).write_text(
+    backup_dir = settings.processed_path.parent / "backup" / "20260321-120000-000000"
+    (backup_dir / "config").mkdir(parents=True, exist_ok=True)
+    (backup_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "run_id": "20260321-120000-000000",
+                "retention_day_local": "2026-03-21",
+                "created_at": "2026-03-21T12:00:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (backup_dir / "config" / settings.category_rules_path.name).write_text(
         settings.category_rules_path.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
-    (backup_dir / settings.project_rules_path.name).write_text(
+    (backup_dir / "config" / settings.project_rules_path.name).write_text(
         settings.project_rules_path.read_text(encoding="utf-8"),
         encoding="utf-8",
     )

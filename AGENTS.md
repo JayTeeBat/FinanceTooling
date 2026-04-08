@@ -182,6 +182,20 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-04-08 - codex
+- Branch: `codex/unified-backup-snapshots`
+- Completed:
+  - Replaced scattered stage/config backup behavior with one unified snapshot root under `data/backup`, including manifest-based retention of the latest 3 snapshots per retained run day and the latest 7 active run days.
+  - Reworked `update`, `transform`, `ingest`, and `review-import` so top-level mutating commands reuse a single pre-run snapshot and review-import no longer creates config-side `.bak` files.
+  - Updated drift lookup, workflow diagnostics, README docs, and focused tests to the new backup layout and retention model.
+- Checks:
+  - `uv run ruff check src/finance_tooling/backup.py src/finance_tooling/review_import.py src/finance_tooling/commands/review_import.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py src/finance_tooling/workflow/incremental_state.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow_status.py tests/test_backup.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_cli_dispatch.py README.md`: pass
+  - `uv run pytest -q tests/test_backup.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_cli_dispatch.py`: pass
+- Open items:
+  - The broader repo still has unrelated untracked local files outside this branch, so only the backup-system work should be included in the PR.
+- Next action:
+  - Merge the unified backup snapshot PR after review, then decide whether migration helpers such as transaction-id recovery tooling should be folded onto the same backup contract.
+
 ### 2026-04-07 - codex
 - Branch: `codex/example-config-starters`
 - Completed:
@@ -209,16 +223,3 @@ Success target for the 2026 validation campaign:
   - `household_healthcheck.html` remains as a secondary compatibility dashboard and still overlaps somewhat with the primary finance dashboard.
 - Next action:
   - Decide whether to keep `household_healthcheck.html` long-term or formally deprecate it after the finance dashboard settles.
-
-### 2026-04-03 - codex
-- Branch: `codex/fix-rule-drift-monitoring`
-- Completed:
-  - Narrowed full-refresh drift monitoring so only `category_rules.yaml` and `project_rules.yaml` count as stale-history config drift, while override files still participate in transform freshness.
-  - Added compatibility logic so registries written under the old wider fingerprint scheme reconcile against the saved full-refresh config backup instead of falsely flagging override churn as rule drift.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/workflow/incremental_state.py src/finance_tooling/workflow_status.py src/finance_tooling/workflow/ingest.py tests/test_workflow_status.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_workflow_status.py`: pass
-- Open items:
-  - Refreshing the persisted `workflow_pipeline_state.json` still depends on the processed mount being writable to `workflow-status`.
-- Next action:
-  - Publish the focused drift-monitoring fix as a draft PR and refresh the saved workflow-status snapshot once the processed mount is writable.

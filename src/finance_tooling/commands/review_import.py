@@ -77,15 +77,9 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "Create a timestamped backup before writing overrides "
-            "(default: enabled, stored under the config backup/ folder)."
+            "Create a pre-run snapshot backup before writing overrides "
+            "(default: enabled, stored under the data backup/ folder)."
         ),
-    )
-    parser.add_argument(
-        "--backup-path",
-        type=Path,
-        default=None,
-        help="Optional explicit backup destination path (overrides the default backup/ folder).",
     )
     parser.add_argument(
         "--run-transform",
@@ -125,20 +119,23 @@ def handle(args: argparse.Namespace) -> int:
             existing_transaction_store=transaction_overrides,
             dry_run=bool(args.dry_run),
             backup=bool(args.backup),
-            transaction_backup_path=args.backup_path,
             review_state_path=review_state_path,
-            category_rules_path=settings.category_rules_path,
+            category_rules_path=getattr(settings, "category_rules_path", None),
         )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Review import error: {exc}")
         return 1
     print_review_import_result(result, dry_run=bool(args.dry_run), verbose=bool(args.verbose))
     if not args.dry_run:
-        if result.transaction_backup_path is not None:
-            print("Transaction backup: created")
+        if result.backup_run is not None:
+            print("Backup snapshot: created")
         if args.run_transform:
             try:
-                workflow_result = run_transform(settings)
+                workflow_result = run_transform(
+                    settings,
+                    backup_command="review-import",
+                    backup_run=result.backup_run,
+                )
             except (FileNotFoundError, RuntimeError, ValueError) as exc:
                 print(f"Transform error after review import: {exc}")
                 return 1
