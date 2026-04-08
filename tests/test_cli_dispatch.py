@@ -533,7 +533,9 @@ def test_review_import_runs_transform_by_default(monkeypatch, tmp_path: Path, ca
     )
     monkeypatch.setattr(
         "finance_tooling.commands.review_import.run_transform",
-        lambda loaded_settings: transform_called.append(loaded_settings) or object(),
+        lambda loaded_settings, backup_command="transform", backup_run=None: (
+            transform_called.append(loaded_settings) or object()
+        ),
     )
 
     exit_code = main(["review-import"])
@@ -558,7 +560,12 @@ def test_review_import_can_skip_default_transform(monkeypatch, tmp_path: Path, c
         review_state_path=processed_dir / "review_state.parquet",
     )
 
-    def _transform(_settings: object) -> object:
+    def _transform(
+        _settings: object,
+        backup_command: str = "transform",
+        backup_run: object | None = None,
+    ) -> object:
+        del backup_command, backup_run
         raise AssertionError("transform should not run with --no-run-transform")
 
     monkeypatch.setattr(
@@ -844,7 +851,7 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
     config_dir = tmp_path / "config"
-    backup_run = BackupRunResult(
+    result_backup_run = BackupRunResult(
         run_id="20260321T101530000000Z",
         stage="transform",
         command="transform",
@@ -860,9 +867,14 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
     monkeypatch.setattr(
         "finance_tooling.commands.transform.load_settings_from_env", lambda: object()
     )
-    monkeypatch.setattr(
-        "finance_tooling.commands.transform.run_transform",
-        lambda _settings, staged_path=None: WorkflowResult(
+    def _run_transform(
+        _settings: object,
+        staged_path: Path | None = None,
+        backup_command: str = "transform",
+        backup_run: object | None = None,
+    ) -> WorkflowResult:
+        del staged_path, backup_command, backup_run
+        return WorkflowResult(
             dashboard_path=processed_dir / "finance_dashboard.html",
             parquet_path=processed_dir / "transactions_master.parquet",
             csv_path=processed_dir / "transactions_normalized.csv",
@@ -887,9 +899,10 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
             uncategorized_amount_eur_abs=0.0,
             categorized_amount_eur_abs_ratio=1.0,
             uncategorized_amount_eur_abs_ratio=0.0,
-            backup_run=backup_run,
-        ),
-    )
+            backup_run=result_backup_run,
+        )
+
+    monkeypatch.setattr("finance_tooling.commands.transform.run_transform", _run_transform)
 
     exit_code = main(["transform"])
     stdio = capsys.readouterr()
@@ -909,7 +922,7 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
     config_dir = tmp_path / "config"
-    backup_run = BackupRunResult(
+    result_backup_run = BackupRunResult(
         run_id="20260321T101530000000Z",
         stage="transform",
         command="transform",
@@ -925,9 +938,14 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
     monkeypatch.setattr(
         "finance_tooling.commands.transform.load_settings_from_env", lambda: object()
     )
-    monkeypatch.setattr(
-        "finance_tooling.commands.transform.run_transform",
-        lambda _settings, staged_path=None: WorkflowResult(
+    def _run_transform(
+        _settings: object,
+        staged_path: Path | None = None,
+        backup_command: str = "transform",
+        backup_run: object | None = None,
+    ) -> WorkflowResult:
+        del staged_path, backup_command, backup_run
+        return WorkflowResult(
             dashboard_path=processed_dir / "finance_dashboard.html",
             parquet_path=processed_dir / "transactions_master.parquet",
             csv_path=processed_dir / "transactions_normalized.csv",
@@ -956,16 +974,17 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
             uncategorized_count_delta=-1,
             categorized_amount_eur_abs_delta=1.0,
             uncategorized_amount_eur_abs_delta=-1.0,
-            backup_run=backup_run,
-        ),
-    )
+            backup_run=result_backup_run,
+        )
+
+    monkeypatch.setattr("finance_tooling.commands.transform.run_transform", _run_transform)
 
     exit_code = main(["transform", "--verbose"])
     stdio = capsys.readouterr()
 
     assert exit_code == 0
     assert "Backup run: 20260321T101530000000Z" in stdio.out
-    assert str(backup_run.config_backup_dir) not in stdio.out
+    assert str(result_backup_run.config_backup_dir) not in stdio.out
     assert (
         "Categorization by transaction count: "
         "0.00% uncategorized / 100.00% categorized"

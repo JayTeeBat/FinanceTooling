@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from finance_tooling.backup import create_stage_backup_run
 from finance_tooling.config import Settings
 from finance_tooling.models import WorkflowResult
 from finance_tooling.scanner import discover_statement_pdfs
@@ -30,7 +31,20 @@ def run_update(
         raise ValueError("--transform-only cannot be combined with --full-refresh.")
 
     if transform_only:
-        return run_transform(settings, backup_command="update")
+        backup_run = create_stage_backup_run(
+            stage="update",
+            command="update",
+            processed_dir=settings.processed_path,
+            config_targets=(
+                settings.category_rules_path,
+                settings.project_rules_path,
+                settings.budget_targets_path,
+                settings.account_rules_path,
+                settings.project_overrides_path,
+                settings.transaction_overrides_path,
+            ),
+        )
+        return run_transform(settings, backup_command="update", backup_run=backup_run)
 
     if not full_refresh:
         registry = load_source_registry(source_registry_path(settings))
@@ -59,13 +73,41 @@ def run_update(
             )
             if cached_result is not None:
                 return cached_result
-            return run_transform(settings, backup_command="update")
+            backup_run = create_stage_backup_run(
+                stage="update",
+                command="update",
+                processed_dir=settings.processed_path,
+                config_targets=(
+                    settings.category_rules_path,
+                    settings.project_rules_path,
+                    settings.budget_targets_path,
+                    settings.account_rules_path,
+                    settings.project_overrides_path,
+                    settings.transaction_overrides_path,
+                ),
+            )
+            return run_transform(settings, backup_command="update", backup_run=backup_run)
+
+    backup_run = create_stage_backup_run(
+        stage="update",
+        command="update",
+        processed_dir=settings.processed_path,
+        config_targets=(
+            settings.category_rules_path,
+            settings.project_rules_path,
+            settings.budget_targets_path,
+            settings.account_rules_path,
+            settings.project_overrides_path,
+            settings.transaction_overrides_path,
+        ),
+    )
 
     ingest_result = run_ingest(
         settings,
         backup_command="update",
         run_mode="full_refresh" if full_refresh else "incremental",
         emit_ingest_summary=emit_ingest_summary,
+        backup_run=backup_run,
     )
     if ingest_only:
         return ingest_result
@@ -75,6 +117,7 @@ def run_update(
         staged_path=ingest_result.staged_path,
         ingest_result=ingest_result,
         backup_command="update",
+        backup_run=backup_run,
     )
 
 

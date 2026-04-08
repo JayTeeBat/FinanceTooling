@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -538,15 +539,20 @@ def test_import_review_into_overrides_writes_transaction_overrides_and_review_st
     assert review_state.loc[0, "transaction_id"] == "tx_1"
     assert bool(review_state.loc[0, "reviewed"]) is True
     assert review_state.loc[0, "review_comment"] == "done"
-    assert result.transaction_backup_path is None
+    assert result.backup_run is not None
 
 
 def test_import_review_into_overrides_defaults_backup_into_config_backup_folder(
     tmp_path: Path,
 ) -> None:
     review_path = tmp_path / "transactions_review.xlsx"
-    transaction_overrides_path = tmp_path / "transaction_overrides.yaml"
-    review_state_path = tmp_path / "review_state.parquet"
+    data_dir = tmp_path / "data"
+    processed_dir = data_dir / "processed"
+    config_dir = data_dir / "config"
+    processed_dir.mkdir(parents=True)
+    config_dir.mkdir(parents=True)
+    transaction_overrides_path = config_dir / "transaction_overrides.yaml"
+    review_state_path = processed_dir / "state" / "review_state.parquet"
     write_transaction_override_store(
         transaction_overrides_path,
         TransactionOverrideStore(
@@ -599,19 +605,24 @@ def test_import_review_into_overrides_defaults_backup_into_config_backup_folder(
         review_state_path=review_state_path,
     )
 
-    assert result.transaction_backup_path is not None
-    assert result.transaction_backup_path.parent == transaction_overrides_path.parent / "backup"
-    assert result.transaction_backup_path.name.startswith("transaction_overrides.yaml.")
-    assert result.transaction_backup_path.name.endswith(".bak")
-    assert result.transaction_backup_path.exists()
+    assert result.backup_run is not None
+    assert result.backup_run.backup_root == data_dir / "backup"
+    assert result.transaction_backup_path == result.backup_run.snapshot_dir
+    assert result.backup_run.snapshot_dir is not None
+    assert (result.backup_run.snapshot_dir / "manifest.json").exists()
+    assert (result.backup_run.config_backup_dir / "transaction_overrides.yaml").exists()
 
 
 def test_import_review_into_overrides_prunes_old_backups_to_last_ten(tmp_path: Path) -> None:
     review_path = tmp_path / "transactions_review.xlsx"
-    transaction_overrides_path = tmp_path / "transaction_overrides.yaml"
-    review_state_path = tmp_path / "review_state.parquet"
-    backup_dir = transaction_overrides_path.parent / "backup"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = tmp_path / "data"
+    processed_dir = data_dir / "processed"
+    config_dir = data_dir / "config"
+    backup_dir = data_dir / "backup"
+    processed_dir.mkdir(parents=True)
+    config_dir.mkdir(parents=True)
+    transaction_overrides_path = config_dir / "transaction_overrides.yaml"
+    review_state_path = processed_dir / "state" / "review_state.parquet"
     write_transaction_override_store(
         transaction_overrides_path,
         TransactionOverrideStore(
@@ -637,9 +648,21 @@ def test_import_review_into_overrides_prunes_old_backups_to_last_ten(tmp_path: P
             )
         ),
     )
-    for index in range(10):
-        path = backup_dir / f"transaction_overrides.yaml.20260310-00000{index}.bak"
-        path.write_text(f"backup-{index}", encoding="utf-8")
+    for index in range(4):
+        run_id = f"20260310-0{index + 1}0000-000000"
+        snapshot_dir = backup_dir / run_id
+        (snapshot_dir / "processed").mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "config").mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "retention_day_local": "2026-03-10",
+                    "created_at": "2026-03-10T00:00:00+00:00",
+                }
+            ),
+            encoding="utf-8",
+        )
     pd.DataFrame(
         [
             {
@@ -667,10 +690,12 @@ def test_import_review_into_overrides_prunes_old_backups_to_last_ten(tmp_path: P
         review_state_path=review_state_path,
     )
 
-    assert result.transaction_backup_path is not None
-    backups = sorted(backup_dir.glob("transaction_overrides.yaml*.bak"))
-    assert len(backups) == 10
-    assert not (backup_dir / "transaction_overrides.yaml.20260310-000000.bak").exists()
+    assert result.backup_run is not None
+    retained = sorted(
+        child.name for child in backup_dir.iterdir() if child.is_dir() and child.name != "legacy"
+    )
+    assert len(retained) == 4
+    assert "20260310-010000-000000" not in retained
 
 
 def test_import_review_into_overrides_skips_unchanged_categorized_rows(tmp_path: Path) -> None:

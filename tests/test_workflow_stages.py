@@ -1428,7 +1428,7 @@ def test_run_update_skips_ingest_when_incremental_selection_is_empty(
     )
     monkeypatch.setattr(
         "finance_tooling.workflow.update_stage.run_transform",
-        lambda _settings, backup_command="transform": expected,
+        lambda _settings, backup_command="transform", backup_run=None: expected,
     )
 
     result = run_update(settings)
@@ -1436,12 +1436,13 @@ def test_run_update_skips_ingest_when_incremental_selection_is_empty(
     assert result == expected
 
 
-def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
+def test_run_transform_creates_unified_snapshot_backup_and_prunes_same_day_snapshots(
     monkeypatch, tmp_path: Path
 ) -> None:
-    input_dir = tmp_path / "input"
-    input_dir.mkdir()
-    config_dir = tmp_path / "config"
+    data_dir = tmp_path / "data"
+    input_dir = data_dir / "raw"
+    input_dir.mkdir(parents=True)
+    config_dir = data_dir / "config"
     config_dir.mkdir()
     settings = replace(
         _settings(input_dir),
@@ -1457,12 +1458,22 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
     )
     settings.transaction_overrides_path.write_text("version: 1\noverrides: []\n", encoding="utf-8")
     settings.master_parquet_path.write_text("existing-master", encoding="utf-8")
-    processed_backup_root = input_dir / "backup" / "transform"
-    config_backup_root = config_dir / "backup" / "transform"
-    for index in range(10):
-        run_id = f"20260310T00000{index}000000Z"
-        (processed_backup_root / run_id).mkdir(parents=True, exist_ok=True)
-        (config_backup_root / run_id).mkdir(parents=True, exist_ok=True)
+    backup_root = input_dir / "backup"
+    for index in range(3):
+        run_id = f"20260310-0{index + 1}0000-000000"
+        snapshot_dir = backup_root / run_id
+        (snapshot_dir / "processed").mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "config").mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "retention_day_local": "2026-03-10",
+                    "created_at": "2026-03-10T00:00:00+00:00",
+                }
+            ),
+            encoding="utf-8",
+        )
 
     monkeypatch.setattr(
         "finance_tooling.workflow.transform_stage.read_staged_transactions",
@@ -1542,15 +1553,19 @@ def test_run_transform_creates_category_rules_backup_and_prunes_to_last_ten(
 
     backup_run = cast(BackupRunResult, captured["backup_run"])
     assert backup_run is not None
+    assert backup_run.backup_root == backup_root
+    assert backup_run.snapshot_dir is not None
     assert backup_run.processed_backup_dir is not None
     assert backup_run.config_backup_dir is not None
-    assert (backup_run.processed_backup_dir / "transform_transactions.parquet").exists()
+    assert (backup_run.processed_backup_dir / "outputs" / "transform_transactions.parquet").exists()
     assert (backup_run.config_backup_dir / "category_rules.yaml").exists()
     assert (backup_run.config_backup_dir / "project_rules.yaml").exists()
     assert (backup_run.config_backup_dir / "project_overrides.yaml").exists()
     assert (backup_run.config_backup_dir / "transaction_overrides.yaml").exists()
-    assert len(list(processed_backup_root.iterdir())) == 10
-    assert len(list(config_backup_root.iterdir())) == 10
+    retained = sorted(
+        child.name for child in backup_root.iterdir() if child.is_dir() and child.name != "legacy"
+    )
+    assert len(retained) == 4
 
 
 def test_run_ingest_creates_staged_backup_run(tmp_path: Path, monkeypatch) -> None:
@@ -1605,9 +1620,9 @@ def test_run_ingest_creates_staged_backup_run(tmp_path: Path, monkeypatch) -> No
     assert result.backup_run is not None
     assert result.backup_run.processed_backup_dir is not None
     assert (
-        result.backup_run.processed_backup_dir / "ingest_staged_transactions.parquet"
+        result.backup_run.processed_backup_dir / "state" / "ingest_staged_transactions.parquet"
     ).exists()
-    assert result.backup_run.config_backup_dir is None
+    assert result.backup_run.config_backup_dir is not None
 
 
 def test_run_update_rejects_conflicting_stage_flags(tmp_path: Path) -> None:

@@ -123,10 +123,10 @@ Detailed guides:
 - Carries forward prior manual category/subcategory (`transaction_override`)
   when parser cleanup changes transaction descriptions but the same transaction can be
   matched deterministically.
-- Creates a pre-run backup snapshot of the current master parquet under
-  `${FINANCE_PROCESSED_PATH}/backup/transform/<run_id>/` and the current
-  categorization/project configs under `${FINANCE_STATEMENTS_PATH}/../config/backup/transform/<run_id>/`.
-  The latest 10 transform runs are retained.
+- Creates one pre-run snapshot under `${FINANCE_STATEMENTS_PATH}/../backup/<snapshot_id>/`
+  containing the current `processed/` tree plus active config files. Retention keeps
+  the latest `3` snapshots for each retained run day and the latest `7` run days that
+  actually had pipeline activity.
 - Writes canonical outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
   `household_healthcheck.html`, `transform_transactions.parquet`,
   `transform_transactions.csv`, `transform_run_summary.json`, and
@@ -227,9 +227,8 @@ normal `update` flow.
   source documents. Modified or missing previously committed files are reported
   as stale conditions and require a guarded full refresh to re-sync history.
 - Parses and normalizes raw transaction records.
-- Creates a pre-run backup snapshot of the current staged parquet under
-  `${FINANCE_PROCESSED_PATH}/backup/ingest/<run_id>/` and keeps the latest 10
-  ingest runs.
+- Reuses the same unified pre-run snapshot model under
+  `${FINANCE_STATEMENTS_PATH}/../backup/<snapshot_id>/`.
 - Writes staged data to `${FINANCE_PROCESSED_PATH}/state/ingest_staged_transactions.parquet`.
 - Writes a self-describing staged batch manifest to
   `${FINANCE_PROCESSED_PATH}/state/ingest_staged_batch_manifest.json`.
@@ -317,13 +316,10 @@ uv run review-import \
 ```
 
 By default, `review-import` aborts when existing override-load warnings are present.
-When backups are enabled, it now stores timestamped config backups under the
-config `backup/` folder by default instead of cluttering the main config
-directory.
-`transform` also snapshots `category_rules.yaml` into the same config `backup/`
-folder before enrichment, and retention keeps only the latest `10` backups for
-both `category_rules.yaml` and `transaction_overrides.yaml` using FIFO
-pruning.
+When backups are enabled, `review-import` writes into the same unified
+`${FINANCE_STATEMENTS_PATH}/../backup/` snapshot root used by `ingest`,
+`transform`, and `update`; it no longer creates per-file `.bak` copies beside
+live config files.
 Use `--allow-load-warnings` only for deliberate recovery flows.
 For `review-export`, output is uncategorized-only by default; use
 `--include-categorized` to include already-categorized rows. Optional
@@ -466,8 +462,7 @@ mismatches are emitted as warnings and included in transform-summary reconciliat
   - `transform_completeness_report.json` when diagnostics are enabled
 - Compatibility-only optional export:
   - `transform_transactions.json` when JSON export is enabled
-- Automatic backup run folders under `processed/backup/ingest`,
-  `processed/backup/transform`, and `config/backup/transform`
+- Unified snapshot backups under `${FINANCE_STATEMENTS_PATH}/../backup/`
 
 ## Developer Notes
 

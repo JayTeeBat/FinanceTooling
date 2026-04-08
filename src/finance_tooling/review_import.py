@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from finance_tooling.backup import create_backup
+from finance_tooling.backup import BackupRunResult, create_stage_backup_run
 from finance_tooling.classify import load_classification_rules, resolve_category_id_from_labels
 from finance_tooling.config import load_settings_from_env
 from finance_tooling.review_common import (
@@ -50,10 +50,50 @@ class ReviewImportResult:
     rows_skipped_invalid_project_tags: int = 0
     rows_skipped_invalid_review_state: int = 0
     transaction_backup_path: Path | None = None
+    backup_run: BackupRunResult | None = None
 
 
-def _backup_override_store(path: Path, backup_path: Path | None) -> Path | None:
-    return create_backup(path, backup_path)
+def _resolve_review_import_backup_run(
+    *,
+    review_path: Path,
+    transaction_overrides_path: Path,
+    review_state_path: Path | None,
+    category_rules_path: Path | None,
+) -> BackupRunResult:
+    processed_dir = (
+        review_state_path.parent.parent
+        if review_state_path is not None
+        else review_path.parent / "processed"
+    )
+    config_dir = transaction_overrides_path.parent
+    config_targets = [
+        category_rules_path or (config_dir / "category_rules.yaml"),
+        config_dir / "project_rules.yaml",
+        config_dir / "budget_targets.yaml",
+        config_dir / "account_rules.yaml",
+        config_dir / "project_overrides.yaml",
+        transaction_overrides_path,
+    ]
+    try:
+        settings = load_settings_from_env()
+    except Exception:
+        settings = None
+    if settings is not None:
+        processed_dir = settings.processed_path if review_state_path is None else processed_dir
+        config_targets = [
+            category_rules_path or settings.category_rules_path,
+            settings.project_rules_path,
+            settings.budget_targets_path,
+            settings.account_rules_path,
+            settings.project_overrides_path,
+            transaction_overrides_path,
+        ]
+    return create_stage_backup_run(
+        stage="review-import",
+        command="review-import",
+        processed_dir=processed_dir,
+        config_targets=tuple(config_targets),
+    )
 
 
 def _parse_category_transaction_override_row(
@@ -153,7 +193,7 @@ def import_review_into_overrides(
     category_rules_path: Path | None = None,
     dry_run: bool = False,
     backup: bool = True,
-    transaction_backup_path: Path | None = None,
+    backup_run: BackupRunResult | None = None,
 ) -> ReviewImportResult:
     """Import reviewed rows and upsert into transaction override config."""
     dataframe = read_table(review_path)
@@ -229,6 +269,14 @@ def import_review_into_overrides(
     resolved_transaction_path = transaction_overrides_path or Path(
         "config/transaction_overrides.yaml"
     )
+    created_backup_run = backup_run
+    if not dry_run and backup and created_backup_run is None:
+        created_backup_run = _resolve_review_import_backup_run(
+            review_path=review_path,
+            transaction_overrides_path=resolved_transaction_path,
+            review_state_path=review_state_path,
+            category_rules_path=category_rules_path,
+        )
     tx_updated = 0
     tx_inserted = 0
     review_state_upserted = 0
@@ -260,13 +308,7 @@ def import_review_into_overrides(
     elif dry_run and review_state_path is not None:
         review_state_upserted = len(review_state_updates)
 
-    created_transaction_backup_path: Path | None = None
     if not dry_run:
-        if merged_transaction_store is not None and backup and (tx_updated > 0 or tx_inserted > 0):
-            created_transaction_backup_path = _backup_override_store(
-                resolved_transaction_path,
-                transaction_backup_path,
-            )
         if merged_transaction_store is not None and (tx_updated > 0 or tx_inserted > 0):
             write_transaction_override_store(
                 resolved_transaction_path,
@@ -288,5 +330,8 @@ def import_review_into_overrides(
         rows_skipped_invalid_category=len(invalid_category_rows),
         rows_skipped_invalid_project_tags=len(invalid_project_rows),
         rows_skipped_invalid_review_state=len(invalid_review_state_rows),
-        transaction_backup_path=created_transaction_backup_path,
+        transaction_backup_path=(
+            created_backup_run.snapshot_dir if created_backup_run is not None else None
+        ),
+        backup_run=created_backup_run,
     )
