@@ -293,6 +293,7 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert pipeline_payload["ingest_diagnostics"]["ingest_text_cache_hits"] == 0
     assert pipeline_payload["ingest_diagnostics"]["ingest_text_cache_misses"] == 0
     assert pipeline_payload["ingest_diagnostics"]["ingest_text_cache_write_count"] == 0
+    assert pipeline_payload["ingest_diagnostics"]["effective_ingest_workers"] == 1
 
     assert result.completeness_path == settings.completeness_json_path
     assert result.completeness_status == "fail"

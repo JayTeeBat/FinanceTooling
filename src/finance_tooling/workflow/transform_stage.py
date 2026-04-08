@@ -564,6 +564,7 @@ def run_transform(
         ingest_text_cache_hits = ingest_result.ingest_text_cache_hits
         ingest_text_cache_misses = ingest_result.ingest_text_cache_misses
         ingest_text_cache_write_count = ingest_result.ingest_text_cache_write_count
+        effective_ingest_workers = ingest_result.effective_ingest_workers
         warnings = [
             *ingest_result.warnings,
             *enrichment.warnings,
@@ -627,6 +628,7 @@ def run_transform(
         ingest_text_cache_write_count = _manifest_int(
             manifest_context, "ingest_text_cache_write_count"
         )
+        effective_ingest_workers = _manifest_int(manifest_context, "effective_ingest_workers")
         warnings = [*enrichment.warnings]
         run_mode = manifest.run_mode
         files_selected_for_processing = manifest.files_selected_for_processing
@@ -672,6 +674,7 @@ def run_transform(
         ingest_text_cache_hits=ingest_text_cache_hits,
         ingest_text_cache_misses=ingest_text_cache_misses,
         ingest_text_cache_write_count=ingest_text_cache_write_count,
+        effective_ingest_workers=effective_ingest_workers,
         manual_category_carry_forward_applied_count=(
             enrichment.manual_category_carry_forward_applied_count
         ),

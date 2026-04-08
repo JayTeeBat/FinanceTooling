@@ -65,6 +65,7 @@ class PerformanceSummaryPayload(TypedDict):
     ingest_text_cache_hits: int
     ingest_text_cache_misses: int
     ingest_text_cache_write_count: int
+    effective_ingest_workers: int
 
 
 @dataclass(frozen=True)
@@ -192,6 +193,7 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         ingest_text_cache_hits=ingest.text_cache_hits,
         ingest_text_cache_misses=ingest.text_cache_misses,
         ingest_text_cache_write_count=ingest.text_cache_write_count,
+        effective_ingest_workers=ingest.effective_ingest_workers,
         manual_category_carry_forward_applied_count=(
             enrichment.manual_category_carry_forward_applied_count
         ),
@@ -244,6 +246,7 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         "ingest_text_cache_hits": ingest.text_cache_hits,
         "ingest_text_cache_misses": ingest.text_cache_misses,
         "ingest_text_cache_write_count": ingest.text_cache_write_count,
+        "effective_ingest_workers": ingest.effective_ingest_workers,
     }
     performance_summary_path = (
         state_root_path(settings) / WORKFLOW_PERFORMANCE_SUMMARY_FILENAME

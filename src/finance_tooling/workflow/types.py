@@ -160,6 +160,7 @@ class IngestResult:
     text_cache_hits: int
     text_cache_misses: int
     text_cache_write_count: int
+    effective_ingest_workers: int = 1
     run_mode: str = "incremental"
     files_selected_for_processing: int = 0
     files_skipped_already_committed: int = 0

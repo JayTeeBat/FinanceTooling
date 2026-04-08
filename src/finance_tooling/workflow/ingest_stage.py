@@ -71,6 +71,7 @@ class IngestExecutionResult:
     ingest_text_cache_hits: int
     ingest_text_cache_misses: int
     ingest_text_cache_write_count: int
+    effective_ingest_workers: int = 1
     newly_covered_months: tuple[str, ...] = ()
     ingest_summary_path: Path | None = None
     run_mode: str = "incremental"
@@ -153,6 +154,7 @@ def run_ingest(
                 "ingest_text_cache_hits": 0,
                 "ingest_text_cache_misses": 0,
                 "ingest_text_cache_write_count": 0,
+                "effective_ingest_workers": 1,
                 "source_inventory": {
                     "raw_file_count": selection_plan.current_inventory.raw_file_count,
                     "unique_document_count": selection_plan.current_inventory.unique_document_count,
@@ -190,6 +192,7 @@ def run_ingest(
             ingest_text_cache_hits=0,
             ingest_text_cache_misses=0,
             ingest_text_cache_write_count=0,
+            effective_ingest_workers=1,
             newly_covered_months=(),
             ingest_summary_path=ingest_summary_path,
             run_mode="incremental",
@@ -310,6 +313,7 @@ def run_ingest(
             "ingest_text_cache_hits": ingest.text_cache_hits,
             "ingest_text_cache_misses": ingest.text_cache_misses,
             "ingest_text_cache_write_count": ingest.text_cache_write_count,
+            "effective_ingest_workers": ingest.effective_ingest_workers,
         },
     )
     staged_manifest_path = staged_batch_manifest_path(settings)
@@ -357,6 +361,7 @@ def run_ingest(
             "ingest_text_cache_hits": ingest.text_cache_hits,
             "ingest_text_cache_misses": ingest.text_cache_misses,
             "ingest_text_cache_write_count": ingest.text_cache_write_count,
+            "effective_ingest_workers": ingest.effective_ingest_workers,
             "source_inventory": {
                 "raw_file_count": selection_plan.current_inventory.raw_file_count,
                 "unique_document_count": selection_plan.current_inventory.unique_document_count,
@@ -396,6 +401,7 @@ def run_ingest(
         ingest_text_cache_hits=ingest.text_cache_hits,
         ingest_text_cache_misses=ingest.text_cache_misses,
         ingest_text_cache_write_count=ingest.text_cache_write_count,
+        effective_ingest_workers=ingest.effective_ingest_workers,
         newly_covered_months=tuple(
             sorted({tx.booking_date.strftime("%Y-%m") for tx in ingest.transactions})
         ),

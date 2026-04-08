@@ -525,8 +525,9 @@ uv run python -m finance_tooling.perf_check
 The run writes standard artifacts plus `performance_summary.json` under the
 isolated `FINANCE_PROCESSED_PATH`, including total runtime and per-stage timings
 (`ingest`, `hsbc_merge`, `enrichment`, `reporting`).
-Set `FINANCE_INGEST_WORKERS` to `>1` to enable multiprocessing during ingestion
-prep; default is `1`.
+Set `FINANCE_INGEST_WORKERS` to override the ingestion worker count. The default
+is adaptive and uses up to `4` workers. Set `FINANCE_INGEST_WORKERS=1` to force
+serial ingestion.
 Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
 `<FINANCE_STATEMENTS_PATH>/../cache/ingest_text_cache.parquet` (or override path via
 `FINANCE_INGEST_TEXT_CACHE_PATH`) and speed up repeated runs.
