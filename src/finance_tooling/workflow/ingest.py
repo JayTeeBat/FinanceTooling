@@ -482,11 +482,13 @@ def ingest_statements(
                 files_for_prepare.append(pdf_path)
                 text_cache_misses += 1
 
-    if _can_use_parallel_prepare(
+    can_use_parallel_prepare = _can_use_parallel_prepare(
         settings=settings,
         extract_text_from_pdf=extract_text_from_pdf,
         select_parser_with_diagnostics=select_parser_with_diagnostics,
-    ):
+    )
+    effective_ingest_workers = settings.ingest_workers if can_use_parallel_prepare else 1
+    if can_use_parallel_prepare:
         prepared_files = _prepare_statements_parallel(
             files_for_prepare,
             source_document_ids=source_document_ids,
@@ -726,6 +728,7 @@ def ingest_statements(
         text_cache_hits=text_cache_hits,
         text_cache_misses=text_cache_misses,
         text_cache_write_count=text_cache_write_count,
+        effective_ingest_workers=effective_ingest_workers,
         source_inventory_path=None,
         run_mode=run_mode,
         files_selected_for_processing=len(files),

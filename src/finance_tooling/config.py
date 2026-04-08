@@ -121,6 +121,10 @@ def _parse_bool(raw_value: str | None, *, default: bool) -> bool:
     raise ValueError(f"Invalid boolean value: {raw_value}")
 
 
+def _default_ingest_workers() -> int:
+    return min(os.cpu_count() or 1, 4)
+
+
 def _parse_int(raw_value: str | None, *, default: int, minimum: int) -> int:
     if raw_value is None:
         return default
@@ -245,7 +249,11 @@ def load_settings_from_env() -> Settings:
         state_dir / WORKFLOW_FX_CACHE_FILENAME
     )
     fx_auto_fetch = _parse_bool(os.environ.get(FX_AUTO_FETCH_ENV), default=True)
-    ingest_workers = _parse_int(os.environ.get(INGEST_WORKERS_ENV), default=1, minimum=1)
+    ingest_workers = _parse_int(
+        os.environ.get(INGEST_WORKERS_ENV),
+        default=_default_ingest_workers(),
+        minimum=1,
+    )
     ingest_text_cache_enabled = _parse_bool(
         os.environ.get(INGEST_TEXT_CACHE_ENABLED_ENV),
         default=False,

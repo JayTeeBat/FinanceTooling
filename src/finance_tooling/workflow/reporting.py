@@ -431,6 +431,7 @@ def persist_and_report(
     ingest_text_cache_hits: int,
     ingest_text_cache_misses: int,
     ingest_text_cache_write_count: int,
+    effective_ingest_workers: int,
     manual_category_carry_forward_applied_count: int,
     manual_category_carry_forward_ambiguous_skipped_count: int,
     manual_category_carry_forward_unmatched_count: int,

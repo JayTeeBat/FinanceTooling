@@ -113,6 +113,7 @@ class IngestDiagnosticsState(TypedDict):
     ingest_text_cache_hits: int
     ingest_text_cache_misses: int
     ingest_text_cache_write_count: int
+    effective_ingest_workers: int
 
 
 class TransformDiagnosticsState(TypedDict):
@@ -508,6 +509,9 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
             ),
             "ingest_text_cache_write_count": _context_int(
                 manifest_context, "ingest_text_cache_write_count"
+            ),
+            "effective_ingest_workers": _context_int(
+                manifest_context, "effective_ingest_workers"
             ),
         },
         "transform_diagnostics": {

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from finance_tooling.config import (
@@ -108,7 +109,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.review_export_dark_safe is True
     assert settings.base_currency == "EUR"
     assert settings.fx_auto_fetch is True
-    assert settings.ingest_workers == 1
+    assert settings.ingest_workers == min(os.cpu_count() or 1, 4)
     assert settings.ingest_text_cache_enabled is False
     assert (
         settings.ingest_text_cache_path

@@ -102,6 +102,7 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
         text_cache_hits=0,
         text_cache_misses=0,
         text_cache_write_count=0,
+        effective_ingest_workers=1,
     )
     hsbc_diagnostics_result = HsbcDiagnosticsResult(
         warnings=[],
@@ -200,6 +201,7 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
             "ingest_text_cache_hits": 0,
             "ingest_text_cache_misses": 0,
             "ingest_text_cache_write_count": 0,
+            "effective_ingest_workers": 1,
         }
 
     monkeypatch.setattr("finance_tooling.perf_check.persist_and_report", _persist)
@@ -226,6 +228,7 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
     assert '"ingest_duration_seconds_by_bank"' in payload
     assert '"ingest_text_cache_enabled": false' in payload
     assert '"ingest_text_cache_hits": 0' in payload
+    assert '"effective_ingest_workers": 1' in payload
 
 
 def test_assert_isolated_processed_path_blocks_dotenv_processed_dir(
