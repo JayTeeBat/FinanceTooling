@@ -183,7 +183,7 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-04-09 - codex
-- Branch: `main`
+- Branch: `codex/package-layout-cleanup`
 - Completed:
   - Fixed `review-import` backup/path resolution so explicit review and override paths no longer get redirected through ambient env-backed processed paths.
   - Hard-moved core infrastructure into `src/finance_tooling/core/`, categorization modules into `src/finance_tooling/categorization/`, review helpers into `src/finance_tooling/review/`, reporting modules into `src/finance_tooling/reporting/`, planning modules into `src/finance_tooling/planning/`, and audit/maintenance tools into `src/finance_tooling/audits/` and `src/finance_tooling/maintenance/`.
@@ -200,6 +200,7 @@ Success target for the 2026 validation campaign:
   - `.venv/bin/ty check src/finance_tooling tests`: fail (pre-existing typing debt remains)
 - Open items:
   - The tracked package root is now effectively reduced to package entrypoints; the main remaining cleanup work is typed payload/type-check debt rather than package layout.
+  - Draft PR opened: `#79`
 - Next action:
   - Attack the remaining `ty` diagnostics with typed payload cleanup, starting with reporting/status JSON payload contracts.
 
