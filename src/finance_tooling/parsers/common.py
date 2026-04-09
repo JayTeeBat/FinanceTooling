@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 
 if TYPE_CHECKING:
     from finance_tooling.parsers.base import NormalizeConfig, ParsedRow

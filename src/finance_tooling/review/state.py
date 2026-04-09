@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.models import Transaction
-from finance_tooling.store import compute_transaction_id
+from finance_tooling.core.models import Transaction
+from finance_tooling.core.store import compute_transaction_id
 
 REVIEW_STATE_COLUMNS = ("transaction_id", "reviewed", "review_comment", "updated_at")
 

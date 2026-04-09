@@ -2,7 +2,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.projecting import assign_projects_to_dataframe, load_project_config
+from finance_tooling.categorization.projecting import (
+    assign_projects_to_dataframe,
+    load_project_config,
+)
 
 
 def test_assign_projects_uses_override_rule_and_fallback(tmp_path: Path) -> None:

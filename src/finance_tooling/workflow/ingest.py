@@ -15,10 +15,15 @@ from typing import cast
 
 from tqdm import tqdm
 
-from finance_tooling.config import Settings
-from finance_tooling.extract import ExtractedPdfText
-from finance_tooling.extract import extract_text_from_pdf as default_extract_text_from_pdf
-from finance_tooling.models import Transaction
+from finance_tooling.core.config import Settings
+from finance_tooling.core.extract import ExtractedPdfText
+from finance_tooling.core.extract import extract_text_from_pdf as default_extract_text_from_pdf
+from finance_tooling.core.models import Transaction
+from finance_tooling.core.source_inventory import (
+    SourceInventorySnapshot,
+    build_source_inventory,
+    representative_source_files,
+)
 from finance_tooling.parsers.base import StatementParser, StatementValidation
 from finance_tooling.parsers.generic import GenericParser
 from finance_tooling.parsers.registry import (
@@ -27,11 +32,6 @@ from finance_tooling.parsers.registry import (
 )
 from finance_tooling.parsers.registry import (
     select_parser_with_diagnostics as default_select_parser_with_diagnostics,
-)
-from finance_tooling.source_inventory import (
-    SourceInventorySnapshot,
-    build_source_inventory,
-    representative_source_files,
 )
 from finance_tooling.workflow.ingest_cache import (
     CachedExtractionRow,

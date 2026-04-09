@@ -12,7 +12,7 @@ from typing import Literal, cast
 
 import yaml
 
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 
 MatchType = Literal["contains", "exact", "regex"]
 CashflowType = Literal["in", "out", "transfer", "exclude"]

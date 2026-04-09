@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.cashflow import build_cashflow_rows_frame, build_cashflow_yoy_summary
-from finance_tooling.projecting import (
+from finance_tooling.categorization.projecting import (
     ProjectConfig,
     assign_projects_to_dataframe,
     load_project_config,
 )
+from finance_tooling.reporting.cashflow import build_cashflow_rows_frame, build_cashflow_yoy_summary
 
 
 def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: str) -> pd.Series:

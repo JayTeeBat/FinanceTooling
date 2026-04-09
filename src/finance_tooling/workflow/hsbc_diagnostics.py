@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.workflow.ingest import extract_statement_date
 from finance_tooling.workflow.types import HsbcDiagnosticsResult, HsbcSelectionDiagnostic

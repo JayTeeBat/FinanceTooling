@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.backup import BackupRunResult
+from finance_tooling.core.backup import BackupRunResult
 
 CANONICAL_TRANSACTION_COLUMNS = [
     "transaction_id",

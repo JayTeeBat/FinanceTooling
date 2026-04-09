@@ -4,12 +4,12 @@ from datetime import date
 
 import pandas as pd
 
-from finance_tooling.categorization_audit import (
+from finance_tooling.audits.categorization import (
     build_categorization_audit,
     render_categorization_audit_markdown,
 )
-from finance_tooling.classify import ClassificationRules, TaxonomyCategory
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.classify import ClassificationRules, TaxonomyCategory
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
 )

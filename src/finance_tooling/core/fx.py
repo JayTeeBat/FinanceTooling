@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 
 _ECB_SOURCE = "ECB_SDW"
 _ECB_URL = "https://data-api.ecb.europa.eu/service/data/EXR"

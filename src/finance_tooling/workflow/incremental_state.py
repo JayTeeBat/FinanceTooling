@@ -12,17 +12,16 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from finance_tooling.backup import backup_root_from_processed_dir
-from finance_tooling.config import (
+from finance_tooling.core.backup import backup_root_from_processed_dir
+from finance_tooling.core.config import (
     LEGACY_STAGED_TRANSACTIONS_FILENAME,
     TRANSFORM_SOURCE_REGISTRY_FILENAME,
     Settings,
     ingest_state_path,
     state_root_path,
 )
-from finance_tooling.parsers.base import StatementValidation
-from finance_tooling.scanner import discover_statement_pdfs
-from finance_tooling.source_inventory import (
+from finance_tooling.core.scanner import discover_statement_pdfs
+from finance_tooling.core.source_inventory import (
     SourceInventoryEntry,
     SourceInventorySnapshot,
     build_source_inventory,
@@ -30,6 +29,7 @@ from finance_tooling.source_inventory import (
     load_source_inventory,
     load_source_inventory_payload,
 )
+from finance_tooling.parsers.base import StatementValidation
 
 RunMode = Literal["incremental", "full_refresh"]
 

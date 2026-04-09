@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.budgeting import build_budget_status, load_budget_config
+from finance_tooling.planning.budgeting import build_budget_status, load_budget_config
 
 
 def test_build_budget_status_supports_category_and_project_targets(tmp_path: Path) -> None:

@@ -7,8 +7,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from finance_tooling.config import Settings
-from finance_tooling.source_inventory import build_source_inventory
+from finance_tooling.core.config import Settings
+from finance_tooling.core.source_inventory import build_source_inventory
+from finance_tooling.reporting.workflow_status import build_pipeline_state
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
     compute_rule_config_fingerprint,
@@ -19,7 +20,6 @@ from finance_tooling.workflow.incremental_state import (
     update_source_registry,
     write_source_registry,
 )
-from finance_tooling.workflow_status import build_pipeline_state
 
 HAS_PYARROW = importlib.util.find_spec("pyarrow") is not None
 pytestmark = pytest.mark.skipif(not HAS_PYARROW, reason="pyarrow is required")

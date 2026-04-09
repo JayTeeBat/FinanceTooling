@@ -5,10 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from finance_tooling.backup import BackupRunResult, create_stage_backup_run
-from finance_tooling.classify import load_classification_rules, resolve_category_id_from_labels
-from finance_tooling.config import load_settings_from_env
-from finance_tooling.review_common import (
+from finance_tooling.categorization.classify import (
+    load_classification_rules,
+    resolve_category_id_from_labels,
+)
+from finance_tooling.categorization.transaction_overrides import (
+    TransactionOverrideEntry,
+    TransactionOverrideStore,
+    load_transaction_override_store,
+    merge_transaction_override_entries,
+    transaction_override_entry_key,
+    upsert_transaction_override_entries,
+    write_transaction_override_store,
+)
+from finance_tooling.core.backup import BackupRunResult, create_stage_backup_run
+from finance_tooling.core.config import load_settings_from_env
+from finance_tooling.review.common import (
     ORIGINAL_CATEGORY_COLUMN,
     ORIGINAL_SUBCATEGORY_COLUMN,
     PROJECT_TAGS_COLUMN,
@@ -20,16 +32,7 @@ from finance_tooling.review_common import (
     normalize_reviewed_value,
     read_table,
 )
-from finance_tooling.review_state import build_review_state_updates, upsert_review_state
-from finance_tooling.transaction_overrides import (
-    TransactionOverrideEntry,
-    TransactionOverrideStore,
-    load_transaction_override_store,
-    merge_transaction_override_entries,
-    transaction_override_entry_key,
-    upsert_transaction_override_entries,
-    write_transaction_override_store,
-)
+from finance_tooling.review.state import build_review_state_updates, upsert_review_state
 
 
 @dataclass(frozen=True)
@@ -74,26 +77,29 @@ def _resolve_review_import_backup_run(
         config_dir / "project_overrides.yaml",
         transaction_overrides_path,
     ]
-    try:
-        settings = load_settings_from_env()
-    except Exception:
-        settings = None
-    if settings is not None:
-        processed_dir = settings.processed_path if review_state_path is None else processed_dir
-        config_targets = [
-            category_rules_path or settings.category_rules_path,
-            settings.project_rules_path,
-            settings.budget_targets_path,
-            settings.account_rules_path,
-            settings.project_overrides_path,
-            transaction_overrides_path,
-        ]
     return create_stage_backup_run(
         stage="review-import",
         command="review-import",
         processed_dir=processed_dir,
         config_targets=tuple(config_targets),
     )
+
+
+def _resolve_category_rules_path(
+    *,
+    transaction_overrides_path: Path | None,
+    category_rules_path: Path | None,
+) -> Path | None:
+    if category_rules_path is not None:
+        return category_rules_path
+    if transaction_overrides_path is not None:
+        sibling_rules_path = transaction_overrides_path.parent / "category_rules.yaml"
+        if sibling_rules_path.exists():
+            return sibling_rules_path
+    try:
+        return load_settings_from_env().category_rules_path
+    except Exception:
+        return None
 
 
 def _parse_category_transaction_override_row(
@@ -118,14 +124,8 @@ def _parse_category_transaction_override_row(
         return None
 
     resolved_category_id = None
-    resolved_category_rules_path = category_rules_path
-    if resolved_category_rules_path is None:
-        try:
-            resolved_category_rules_path = load_settings_from_env().category_rules_path
-        except Exception:
-            resolved_category_rules_path = None
-    if resolved_category_rules_path is not None:
-        classification_rules, _warnings = load_classification_rules(resolved_category_rules_path)
+    if category_rules_path is not None:
+        classification_rules, _warnings = load_classification_rules(category_rules_path)
         resolved_category_id = resolve_category_id_from_labels(
             category,
             subcategory,
@@ -204,6 +204,16 @@ def import_review_into_overrides(
         joined = ", ".join(missing_columns)
         raise ValueError(f"Review table missing required columns: {joined}")
 
+    resolved_transaction_path = transaction_overrides_path or Path(
+        "config/transaction_overrides.yaml"
+    )
+    resolved_category_rules_path = _resolve_category_rules_path(
+        transaction_overrides_path=(
+            resolved_transaction_path if transaction_overrides_path is not None else None
+        ),
+        category_rules_path=category_rules_path,
+    )
+
     raw_rows = dataframe.to_dict(orient="records")
     parsed_transaction_entries: dict[tuple[str, ...], TransactionOverrideEntry] = {}
     invalid_rows: set[int] = set()
@@ -223,7 +233,7 @@ def import_review_into_overrides(
         elif category is not None:
             parsed_transaction = _parse_category_transaction_override_row(
                 row,
-                category_rules_path=category_rules_path,
+                category_rules_path=resolved_category_rules_path,
             )
             if parsed_transaction is None:
                 original_category = normalize_optional_text(row.get(ORIGINAL_CATEGORY_COLUMN))
@@ -266,9 +276,6 @@ def import_review_into_overrides(
             if reviewed or comment is not None:
                 invalid_review_state_rows.add(index)
 
-    resolved_transaction_path = transaction_overrides_path or Path(
-        "config/transaction_overrides.yaml"
-    )
     created_backup_run = backup_run
     if not dry_run and backup and created_backup_run is None:
         created_backup_run = _resolve_review_import_backup_run(

@@ -9,7 +9,7 @@ from finance_tooling.commands.common import (
     print_ingest_result,
     print_workflow_result,
 )
-from finance_tooling.config import load_settings_from_env
+from finance_tooling.core.config import load_settings_from_env
 from finance_tooling.workflow.incremental_state import build_full_refresh_preflight
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 from finance_tooling.workflow.update_stage import run_update

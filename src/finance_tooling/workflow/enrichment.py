@@ -9,20 +9,23 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.account_inference import load_account_inference_config
-from finance_tooling.classify import (
+from finance_tooling.categorization.account_inference import load_account_inference_config
+from finance_tooling.categorization.classify import (
     build_classification_diagnostics,
     classify_transactions_with_diagnostics,
     load_classification_rules,
 )
-from finance_tooling.config import Settings
-from finance_tooling.fx import build_fx_lookup_index, ensure_fx_cache, resolve_rate_from_index
-from finance_tooling.models import Transaction
-from finance_tooling.projecting import assign_projects_to_transactions, load_project_config
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.projecting import (
+    assign_projects_to_transactions,
+    load_project_config,
+)
+from finance_tooling.categorization.transaction_overrides import (
     apply_transaction_overrides,
     load_transaction_override_store,
 )
+from finance_tooling.core.config import Settings
+from finance_tooling.core.fx import build_fx_lookup_index, ensure_fx_cache, resolve_rate_from_index
+from finance_tooling.core.models import Transaction
 from finance_tooling.workflow.category_carry_forward import apply_manual_category_carry_forward
 from finance_tooling.workflow.types import EnrichmentResult
 

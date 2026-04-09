@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from finance_tooling.category_id_migration_audit import (
+from finance_tooling.audits.category_id_migration import (
     build_category_id_migration_audit,
     render_category_id_migration_audit_markdown,
 )
-from finance_tooling.classify import ClassificationRules, TaxonomyCategory
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.classify import ClassificationRules, TaxonomyCategory
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
 )

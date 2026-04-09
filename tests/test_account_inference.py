@@ -4,14 +4,14 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.account_inference import (
+from finance_tooling.categorization.account_inference import (
     AccountInferenceConfig,
     CounterpartyRule,
     InternalAccount,
     infer_accounts_for_transactions,
     load_account_inference_config,
 )
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 
 
 def _tx(description: str, *, amount: str) -> Transaction:

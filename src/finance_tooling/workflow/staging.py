@@ -9,13 +9,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.config import (
+from finance_tooling.core.config import (
     INGEST_STAGED_TRANSACTIONS_FILENAME,
     LEGACY_STAGED_TRANSACTIONS_FILENAME,
     Settings,
 )
-from finance_tooling.models import Transaction
-from finance_tooling.source_inventory import compute_source_document_id
+from finance_tooling.core.models import Transaction
+from finance_tooling.core.source_inventory import compute_source_document_id
 from finance_tooling.workflow.types import StagingWriteResult
 
 _REQUIRED_STAGED_COLUMNS = (

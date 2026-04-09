@@ -9,13 +9,13 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from finance_tooling.backup import BackupRunResult, create_stage_backup_run
-from finance_tooling.config import INGEST_SUMMARY_FILENAME, Settings, ingest_state_path
-from finance_tooling.extract import extract_text_from_pdf
+from finance_tooling.core.backup import BackupRunResult, create_stage_backup_run
+from finance_tooling.core.config import INGEST_SUMMARY_FILENAME, Settings, ingest_state_path
+from finance_tooling.core.extract import extract_text_from_pdf
+from finance_tooling.core.scanner import discover_statement_pdfs
+from finance_tooling.core.source_inventory import build_source_inventory
 from finance_tooling.parsers import select_parser_with_diagnostics
 from finance_tooling.parsers.base import StatementValidation
-from finance_tooling.scanner import discover_statement_pdfs
-from finance_tooling.source_inventory import build_source_inventory
 from finance_tooling.workflow.hsbc_diagnostics import analyze_hsbc_parser_outputs
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,

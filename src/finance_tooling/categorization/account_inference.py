@@ -11,8 +11,8 @@ from typing import Literal, cast
 
 import yaml
 
-from finance_tooling.classify import normalize_description
-from finance_tooling.models import Transaction
+from finance_tooling.categorization.classify import normalize_description
+from finance_tooling.core.models import Transaction
 
 MatchType = Literal["contains", "exact", "regex"]
 AccountType = Literal["internal", "external", "unknown"]

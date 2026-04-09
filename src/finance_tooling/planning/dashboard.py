@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from finance_tooling.planning import load_planning_inputs
+from finance_tooling.planning.engine import load_planning_inputs
 
 
 def _serialize_payload(payload: dict[str, object]) -> str:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from finance_tooling.source_inventory import (
+from finance_tooling.core.source_inventory import (
     build_source_inventory,
     duplicate_groups,
     load_source_inventory,

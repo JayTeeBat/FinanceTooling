@@ -10,19 +10,19 @@ from pathlib import Path
 from time import perf_counter
 from typing import TypedDict
 
-from finance_tooling.config import (
+from finance_tooling.core.config import (
     DOTENV_PATH,
     PROCESSED_PATH_ENV,
     Settings,
     load_settings_from_env,
     state_root_path,
 )
-from finance_tooling.dashboard import render_dashboard_html
-from finance_tooling.extract import extract_text_from_pdf
-from finance_tooling.models import WorkflowResult
+from finance_tooling.core.extract import extract_text_from_pdf
+from finance_tooling.core.models import WorkflowResult
+from finance_tooling.core.scanner import discover_statement_pdfs
+from finance_tooling.core.store import upsert_transactions
 from finance_tooling.parsers import select_parser_with_diagnostics
-from finance_tooling.scanner import discover_statement_pdfs
-from finance_tooling.store import upsert_transactions
+from finance_tooling.reporting.dashboard import render_dashboard_html
 from finance_tooling.workflow.enrichment import enrich_transactions
 from finance_tooling.workflow.hsbc_diagnostics import analyze_hsbc_parser_outputs
 from finance_tooling.workflow.ingest import ingest_statements

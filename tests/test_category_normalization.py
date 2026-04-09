@@ -4,11 +4,11 @@ from datetime import date
 
 import pandas as pd
 
-from finance_tooling.category_normalization import (
+from finance_tooling.categorization.category_normalization import (
     build_categorization_consolidation_delta,
     normalize_categories_for_dataframe,
 )
-from finance_tooling.classify import ClassificationRules, TaxonomyCategory
+from finance_tooling.categorization.classify import ClassificationRules, TaxonomyCategory
 
 
 def _rules() -> ClassificationRules:

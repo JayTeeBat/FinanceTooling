@@ -31,6 +31,7 @@ workflow-status = "finance_tooling.commands.workflow_status:main"
 dev = [
   "pre-commit>=4.0.0",
   "pytest>=8.3.0",
+  "pytest-cov>=6.0.0",
   "ruff>=0.13.0",
   "ty>=0.0.1a17",
 ]

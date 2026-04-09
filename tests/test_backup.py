@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from finance_tooling.backup import create_stage_backup_run
+from finance_tooling.core.backup import create_stage_backup_run
 
 
 def test_create_stage_backup_run_copies_full_state_and_prunes_by_run_day(tmp_path: Path) -> None:

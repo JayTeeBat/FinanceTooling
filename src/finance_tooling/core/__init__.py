@@ -1,4 +1,6 @@
-"""Shared core primitives for the tooling package."""
+"""Core package primitives for finance_tooling."""
+
+from __future__ import annotations
 
 
 def healthcheck() -> str:

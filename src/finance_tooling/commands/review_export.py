@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from finance_tooling.commands.common import resolve_review_export_paths
-from finance_tooling.review_export import export_review_rows
+from finance_tooling.review.export import export_review_rows
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:

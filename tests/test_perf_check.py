@@ -4,12 +4,12 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.account_inference import AccountInferenceConfig
-from finance_tooling.classify import ClassificationDiagnostics, ClassificationRules
-from finance_tooling.config import Settings
-from finance_tooling.models import Transaction, WorkflowResult
-from finance_tooling.perf_check import assert_isolated_processed_path, run_perf_check
-from finance_tooling.transaction_overrides import TransactionOverrideStore
+from finance_tooling.categorization.account_inference import AccountInferenceConfig
+from finance_tooling.categorization.classify import ClassificationDiagnostics, ClassificationRules
+from finance_tooling.categorization.transaction_overrides import TransactionOverrideStore
+from finance_tooling.core.config import Settings
+from finance_tooling.core.models import Transaction, WorkflowResult
+from finance_tooling.maintenance.perf_check import assert_isolated_processed_path, run_perf_check
 from finance_tooling.workflow.types import EnrichmentResult, HsbcDiagnosticsResult, IngestResult
 
 
@@ -176,17 +176,17 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
     )
 
     clock = iter([0.0, 1.0, 3.5, 4.0, 4.5, 5.0, 7.0, 8.0, 9.25, 10.0])
-    monkeypatch.setattr("finance_tooling.perf_check.perf_counter", lambda: next(clock))
+    monkeypatch.setattr("finance_tooling.maintenance.perf_check.perf_counter", lambda: next(clock))
     monkeypatch.setattr(
-        "finance_tooling.perf_check.ingest_statements",
+        "finance_tooling.maintenance.perf_check.ingest_statements",
         lambda *args, **kwargs: ingest_result,
     )
     monkeypatch.setattr(
-        "finance_tooling.perf_check.analyze_hsbc_parser_outputs",
+        "finance_tooling.maintenance.perf_check.analyze_hsbc_parser_outputs",
         lambda *args, **kwargs: hsbc_diagnostics_result,
     )
     monkeypatch.setattr(
-        "finance_tooling.perf_check.enrich_transactions",
+        "finance_tooling.maintenance.perf_check.enrich_transactions",
         lambda *args, **kwargs: enrichment_result,
     )
 
@@ -204,7 +204,7 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
             "effective_ingest_workers": 1,
         }
 
-    monkeypatch.setattr("finance_tooling.perf_check.persist_and_report", _persist)
+    monkeypatch.setattr("finance_tooling.maintenance.perf_check.persist_and_report", _persist)
 
     result = run_perf_check(settings)
 
@@ -237,7 +237,7 @@ def test_assert_isolated_processed_path_blocks_dotenv_processed_dir(
     standard_dir = tmp_path / "processed"
     dotenv_path = tmp_path / ".env"
     dotenv_path.write_text(f"FINANCE_PROCESSED_PATH={standard_dir}\n", encoding="utf-8")
-    monkeypatch.setattr("finance_tooling.perf_check.DOTENV_PATH", dotenv_path)
+    monkeypatch.setattr("finance_tooling.maintenance.perf_check.DOTENV_PATH", dotenv_path)
 
     settings = _settings(tmp_path, standard_dir)
 
@@ -253,7 +253,7 @@ def test_assert_isolated_processed_path_allows_override(monkeypatch, tmp_path: P
     standard_dir = tmp_path / "processed"
     dotenv_path = tmp_path / ".env"
     dotenv_path.write_text(f"FINANCE_PROCESSED_PATH={standard_dir}\n", encoding="utf-8")
-    monkeypatch.setattr("finance_tooling.perf_check.DOTENV_PATH", dotenv_path)
+    monkeypatch.setattr("finance_tooling.maintenance.perf_check.DOTENV_PATH", dotenv_path)
     monkeypatch.setenv("FINANCE_PERF_ALLOW_IN_PLACE", "true")
 
     settings = _settings(tmp_path, standard_dir)

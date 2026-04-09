@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from finance_tooling.commands.common import print_full_refresh_preflight, print_ingest_result
-from finance_tooling.config import load_settings_from_env
+from finance_tooling.core.config import load_settings_from_env
 from finance_tooling.workflow.incremental_state import build_full_refresh_preflight
 from finance_tooling.workflow.ingest_stage import run_ingest
 

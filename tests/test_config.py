@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from finance_tooling.config import (
+from finance_tooling.core.config import (
     BASE_CURRENCY_ENV,
     BUDGET_TARGETS_PATH_ENV,
     CATEGORY_RULES_PATH_ENV,

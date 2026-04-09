@@ -2,7 +2,7 @@ import csv
 import json
 from pathlib import Path
 
-from finance_tooling.metrics_log import (
+from finance_tooling.reporting.metrics_log import (
     build_bank_snapshots,
     build_snapshot,
     upsert_bank_snapshots,

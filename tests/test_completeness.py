@@ -5,13 +5,13 @@ from typing import Any, cast
 
 import pandas as pd
 
-from finance_tooling.completeness import (
+from finance_tooling.core.models import Transaction
+from finance_tooling.parsers.base import StatementValidation
+from finance_tooling.reporting.completeness import (
     build_completeness_report,
     build_completeness_report_from_dataframe,
     classify_statement_type,
 )
-from finance_tooling.models import Transaction
-from finance_tooling.parsers.base import StatementValidation
 
 
 def _tx(source_file: Path, bank: str) -> Transaction:

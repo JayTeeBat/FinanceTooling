@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.cashflow import build_cashflow_rows_frame
-from finance_tooling.classify import normalize_description
+from finance_tooling.categorization.classify import normalize_description
+from finance_tooling.reporting.cashflow import build_cashflow_rows_frame
 
 _ESSENTIAL_CATEGORIES = frozenset(
     {

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.models import CANONICAL_TRANSACTION_COLUMNS, Transaction
+from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS, Transaction
 
 
 @dataclass(frozen=True)

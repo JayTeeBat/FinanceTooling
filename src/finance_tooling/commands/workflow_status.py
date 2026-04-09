@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 
-from finance_tooling.config import load_settings_from_env
-from finance_tooling.workflow_status import PipelineFinding, build_pipeline_state
+from finance_tooling.core.config import load_settings_from_env
+from finance_tooling.reporting.workflow_status import PipelineFinding, build_pipeline_state
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:

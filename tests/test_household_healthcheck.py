@@ -7,7 +7,7 @@ from typing import cast
 
 import pandas as pd
 
-from finance_tooling.household_healthcheck import render_household_healthcheck_html
+from finance_tooling.reporting.household_healthcheck import render_household_healthcheck_html
 
 
 def _extract_payload(html: str) -> dict[str, object]:

@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from finance_tooling.config import Settings
-from finance_tooling.models import Transaction
+from finance_tooling.core.config import Settings
+from finance_tooling.core.models import Transaction
 from finance_tooling.workflow.enrichment import (
     apply_fx_and_mtime,
     enrich_transactions,

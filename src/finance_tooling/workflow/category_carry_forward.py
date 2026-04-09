@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.classify import normalize_description
-from finance_tooling.models import Transaction
+from finance_tooling.categorization.classify import normalize_description
+from finance_tooling.core.models import Transaction
 
 _MANUAL_SOURCES = {"transaction_override"}
 _BLOCKED_CURRENT_SOURCES = _MANUAL_SOURCES
