@@ -144,9 +144,12 @@ def test_incremental_state_prefers_legacy_outputs_registry_and_staged_artifacts(
     legacy_staged = settings.summary_json_path.parent / "staged_transactions.parquet"
     legacy_staged.write_text("placeholder", encoding="utf-8")
 
-    assert source_registry_path(settings) == legacy_registry
-    assert resolve_staged_batch_manifest_path(settings) == legacy_manifest
-    assert resolve_staged_transactions_path(settings) == legacy_staged
+    with pytest.warns(FutureWarning, match="legacy source registry path"):
+        assert source_registry_path(settings) == legacy_registry
+    with pytest.warns(FutureWarning, match="legacy staged batch manifest path"):
+        assert resolve_staged_batch_manifest_path(settings) == legacy_manifest
+    with pytest.warns(FutureWarning, match="legacy staged transactions path"):
+        assert resolve_staged_transactions_path(settings) == legacy_staged
 
 
 def test_transaction_override_changes_do_not_report_config_drift(tmp_path: Path) -> None:

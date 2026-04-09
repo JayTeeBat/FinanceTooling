@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import warnings
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -36,6 +37,17 @@ RunMode = Literal["incremental", "full_refresh"]
 LEGACY_SOURCE_REGISTRY_FILENAME = "source_registry.json"
 INGEST_STAGED_BATCH_MANIFEST_FILENAME = "ingest_staged_batch_manifest.json"
 LEGACY_STAGED_BATCH_MANIFEST_FILENAME = "staged_batch_manifest.json"
+
+
+def _warn_legacy_path_usage(feature: str, legacy_path: Path, preferred_path: Path) -> None:
+    warnings.warn(
+        (
+            f"Using legacy {feature} path '{legacy_path}'. Move the file to "
+            f"'{preferred_path}' to avoid relying on deprecated compatibility fallbacks."
+        ),
+        FutureWarning,
+        stacklevel=2,
+    )
 
 
 @dataclass(frozen=True)
@@ -140,6 +152,7 @@ def source_registry_path(settings: Settings) -> Path:
         settings.summary_json_path.parent / LEGACY_SOURCE_REGISTRY_FILENAME,
     ):
         if legacy.exists():
+            _warn_legacy_path_usage("source registry", legacy, preferred)
             return legacy
     return preferred
 
@@ -158,6 +171,7 @@ def resolve_staged_transactions_path(settings: Settings) -> Path:
         settings.summary_json_path.parent / LEGACY_STAGED_TRANSACTIONS_FILENAME,
     ):
         if legacy.exists():
+            _warn_legacy_path_usage("staged transactions", legacy, preferred)
             return legacy
     return preferred
 
@@ -172,6 +186,7 @@ def resolve_staged_batch_manifest_path(settings: Settings) -> Path:
         settings.summary_json_path.parent / LEGACY_STAGED_BATCH_MANIFEST_FILENAME,
     ):
         if legacy.exists():
+            _warn_legacy_path_usage("staged batch manifest", legacy, preferred)
             return legacy
     return preferred
 

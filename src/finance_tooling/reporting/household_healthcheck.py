@@ -1028,7 +1028,7 @@ def render_household_healthcheck_html(
     *,
     base_currency: str,
 ) -> Path:
-    """Render a self-contained household healthcheck HTML dashboard."""
+    """Render the deprecated compatibility-only household healthcheck dashboard."""
     payload = _build_payload(dataframe, base_currency=base_currency)
     html = _HTML_TEMPLATE.replace("__PAYLOAD_JSON__", _serialize_payload(payload))
     destination.parent.mkdir(parents=True, exist_ok=True)

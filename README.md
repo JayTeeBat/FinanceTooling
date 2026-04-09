@@ -62,6 +62,13 @@ Compatibility-only optional export:
 
 - `transform_transactions.json` when JSON export is explicitly enabled
 
+Deprecated / compatibility-only surface:
+
+- `household_healthcheck.html` is retained as a secondary compatibility dashboard.
+- legacy state/output path fallbacks are still supported temporarily, but the code now warns
+  when those fallback paths are used so they can be migrated to the canonical `state/` layout.
+- `finance_tooling.healthcheck()` is deprecated and should not be used for new integrations.
+
 ## Workflow Overview (Newcomer)
 
 Use this sequence when processing new statements and optionally refining

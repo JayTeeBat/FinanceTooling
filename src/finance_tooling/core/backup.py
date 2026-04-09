@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import warnings
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -290,6 +291,16 @@ def create_stage_backup_run(
         processed_dir=processed_dir,
         config_targets=config_targets,
     )
+    if migrated_legacy_paths:
+        warnings.warn(
+            (
+                "Migrated legacy backup layout into the unified snapshot root at "
+                f"'{backup_root / 'legacy'}'. The old backup locations are deprecated and "
+                "should not be recreated."
+            ),
+            FutureWarning,
+            stacklevel=2,
+        )
 
     try:
         processed_backup_dir.mkdir(parents=True, exist_ok=True)

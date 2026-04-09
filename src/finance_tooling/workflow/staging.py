@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -47,6 +48,18 @@ _REQUIRED_STAGED_COLUMNS = (
 _LEGACY_COMPATIBLE_COLUMNS = frozenset({"source_document_id", "source_record_index"})
 
 
+def _warn_legacy_staged_path(legacy_path: Path, preferred_path: Path) -> None:
+    warnings.warn(
+        (
+            "Using legacy staged transactions path "
+            f"'{legacy_path}'. Move the file to '{preferred_path}' to avoid relying on "
+            "deprecated compatibility fallbacks."
+        ),
+        FutureWarning,
+        stacklevel=2,
+    )
+
+
 def _require_parquet_engine() -> None:
     try:
         __import__("pyarrow")
@@ -72,6 +85,7 @@ def resolve_staged_transactions_path(
             settings.summary_json_path.parent / LEGACY_STAGED_TRANSACTIONS_FILENAME,
         ):
             if legacy_path.exists():
+                _warn_legacy_staged_path(legacy_path, candidate)
                 return legacy_path
     return candidate
 

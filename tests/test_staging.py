@@ -5,6 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from finance_tooling.core.config import Settings
 from finance_tooling.core.models import Transaction
@@ -116,7 +117,8 @@ def test_resolve_staged_transactions_path_supports_legacy_outputs_location(tmp_p
     legacy_path = settings.summary_json_path.parent / "staged_transactions.parquet"
     legacy_path.write_text("placeholder", encoding="utf-8")
 
-    assert resolve_staged_transactions_path(settings) == legacy_path
+    with pytest.warns(FutureWarning, match="legacy staged transactions path"):
+        assert resolve_staged_transactions_path(settings) == legacy_path
 
 
 def test_read_staged_transactions_backfills_legacy_identity_columns(tmp_path: Path) -> None:
