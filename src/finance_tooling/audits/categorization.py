@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import TypedDict, cast
 
 import pandas as pd
 
@@ -16,6 +16,74 @@ from finance_tooling.categorization.transaction_overrides import (
 from finance_tooling.core.config import Settings, load_settings_from_env
 
 _AUDIT_FILENAME = "categorization_audit.md"
+
+
+class AuditSampleRow(TypedDict, total=False):
+    booking_date: object
+    description: object
+    bank: object
+    amount_native: object
+    currency: object
+    category_source: object
+
+
+class AuditYearlyOverrideRow(TypedDict):
+    year: int
+    row_count: int
+    override_row_count: int
+
+
+class OverrideIntegrity(TypedDict):
+    override_entries: int
+    matched_entry_count: int
+    unmatched_entry_count: int
+    override_row_count: int
+    unmatched_categories: dict[str, int]
+    sample_unmatched_transaction_ids: list[str]
+    yearly_rows: list[AuditYearlyOverrideRow]
+
+
+class ReviewStateIntegrity(TypedDict):
+    review_state_rows: int
+    reviewed_true_count: int
+    reviewed_false_count: int
+    matched_transaction_count: int
+    unmatched_transaction_count: int
+
+
+class MissingCategoryRow(TypedDict):
+    category: str
+    count: int
+    source_counts: dict[str, int]
+    subcategory_counts: dict[str, int]
+    samples: list[AuditSampleRow]
+
+
+class TaxonomyDrift(TypedDict):
+    missing_categories: list[MissingCategoryRow]
+
+
+class CoverageDriftRow(TypedDict):
+    year: int
+    row_count: int
+    categorized_count: int
+    uncategorized_count: int
+    override_row_count: int
+
+
+class CoverageDrift(TypedDict):
+    yearly_rows: list[CoverageDriftRow]
+
+
+class MixedSourceCategoryRow(TypedDict):
+    category: str
+    total_count: int
+    source_counts: dict[str, int]
+
+
+class RuleLayerConsistency(TypedDict):
+    rule_rows_missing_rule_id: int
+    mixed_source_categories: list[MixedSourceCategoryRow]
 
 
 @dataclass(frozen=True)
@@ -31,11 +99,11 @@ class AuditFinding:
 class CategorizationAudit:
     """Audit result payload used for rendering and tests."""
 
-    override_integrity: dict[str, object]
-    review_state_integrity: dict[str, object]
-    taxonomy_drift: dict[str, object]
-    coverage_drift: dict[str, object]
-    rule_layer_consistency: dict[str, object]
+    override_integrity: OverrideIntegrity
+    review_state_integrity: ReviewStateIntegrity
+    taxonomy_drift: TaxonomyDrift
+    coverage_drift: CoverageDrift
+    rule_layer_consistency: RuleLayerConsistency
     findings: list[AuditFinding]
     remediation_backlog: dict[str, list[str]]
 
@@ -68,7 +136,7 @@ def _year_series(dataframe: pd.DataFrame) -> pd.Series:
     ).dt.year
 
 
-def _sample_rows(dataframe: pd.DataFrame, mask: pd.Series) -> list[dict[str, object]]:
+def _sample_rows(dataframe: pd.DataFrame, mask: pd.Series) -> list[AuditSampleRow]:
     sample_columns = [
         column
         for column in (
@@ -89,7 +157,7 @@ def _sample_rows(dataframe: pd.DataFrame, mask: pd.Series) -> list[dict[str, obj
 def _build_override_integrity(
     dataframe: pd.DataFrame,
     override_store: TransactionOverrideStore,
-) -> dict[str, object]:
+) -> OverrideIntegrity:
     transaction_ids = set(_string_series(dataframe, "transaction_id").tolist())
     entries = [entry for entry in override_store.entries if entry.transaction_id is not None]
     matched_entries = [
@@ -103,7 +171,7 @@ def _build_override_integrity(
         "transaction_override"
     )
     years = _year_series(dataframe)
-    yearly_rows: list[dict[str, object]] = []
+    yearly_rows: list[AuditYearlyOverrideRow] = []
     for raw_year in sorted(year for year in years.dropna().astype(int).unique()):
         year_mask = years.eq(raw_year)
         yearly_rows.append(
@@ -142,7 +210,7 @@ def _build_override_integrity(
 def _build_review_state_integrity(
     dataframe: pd.DataFrame,
     review_state: pd.DataFrame,
-) -> dict[str, object]:
+) -> ReviewStateIntegrity:
     if review_state.empty:
         return {
             "review_state_rows": 0,
@@ -171,11 +239,11 @@ def _build_review_state_integrity(
 def _build_taxonomy_drift(
     dataframe: pd.DataFrame,
     rules: ClassificationRules,
-) -> dict[str, object]:
+) -> TaxonomyDrift:
     category = _string_series(dataframe, "category").str.strip()
     subcategory = _string_series(dataframe, "subcategory")
     category_source = _string_series(dataframe, "category_source")
-    missing_categories: list[dict[str, object]] = []
+    missing_categories: list[MissingCategoryRow] = []
     missing_names = {
         value
         for value in category.tolist()
@@ -207,11 +275,11 @@ def _build_taxonomy_drift(
     return {"missing_categories": missing_categories}
 
 
-def _build_coverage_drift(dataframe: pd.DataFrame) -> dict[str, object]:
+def _build_coverage_drift(dataframe: pd.DataFrame) -> CoverageDrift:
     years = _year_series(dataframe)
     category = _string_series(dataframe, "category").str.strip().str.casefold()
     category_source = _string_series(dataframe, "category_source").str.strip()
-    yearly_rows: list[dict[str, object]] = []
+    yearly_rows: list[CoverageDriftRow] = []
     for raw_year in sorted(year for year in years.dropna().astype(int).unique()):
         year_mask = years.eq(raw_year)
         yearly_rows.append(
@@ -228,13 +296,13 @@ def _build_coverage_drift(dataframe: pd.DataFrame) -> dict[str, object]:
     return {"yearly_rows": yearly_rows}
 
 
-def _build_rule_layer_consistency(dataframe: pd.DataFrame) -> dict[str, object]:
+def _build_rule_layer_consistency(dataframe: pd.DataFrame) -> RuleLayerConsistency:
     category_source = _string_series(dataframe, "category_source").str.strip()
     category_rule_id = _string_series(dataframe, "category_rule_id").str.strip()
     category = _string_series(dataframe, "category").str.strip()
 
     missing_rule_id_mask = category_source.eq("rule") & category_rule_id.eq("")
-    mixed_source_categories: list[dict[str, object]] = []
+    mixed_source_categories: list[MixedSourceCategoryRow] = []
     crosstab = pd.crosstab(category, category_source)
     for category_name, row in crosstab.iterrows():
         nonzero = {str(index): int(value) for index, value in row.items() if int(value) > 0}
@@ -257,14 +325,14 @@ def _build_rule_layer_consistency(dataframe: pd.DataFrame) -> dict[str, object]:
 
 
 def _classify_findings(
-    override_integrity: dict[str, object],
-    review_state_integrity: dict[str, object],
-    taxonomy_drift: dict[str, object],
-    coverage_drift: dict[str, object],
+    override_integrity: OverrideIntegrity,
+    review_state_integrity: ReviewStateIntegrity,
+    taxonomy_drift: TaxonomyDrift,
+    coverage_drift: CoverageDrift,
 ) -> list[AuditFinding]:
     findings: list[AuditFinding] = []
 
-    if cast(int, override_integrity["unmatched_entry_count"]) > 0:
+    if override_integrity["unmatched_entry_count"] > 0:
         findings.append(
             AuditFinding(
                 title="Unmatched transaction overrides",
@@ -288,8 +356,8 @@ def _classify_findings(
             )
         )
 
-    review_rows = cast(int, review_state_integrity["review_state_rows"])
-    reviewed_true_count = cast(int, review_state_integrity["reviewed_true_count"])
+    review_rows = review_state_integrity["review_state_rows"]
+    reviewed_true_count = review_state_integrity["reviewed_true_count"]
     if review_rows > 0 and reviewed_true_count == 0:
         findings.append(
             AuditFinding(
@@ -302,12 +370,9 @@ def _classify_findings(
             )
         )
 
-    missing_categories = cast(
-        list[dict[str, object]],
-        taxonomy_drift["missing_categories"],
-    )
+    missing_categories = taxonomy_drift["missing_categories"]
     if missing_categories:
-        category_names = ", ".join(cast(str, row["category"]) for row in missing_categories[:10])
+        category_names = ", ".join(row["category"] for row in missing_categories[:10])
         findings.append(
             AuditFinding(
                 title="Legacy categories missing from taxonomy",
@@ -319,13 +384,13 @@ def _classify_findings(
             )
         )
 
-    yearly_rows = cast(list[dict[str, object]], coverage_drift["yearly_rows"])
+    yearly_rows = coverage_drift["yearly_rows"]
     if yearly_rows:
-        peak = max(yearly_rows, key=lambda row: cast(int, row["override_row_count"]))
-        tail_rows = [row for row in yearly_rows if cast(int, row["year"]) >= 2022]
-        if tail_rows and cast(int, peak["override_row_count"]) > 0:
-            tail_peak = max(cast(int, row["override_row_count"]) for row in tail_rows)
-            if tail_peak * 5 < cast(int, peak["override_row_count"]):
+        peak = max(yearly_rows, key=lambda row: row["override_row_count"])
+        tail_rows = [row for row in yearly_rows if row["year"] >= 2022]
+        if tail_rows and peak["override_row_count"] > 0:
+            tail_peak = max(row["override_row_count"] for row in tail_rows)
+            if tail_peak * 5 < peak["override_row_count"]:
                 findings.append(
                     AuditFinding(
                         title="Override footprint drops sharply after early years",
@@ -342,19 +407,16 @@ def _classify_findings(
 
 
 def _build_remediation_backlog(
-    override_integrity: dict[str, object],
-    review_state_integrity: dict[str, object],
-    taxonomy_drift: dict[str, object],
+    override_integrity: OverrideIntegrity,
+    review_state_integrity: ReviewStateIntegrity,
+    taxonomy_drift: TaxonomyDrift,
     findings: list[AuditFinding],
 ) -> dict[str, list[str]]:
     safe_fixes: list[str] = []
     state_semantics: list[str] = []
     manual_inspection: list[str] = []
 
-    missing_categories = cast(
-        list[dict[str, object]],
-        taxonomy_drift["missing_categories"],
-    )
+    missing_categories = taxonomy_drift["missing_categories"]
     if missing_categories:
         safe_fixes.append(
             "Restore or alias legacy taxonomy categories still present in "
@@ -366,8 +428,8 @@ def _build_remediation_backlog(
         )
 
     if (
-        cast(int, review_state_integrity["review_state_rows"]) > 0
-        and cast(int, review_state_integrity["reviewed_true_count"]) == 0
+        review_state_integrity["review_state_rows"] > 0
+        and review_state_integrity["reviewed_true_count"] == 0
     ):
         state_semantics.append(
             "Audit review-state write/import semantics to determine when "
@@ -378,7 +440,7 @@ def _build_remediation_backlog(
             "live review-state parquet before modifying any categorization data."
         )
 
-    if cast(int, override_integrity["unmatched_entry_count"]) > 0:
+    if override_integrity["unmatched_entry_count"] > 0:
         state_semantics.append(
             "Investigate transaction-id migration history for unmatched manual "
             "overrides before editing overrides."
@@ -463,10 +525,7 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
 
     override_year_rows = [
         [row["year"], row["row_count"], row["override_row_count"]]
-        for row in cast(
-            list[dict[str, object]],
-            audit.override_integrity["yearly_rows"],
-        )
+        for row in audit.override_integrity["yearly_rows"]
     ]
     coverage_rows = [
         [
@@ -476,7 +535,7 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
             row["uncategorized_count"],
             row["override_row_count"],
         ]
-        for row in cast(list[dict[str, object]], audit.coverage_drift["yearly_rows"])
+        for row in audit.coverage_drift["yearly_rows"]
     ]
     taxonomy_rows = [
         [
@@ -484,17 +543,14 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
             row["count"],
             ", ".join(
                 f"{key}={value}"
-                for key, value in cast(dict[str, int], row["source_counts"]).items()
+                for key, value in row["source_counts"].items()
             ),
             ", ".join(
                 f"{key}={value}"
-                for key, value in cast(dict[str, int], row["subcategory_counts"]).items()
+                for key, value in row["subcategory_counts"].items()
             ),
         ]
-        for row in cast(
-            list[dict[str, object]],
-            audit.taxonomy_drift["missing_categories"],
-        )
+        for row in audit.taxonomy_drift["missing_categories"]
     ]
     mixed_source_rows = [
         [
@@ -502,13 +558,10 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
             row["total_count"],
             ", ".join(
                 f"{key}={value}"
-                for key, value in cast(dict[str, int], row["source_counts"]).items()
+                for key, value in row["source_counts"].items()
             ),
         ]
-        for row in cast(
-            list[dict[str, object]],
-            audit.rule_layer_consistency["mixed_source_categories"],
-        )
+        for row in audit.rule_layer_consistency["mixed_source_categories"]
     ]
 
     safe_fixes = "\n".join(

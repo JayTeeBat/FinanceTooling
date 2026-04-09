@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 
 import pandas as pd
 
@@ -100,7 +101,10 @@ def test_build_categorization_audit_flags_review_state_and_taxonomy_drift() -> N
     assert audit.override_integrity["unmatched_entry_count"] == 0
     assert audit.review_state_integrity["review_state_rows"] == 2
     assert audit.review_state_integrity["reviewed_true_count"] == 0
-    assert [row["category"] for row in audit.taxonomy_drift["missing_categories"]] == ["House"]
+    missing_categories = audit.taxonomy_drift["missing_categories"]
+    assert isinstance(missing_categories, list)
+    typed_missing_categories = [cast(dict[str, object], row) for row in missing_categories]
+    assert [row["category"] for row in typed_missing_categories] == ["House"]
     assert any(
         finding.classification == "likely lost manual state"
         and "review-state" in finding.title.lower()

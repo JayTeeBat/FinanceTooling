@@ -116,7 +116,7 @@ def test_render_dashboard_html_embeds_transactions_and_projects(tmp_path: Path) 
     cashflow_yoy = payload["cashflow_yoy"]
     assert isinstance(cashflow_yoy, dict)
     assert "years" in cashflow_yoy
-    years = cast(list[dict[str, object]], cashflow_yoy["years"])
+    years = cast(list[dict[str, object]], cast(dict[str, object], cashflow_yoy)["years"])
     assert years[0]["transfer_volume"] == 300.0
     assert years[0]["uncategorized_volume"] == 75.0
     transactions_raw = payload["transactions"]

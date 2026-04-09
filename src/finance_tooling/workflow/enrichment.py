@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -101,7 +101,10 @@ def recompute_dataframe_fx(
 
     seed_transactions: list[Transaction] = []
     for row in dataframe.to_dict(orient="records"):
-        booking_ts = pd.to_datetime(row.get("booking_date"), errors="coerce")
+        booking_value = row.get("booking_date")
+        if not isinstance(booking_value, str | date | datetime | pd.Timestamp):
+            continue
+        booking_ts = pd.to_datetime(booking_value, errors="coerce")
         if pd.isna(booking_ts):
             continue
         currency = str(row.get("currency") or settings.base_currency).strip().upper()
@@ -132,7 +135,14 @@ def recompute_dataframe_fx(
     amounts_eur: list[float | None] = []
 
     for row in recomputed.to_dict(orient="records"):
-        booking_ts = pd.to_datetime(row.get("booking_date"), errors="coerce")
+        booking_value = row.get("booking_date")
+        if not isinstance(booking_value, str | date | datetime | pd.Timestamp):
+            fx_rates.append(None)
+            fx_rate_dates.append(None)
+            fx_sources.append(None)
+            amounts_eur.append(None)
+            continue
+        booking_ts = pd.to_datetime(booking_value, errors="coerce")
         currency = str(row.get("currency") or settings.base_currency).strip().upper()
         amount_native = Decimal(str(row.get("amount_native") or "0"))
         if pd.isna(booking_ts):

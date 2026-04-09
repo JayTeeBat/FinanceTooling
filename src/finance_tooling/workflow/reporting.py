@@ -19,6 +19,8 @@ from finance_tooling.categorization.category_normalization import (
 from finance_tooling.categorization.classify import (
     ClassificationDiagnostics,
     ClassificationRules,
+    TopRuleHitSummary,
+    UncategorizedDescriptionSummary,
     normalize_description,
     resolve_reporting_categories_for_dataframe,
 )
@@ -43,6 +45,7 @@ from finance_tooling.reporting.dashboard import render_dashboard_html
 from finance_tooling.reporting.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.workflow.enrichment import recompute_dataframe_fx
 from finance_tooling.workflow.types import (
+    CategoryMetricByBankRow,
     HsbcBoundaryDiagnostic,
     HsbcSelectionDiagnostic,
     HsbcSignDiagnostic,
@@ -120,7 +123,7 @@ def _build_classification_diagnostics_from_dataframe(
         uncategorized_descriptions = {
             str(index): int(value) for index, value in normalized_descriptions.items()
         }
-    top_uncategorized = [
+    top_uncategorized: list[UncategorizedDescriptionSummary] = [
         {"description": description, "count": count}
         for description, count in sorted(
             uncategorized_descriptions.items(),
@@ -128,7 +131,7 @@ def _build_classification_diagnostics_from_dataframe(
         )[:10]
     ]
 
-    top_rules: list[dict[str, object]] = []
+    top_rules: list[TopRuleHitSummary] = []
     if "category_rule_id" in dataframe.columns:
         rule_hits = (
             dataframe["category_rule_id"]
@@ -159,7 +162,7 @@ def _build_classification_diagnostics_from_dataframe(
 
 def _build_category_metrics_from_dataframe(
     dataframe: DataFrame,
-) -> tuple[list[dict[str, object]], float, float, float, int]:
+) -> tuple[list[CategoryMetricByBankRow], float, float, float, int]:
     if dataframe.empty:
         return [], 0.0, 0.0, 0.0, 0
 
@@ -257,7 +260,7 @@ def _build_category_metrics_from_dataframe(
         uncategorized_amount_eur_abs=("uncategorized_amount_eur_abs", "sum"),
     )
 
-    category_metrics_by_bank: list[dict[str, object]] = []
+    category_metrics_by_bank: list[CategoryMetricByBankRow] = []
     for bank, row in grouped.iterrows():
         transactions_count = int(row["transactions_count"])
         categorized_count = int(row["categorized_count"])

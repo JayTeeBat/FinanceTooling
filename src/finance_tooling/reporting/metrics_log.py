@@ -8,6 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 
 @dataclass(frozen=True)
@@ -173,8 +174,10 @@ def build_snapshot(
     reconciliation = completeness_payload.get("statement_reconciliation", {})
     if not isinstance(reconciliation, dict):
         reconciliation = {}
-    reconciliation_pass_ratio_raw = reconciliation.get(
-        "pass_ratio", payload.get("statement_reconciliation_pass_ratio")
+    reconciliation_payload = cast(dict[str, object], reconciliation)
+    reconciliation_pass_ratio_raw = reconciliation_payload.get(
+        "pass_ratio",
+        payload.get("statement_reconciliation_pass_ratio"),
     )
     reconciliation_pass_ratio = (
         None if reconciliation_pass_ratio_raw is None else _to_float(reconciliation_pass_ratio_raw)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pandas as pd
 
 from finance_tooling.audits.category_id_migration import (
@@ -198,7 +200,9 @@ def test_build_category_id_migration_audit_flags_ambiguous_taxonomy_labels() -> 
     )
 
     assert audit.taxonomy_summary["ambiguous_label_pair_count"] == 1
-    ambiguous = audit.taxonomy_summary["ambiguous_label_pairs"][0]
+    ambiguous_pairs = audit.taxonomy_summary["ambiguous_label_pairs"]
+    assert isinstance(ambiguous_pairs, list)
+    ambiguous = cast(dict[str, object], ambiguous_pairs[0])
     assert ambiguous["category"] == "shopping"
     assert ambiguous["subcategory"] == "general goods"
 
