@@ -6,10 +6,12 @@ import argparse
 from pathlib import Path
 
 from finance_tooling.categorization.transaction_overrides import load_transaction_override_store
-from finance_tooling.commands.common import print_workflow_result, resolve_review_import_paths
+from finance_tooling.commands import common
 from finance_tooling.core.config import load_settings_from_env
 from finance_tooling.review.importer import ReviewImportResult, import_review_into_overrides
 from finance_tooling.workflow.transform_stage import run_transform
+
+print_workflow_result = common.print_workflow_result
 
 
 def print_review_import_result(result: ReviewImportResult, *, dry_run: bool, verbose: bool) -> None:
@@ -92,11 +94,13 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
 def handle(args: argparse.Namespace) -> int:
     """Execute the review-import command from parsed CLI arguments."""
+    settings = common.try_load_settings_for_defaults()
     try:
-        settings = load_settings_from_env()
-        review_path, transaction_overrides_path, review_state_path = resolve_review_import_paths(
-            args.review_path,
-            args.transaction_overrides_path,
+        review_path, transaction_overrides_path, review_state_path = (
+            common.resolve_review_import_paths(
+                args.review_path,
+                args.transaction_overrides_path,
+            )
         )
         transaction_overrides, transaction_warnings = load_transaction_override_store(
             transaction_overrides_path
@@ -130,9 +134,10 @@ def handle(args: argparse.Namespace) -> int:
         if result.backup_run is not None:
             print("Backup snapshot: created")
         if args.run_transform:
+            transform_settings = settings if settings is not None else load_settings_from_env()
             try:
                 workflow_result = run_transform(
-                    settings,
+                    transform_settings,
                     backup_command="review-import",
                     backup_run=result.backup_run,
                 )
