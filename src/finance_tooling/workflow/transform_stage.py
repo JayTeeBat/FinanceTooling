@@ -13,17 +13,17 @@ from typing import cast
 import pandas as pd
 from tqdm import tqdm
 
-from finance_tooling.account_inference import infer_accounts_for_transactions
-from finance_tooling.backup import BackupRunResult, create_stage_backup_run
-from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
-from finance_tooling.dashboard import render_dashboard_html
-from finance_tooling.fx import FX_RATE_SEMANTICS_VERSION
-from finance_tooling.household_healthcheck import render_household_healthcheck_html
-from finance_tooling.models import WorkflowResult
+from finance_tooling.categorization.account_inference import infer_accounts_for_transactions
+from finance_tooling.core.backup import BackupRunResult, create_stage_backup_run
+from finance_tooling.core.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
+from finance_tooling.core.fx import FX_RATE_SEMANTICS_VERSION
+from finance_tooling.core.models import WorkflowResult
+from finance_tooling.core.source_inventory import load_source_inventory
+from finance_tooling.core.store import upsert_transactions
 from finance_tooling.parsers.base import StatementValidation
-from finance_tooling.review_state import apply_review_state
-from finance_tooling.source_inventory import load_source_inventory
-from finance_tooling.store import upsert_transactions
+from finance_tooling.reporting.dashboard import render_dashboard_html
+from finance_tooling.reporting.household_healthcheck import render_household_healthcheck_html
+from finance_tooling.review.state import apply_review_state
 from finance_tooling.workflow.enrichment import enrich_transactions
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,

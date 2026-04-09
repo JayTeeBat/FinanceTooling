@@ -5,15 +5,15 @@ import pandas as pd
 import pytest
 from openpyxl import load_workbook
 
-from finance_tooling.review_export import export_review_rows
-from finance_tooling.review_import import import_review_into_overrides
-from finance_tooling.review_state import load_review_state
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
     load_transaction_override_store,
     write_transaction_override_store,
 )
+from finance_tooling.review.export import export_review_rows
+from finance_tooling.review.importer import import_review_into_overrides
+from finance_tooling.review.state import load_review_state
 
 
 def test_export_review_rows_filters_and_keeps_full_detail(tmp_path: Path) -> None:

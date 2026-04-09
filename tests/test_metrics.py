@@ -1,6 +1,6 @@
 import pandas as pd
 
-from finance_tooling.metrics import (
+from finance_tooling.reporting.metrics import (
     build_base_currency_summary,
     build_monthly_net_eur,
     build_spend_by_category_eur,

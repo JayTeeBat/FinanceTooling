@@ -7,8 +7,8 @@ from datetime import date
 from pathlib import Path
 from typing import TypedDict, cast
 
-from finance_tooling.planning import build_planning_summary, load_planning_inputs
-from finance_tooling.planning_dashboard import render_planning_hypothesis_html
+from finance_tooling.planning.dashboard import render_planning_hypothesis_html
+from finance_tooling.planning.engine import build_planning_summary, load_planning_inputs
 
 
 class ChildBaseline(TypedDict):

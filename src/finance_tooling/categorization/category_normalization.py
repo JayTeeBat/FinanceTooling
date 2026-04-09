@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.classify import ClassificationRules
-from finance_tooling.config import Settings
+from finance_tooling.categorization.classify import ClassificationRules
+from finance_tooling.core.config import Settings
 
 _DEFAULT_REFERENCE_RELATIVE_PATH = Path(
     "backup/processed_backups/20260311-232233/processed/transactions_master.parquet"

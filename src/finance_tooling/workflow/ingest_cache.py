@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.extract import ExtractedPdfText
+from finance_tooling.core.extract import ExtractedPdfText
 
 _CACHE_COLUMNS = [
     "source_file",

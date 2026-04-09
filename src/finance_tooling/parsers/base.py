@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Protocol
 
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 from finance_tooling.parsers.common import normalize_row_to_transaction
 
 

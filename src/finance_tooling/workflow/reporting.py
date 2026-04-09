@@ -11,36 +11,36 @@ from typing import cast
 import pandas as pd
 from pandas import DataFrame
 
-from finance_tooling.account_inference import AccountInferenceConfig
-from finance_tooling.backup import BackupRunResult
-from finance_tooling.cashflow import (
-    build_cashflow_yoy_summary,
-    resolve_cashflow_types_for_dataframe,
-    resolve_economic_roles_for_dataframe,
-)
-from finance_tooling.category_normalization import (
+from finance_tooling.categorization.account_inference import AccountInferenceConfig
+from finance_tooling.categorization.category_normalization import (
     normalize_categories_for_dataframe,
     write_categorization_consolidation_delta,
 )
-from finance_tooling.classify import (
+from finance_tooling.categorization.classify import (
     ClassificationDiagnostics,
     ClassificationRules,
     normalize_description,
     resolve_reporting_categories_for_dataframe,
 )
-from finance_tooling.completeness import build_completeness_report_from_dataframe
-from finance_tooling.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
-from finance_tooling.dashboard import render_dashboard_html
-from finance_tooling.fx import FX_RATE_SEMANTICS_VERSION
-from finance_tooling.household_healthcheck import render_household_healthcheck_html
-from finance_tooling.models import Transaction, WorkflowResult
-from finance_tooling.parsers.base import StatementValidation
-from finance_tooling.store import (
+from finance_tooling.categorization.transaction_overrides import TransactionOverrideStore
+from finance_tooling.core.backup import BackupRunResult
+from finance_tooling.core.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
+from finance_tooling.core.fx import FX_RATE_SEMANTICS_VERSION
+from finance_tooling.core.models import Transaction, WorkflowResult
+from finance_tooling.core.store import (
     UpsertResult,
     upsert_transactions,
     write_canonical_dataframe,
 )
-from finance_tooling.transaction_overrides import TransactionOverrideStore
+from finance_tooling.parsers.base import StatementValidation
+from finance_tooling.reporting.cashflow import (
+    build_cashflow_yoy_summary,
+    resolve_cashflow_types_for_dataframe,
+    resolve_economic_roles_for_dataframe,
+)
+from finance_tooling.reporting.completeness import build_completeness_report_from_dataframe
+from finance_tooling.reporting.dashboard import render_dashboard_html
+from finance_tooling.reporting.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.workflow.enrichment import recompute_dataframe_fx
 from finance_tooling.workflow.types import (
     HsbcBoundaryDiagnostic,

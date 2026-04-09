@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.cashflow import build_cashflow_rows_frame
-from finance_tooling.classify import normalize_description
+from finance_tooling.categorization.classify import normalize_description
+from finance_tooling.reporting.cashflow import build_cashflow_rows_frame
 
 _ESSENTIAL_CATEGORIES = frozenset(
     {
@@ -1028,7 +1028,7 @@ def render_household_healthcheck_html(
     *,
     base_currency: str,
 ) -> Path:
-    """Render a self-contained household healthcheck HTML dashboard."""
+    """Render the deprecated compatibility-only household healthcheck dashboard."""
     payload = _build_payload(dataframe, base_currency=base_currency)
     html = _HTML_TEMPLATE.replace("__PAYLOAD_JSON__", _serialize_payload(payload))
     destination.parent.mkdir(parents=True, exist_ok=True)

@@ -7,19 +7,19 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.category_id_migration_audit import _resolve_row_category_ids
-from finance_tooling.classify import (
+from finance_tooling.audits.category_id_migration import _resolve_row_category_ids
+from finance_tooling.categorization.classify import (
     ClassificationRules,
     load_classification_rules,
     resolve_taxonomy_labels,
 )
-from finance_tooling.config import Settings, load_settings_from_env
-from finance_tooling.store import write_canonical_dataframe
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideStore,
     load_transaction_override_store,
     write_transaction_override_store,
 )
+from finance_tooling.core.config import Settings, load_settings_from_env
+from finance_tooling.core.store import write_canonical_dataframe
 
 
 def migrate_canonical_dataframe(

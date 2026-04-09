@@ -8,7 +8,7 @@ from typing import cast
 
 import pandas as pd
 
-from finance_tooling.classify import (
+from finance_tooling.categorization.classify import (
     ClassificationRules,
     _taxonomy_entries_by_id,
     load_classification_rules,
@@ -16,12 +16,12 @@ from finance_tooling.classify import (
     resolve_reporting_category_id,
     resolve_taxonomy_labels,
 )
-from finance_tooling.config import Settings, load_settings_from_env, outputs_root_path
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
     load_transaction_override_store,
 )
+from finance_tooling.core.config import Settings, load_settings_from_env, outputs_root_path
 
 _AUDIT_FILENAME = "category_id_migration_audit.md"
 

@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.classify import (
+from finance_tooling.categorization.classify import (
     CategoryRule,
     ClassificationRules,
     classify_transactions,
@@ -12,7 +12,7 @@ from finance_tooling.classify import (
     normalize_description,
     resolve_taxonomy_cashflow_type,
 )
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 
 
 def test_classify_transactions_assigns_keyword_category() -> None:

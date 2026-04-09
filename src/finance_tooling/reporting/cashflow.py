@@ -8,22 +8,22 @@ from typing import cast
 
 import pandas as pd
 
-from finance_tooling.account_inference import (
+from finance_tooling.categorization.account_inference import (
     AccountInferenceConfig,
     transaction_matches_identified_employer,
 )
-from finance_tooling.classify import (
+from finance_tooling.categorization.classify import (
     ClassificationRules,
     resolve_category_id_from_labels,
     resolve_taxonomy_cashflow_type_for_category_id,
     resolve_taxonomy_economic_role_for_category_id,
 )
-from finance_tooling.models import CANONICAL_TRANSACTION_COLUMNS
-from finance_tooling.store import transactions_from_dataframe
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideStore,
     iter_matching_override_entries,
 )
+from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS
+from finance_tooling.core.store import transactions_from_dataframe
 
 _VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
 _VALID_ECONOMIC_ROLES = frozenset({"income", "expense", "transfer", "exclude"})

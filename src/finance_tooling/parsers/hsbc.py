@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 from finance_tooling.parsers.base import (
     BaseStatementParser,
     NormalizeConfig,

@@ -7,19 +7,19 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from finance_tooling.migrate_transaction_ids import migrate_transaction_ids
-from finance_tooling.models import Transaction
-from finance_tooling.store import (
-    compute_legacy_transaction_id,
-    compute_path_based_transaction_id,
-    compute_transaction_id,
-)
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
     load_transaction_override_store,
     write_transaction_override_store,
 )
+from finance_tooling.core.models import Transaction
+from finance_tooling.core.store import (
+    compute_legacy_transaction_id,
+    compute_path_based_transaction_id,
+    compute_transaction_id,
+)
+from finance_tooling.maintenance.migrate_transaction_ids import migrate_transaction_ids
 from finance_tooling.workflow.staging import write_staged_transactions
 
 HAS_PYARROW = importlib.util.find_spec("pyarrow") is not None

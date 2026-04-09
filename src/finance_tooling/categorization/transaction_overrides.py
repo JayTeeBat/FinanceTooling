@@ -11,8 +11,8 @@ from typing import cast
 
 import yaml
 
-from finance_tooling.account_inference import _normalize_account_type
-from finance_tooling.classify import (
+from finance_tooling.categorization.account_inference import _normalize_account_type
+from finance_tooling.categorization.classify import (
     ClassificationRules,
     _normalize_cashflow_type,
     normalize_description,
@@ -20,8 +20,8 @@ from finance_tooling.classify import (
     resolve_reporting_category_id,
     resolve_taxonomy_labels,
 )
-from finance_tooling.models import Transaction
-from finance_tooling.store import compute_transaction_id
+from finance_tooling.core.models import Transaction
+from finance_tooling.core.store import compute_transaction_id
 
 
 @dataclass(frozen=True)

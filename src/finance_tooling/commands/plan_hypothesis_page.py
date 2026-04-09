@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from finance_tooling.planning_dashboard import render_planning_hypothesis_html
+from finance_tooling.planning.dashboard import render_planning_hypothesis_html
 
 DEFAULT_INPUTS_PATH = Path("planning/household_finance_360/09_planning_inputs.yaml")
 DEFAULT_OUTPUT_PATH = Path("planning/household_finance_360/15_hypothesis_playground.html")

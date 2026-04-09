@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from finance_tooling.commands.common import print_workflow_result
-from finance_tooling.config import load_settings_from_env
+from finance_tooling.core.config import load_settings_from_env
 from finance_tooling.workflow.transform_stage import run_transform
 
 

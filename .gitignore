@@ -175,3 +175,8 @@ cython_debug/
 
 # Local runtime backup artifacts
 config/*.bak
+
+# Local workspace tooling and scratch roots
+/.codex
+/backups/
+/worktrees/

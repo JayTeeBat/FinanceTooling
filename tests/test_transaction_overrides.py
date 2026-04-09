@@ -4,14 +4,14 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from finance_tooling.models import Transaction
-from finance_tooling.store import compute_transaction_id
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
     apply_transaction_overrides,
     load_transaction_override_store,
 )
+from finance_tooling.core.models import Transaction
+from finance_tooling.core.store import compute_transaction_id
 
 
 def _tx(description: str, *, amount: str) -> Transaction:

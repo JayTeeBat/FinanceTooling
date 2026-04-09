@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from finance_tooling.backup import create_stage_backup_run
+import pytest
+
+from finance_tooling.core.backup import create_stage_backup_run
 
 
 def test_create_stage_backup_run_copies_full_state_and_prunes_by_run_day(tmp_path: Path) -> None:
@@ -80,16 +82,17 @@ def test_create_stage_backup_run_migrates_legacy_backups_and_records_missing_fil
     legacy_file_backup = legacy_config_backup / "transaction_overrides.yaml.20260310-000000.bak"
     legacy_file_backup.write_text("config", encoding="utf-8")
 
-    result = create_stage_backup_run(
-        stage="ingest",
-        command="ingest",
-        processed_dir=processed_dir,
-        processed_targets=(processed_dir / "state" / "ingest_staged_transactions.parquet",),
-        config_targets=(
-            config_dir / "project_rules.yaml",
-            config_dir / "transaction_overrides.yaml",
-        ),
-    )
+    with pytest.warns(FutureWarning, match="Migrated legacy backup layout"):
+        result = create_stage_backup_run(
+            stage="ingest",
+            command="ingest",
+            processed_dir=processed_dir,
+            processed_targets=(processed_dir / "state" / "ingest_staged_transactions.parquet",),
+            config_targets=(
+                config_dir / "project_rules.yaml",
+                config_dir / "transaction_overrides.yaml",
+            ),
+        )
 
     assert result.processed_backup_dir is not None
     assert result.config_backup_dir is not None

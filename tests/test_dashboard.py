@@ -8,7 +8,7 @@ from typing import cast
 
 import pandas as pd
 
-from finance_tooling.dashboard import render_dashboard_html
+from finance_tooling.reporting.dashboard import render_dashboard_html
 
 
 def _extract_payload(html: str) -> dict[str, object]:

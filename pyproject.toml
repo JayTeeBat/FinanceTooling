@@ -16,6 +16,7 @@ dependencies = [
   "pdfplumber>=0.11.0",
   "pyyaml>=6.0.2",
   "requests>=2.32.0",
+  "typing-extensions>=4.12.0",
   "tqdm>=4.67.0",
 ]
 
@@ -31,6 +32,7 @@ workflow-status = "finance_tooling.commands.workflow_status:main"
 dev = [
   "pre-commit>=4.0.0",
   "pytest>=8.3.0",
+  "pytest-cov>=6.0.0",
   "ruff>=0.13.0",
   "ty>=0.0.1a17",
 ]

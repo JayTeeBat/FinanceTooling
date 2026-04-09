@@ -9,7 +9,7 @@ from finance_tooling.commands.common import (
     processed_dir_from_settings,
     try_load_settings_for_defaults,
 )
-from finance_tooling.migrate_transaction_ids import migrate_transaction_ids
+from finance_tooling.maintenance.migrate_transaction_ids import migrate_transaction_ids
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance_tooling.classify import normalize_description
-from finance_tooling.review_common import (
+from finance_tooling.categorization.classify import normalize_description
+from finance_tooling.review.common import (
     EXISTING_PROJECT_TAGS_COLUMN,
     FINGERPRINT_COLUMN,
     ORIGINAL_CATEGORY_COLUMN,
@@ -23,7 +23,7 @@ from finance_tooling.review_common import (
     read_table,
     write_table,
 )
-from finance_tooling.review_state import load_review_state
+from finance_tooling.review.state import load_review_state
 
 _PRESERVED_REVIEW_COLUMNS = (
     "category",

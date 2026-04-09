@@ -10,7 +10,7 @@ from typing import cast
 
 import pandas as pd
 
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 from finance_tooling.parsers.base import StatementValidation
 
 _DEFAULT_WARN_COVERAGE_RATIO = 0.90

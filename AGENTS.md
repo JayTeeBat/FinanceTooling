@@ -182,6 +182,28 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-04-09 - codex
+- Branch: `codex/package-layout-cleanup`
+- Completed:
+  - Fixed `review-import` backup/path resolution so explicit review and override paths no longer get redirected through ambient env-backed processed paths.
+  - Hard-moved core infrastructure into `src/finance_tooling/core/`, categorization modules into `src/finance_tooling/categorization/`, review helpers into `src/finance_tooling/review/`, reporting modules into `src/finance_tooling/reporting/`, planning modules into `src/finance_tooling/planning/`, and audit/maintenance tools into `src/finance_tooling/audits/` and `src/finance_tooling/maintenance/`.
+  - Added `pytest-cov`, a GitHub Actions quality workflow, repo-root ignore rules for local scratch paths, and README package-layout docs matching the new subpackage structure.
+- Checks:
+  - `.venv/bin/ruff check .`: pass
+  - `env PYTHONPATH=src sh -c "git ls-files 'tests/test_*.py' | xargs .venv/bin/pytest -q"`: pass
+  - `.venv/bin/pytest -q tests/test_review_workflow.py tests/test_command_entrypoints.py tests/test_config.py tests/test_store.py tests/test_workflow_status.py`: pass
+  - `.venv/bin/pytest -q tests/test_migrate_transaction_ids.py tests/test_perf_check.py tests/test_category_id_migrate_live.py tests/test_category_id_migration_audit.py tests/test_categorization_audit.py`: pass
+  - `.venv/bin/pytest -q tests/test_dashboard.py tests/test_cashflow.py tests/test_completeness.py tests/test_metrics.py tests/test_metrics_log.py tests/test_household_healthcheck.py tests/test_workflow_status.py tests/test_workflow_stages.py`: pass
+  - `.venv/bin/pytest -q tests/test_planning.py tests/test_planning_doe.py tests/test_planning_dashboard.py tests/test_budgeting.py`: pass
+  - `.venv/bin/pytest -q tests/test_account_inference.py tests/test_classify.py tests/test_category_normalization.py tests/test_projecting.py tests/test_transaction_overrides.py tests/test_review_workflow.py tests/test_category_id_migrate_live.py tests/test_category_id_migration_audit.py tests/test_categorization_audit.py tests/test_cashflow.py tests/test_enrichment.py`: pass
+  - `.venv/bin/pytest -q tests/test_fx.py tests/test_enrichment.py tests/test_workflow_stages.py tests/test_perf_check.py`: pass
+  - `.venv/bin/ty check src/finance_tooling tests`: fail (pre-existing typing debt remains)
+- Open items:
+  - The tracked package root is now effectively reduced to package entrypoints; the main remaining cleanup work is typed payload/type-check debt rather than package layout.
+  - Draft PR opened: `#79`
+- Next action:
+  - Attack the remaining `ty` diagnostics with typed payload cleanup, starting with reporting/status JSON payload contracts.
+
 ### 2026-04-08 - codex
 - Branch: `codex/unified-backup-snapshots`
 - Completed:
@@ -209,17 +231,3 @@ Success target for the 2026 validation campaign:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q` still fails on the pre-existing `tests/test_cli_dispatch.py::test_review_import_runs_transform_by_default` fixture/setup mismatch outside this PR's scope.
 - Next action:
   - Publish the starter-config cleanup as a draft PR and decide whether to fix the unrelated full-suite `review-import` test in a separate follow-up.
-
-### 2026-04-05 - codex
-- Branch: `main`
-- Completed:
-  - Split finance reporting from operational diagnostics so `transform_run_summary.json` now stays finance-focused while `workflow_pipeline_state.json` exposes parser, reconciliation, HSBC, and stale-state diagnostics.
-  - Added a shared YoY cashflow aggregation layer and surfaced the resulting annual and YTD cashflow metrics in `transform_dashboard.html` and the finance summary payload.
-  - Updated metrics/perf consumers, README output-contract docs, and focused tests to match the new boundary.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src/finance_tooling/cashflow.py src/finance_tooling/dashboard.py src/finance_tooling/household_healthcheck.py src/finance_tooling/metrics_log.py src/finance_tooling/perf_check.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/types.py src/finance_tooling/workflow_status.py tests/test_dashboard.py tests/test_perf_check.py tests/test_workflow_stages.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_dashboard.py tests/test_metrics_log.py tests/test_perf_check.py tests/test_workflow_status.py tests/test_workflow_stages.py`: pass
-- Open items:
-  - `household_healthcheck.html` remains as a secondary compatibility dashboard and still overlaps somewhat with the primary finance dashboard.
-- Next action:
-  - Decide whether to keep `household_healthcheck.html` long-term or formally deprecate it after the finance dashboard settles.

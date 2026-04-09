@@ -62,6 +62,13 @@ Compatibility-only optional export:
 
 - `transform_transactions.json` when JSON export is explicitly enabled
 
+Deprecated / compatibility-only surface:
+
+- `household_healthcheck.html` is retained as a secondary compatibility dashboard.
+- legacy state/output path fallbacks are still supported temporarily, but the code now warns
+  when those fallback paths are used so they can be migrated to the canonical `state/` layout.
+- `finance_tooling.healthcheck()` is deprecated and should not be used for new integrations.
+
 ## Workflow Overview (Newcomer)
 
 Use this sequence when processing new statements and optionally refining
@@ -490,6 +497,16 @@ Shared stage orchestration lives under:
 - `src/finance_tooling/workflow/transform_stage.py`
 - `src/finance_tooling/workflow/update_stage.py`
 
+Implementation modules are being consolidated into focused subpackages:
+
+- `src/finance_tooling/core/` for config, models, storage, extraction, backup, and source scanning
+- `src/finance_tooling/categorization/` for classification, overrides, account inference, and project assignment
+- `src/finance_tooling/review/` for review export/import/state helpers
+- `src/finance_tooling/reporting/` for dashboards, metrics, completeness, and workflow diagnostics
+- `src/finance_tooling/planning/` for planning calculations, budgeting, and planning dashboards
+- `src/finance_tooling/audits/` for audit-only analysis tools
+- `src/finance_tooling/maintenance/` for migrations and maintenance-only utilities
+
 ### Development Commands
 
 ```bash
@@ -497,6 +514,7 @@ uv run ruff check .
 uv run ruff format .
 uv run ty check src/finance_tooling tests
 uv run pytest
+uv run pytest --cov=src/finance_tooling --cov-report=term-missing --durations=10
 uv run pre-commit run --all-files
 ```
 
@@ -514,7 +532,7 @@ FINANCE_PROCESSED_PATH="${PERF_PROCESSED_PATH}" \
 FINANCE_FX_AUTO_FETCH=false \
 FINANCE_INGEST_WORKERS=4 \
 FINANCE_INGEST_TEXT_CACHE_ENABLED=true \
-uv run python -m finance_tooling.perf_check
+uv run python -m finance_tooling.maintenance.perf_check
 ```
 
 The run writes standard artifacts plus `performance_summary.json` under the
@@ -531,7 +549,17 @@ Set `FINANCE_INGEST_TEXT_CACHE_ENABLED=true` to persist extracted PDF text in
 
 ```text
 src/
-  finance_tooling/      # package modules and parser plugins
+  finance_tooling/      # package entrypoints; implementation now lives in subpackages
+    core/              # config, models, storage, extraction, backups, fx
+    categorization/    # classification, overrides, account/project inference
+    review/            # review export/import/state
+    reporting/         # dashboards, metrics, completeness, diagnostics
+    planning/          # planning calculations and planning dashboards
+    audits/            # audit-only analysis tools
+    maintenance/       # migrations and maintenance-only tools
+    workflow/          # pipeline orchestration
+    commands/          # CLI entrypoints
+    parsers/           # bank parser plugins
 tests/
 ```
 

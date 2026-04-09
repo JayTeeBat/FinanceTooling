@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pandas as pd
 
-from finance_tooling.category_id_migrate_live import (
-    migrate_canonical_dataframe,
-    migrate_override_store,
-)
-from finance_tooling.classify import ClassificationRules, TaxonomyCategory
-from finance_tooling.transaction_overrides import (
+from finance_tooling.categorization.classify import ClassificationRules, TaxonomyCategory
+from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
     TransactionOverrideStore,
+)
+from finance_tooling.maintenance.category_id_migrate_live import (
+    migrate_canonical_dataframe,
+    migrate_override_store,
 )
 
 

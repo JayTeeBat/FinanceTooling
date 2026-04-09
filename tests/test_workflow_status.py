@@ -7,8 +7,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from finance_tooling.config import Settings
-from finance_tooling.source_inventory import build_source_inventory
+from finance_tooling.core.config import Settings
+from finance_tooling.core.source_inventory import build_source_inventory
+from finance_tooling.reporting.workflow_status import build_pipeline_state
 from finance_tooling.workflow.incremental_state import (
     build_incremental_selection_plan,
     compute_rule_config_fingerprint,
@@ -19,7 +20,6 @@ from finance_tooling.workflow.incremental_state import (
     update_source_registry,
     write_source_registry,
 )
-from finance_tooling.workflow_status import build_pipeline_state
 
 HAS_PYARROW = importlib.util.find_spec("pyarrow") is not None
 pytestmark = pytest.mark.skipif(not HAS_PYARROW, reason="pyarrow is required")
@@ -144,9 +144,12 @@ def test_incremental_state_prefers_legacy_outputs_registry_and_staged_artifacts(
     legacy_staged = settings.summary_json_path.parent / "staged_transactions.parquet"
     legacy_staged.write_text("placeholder", encoding="utf-8")
 
-    assert source_registry_path(settings) == legacy_registry
-    assert resolve_staged_batch_manifest_path(settings) == legacy_manifest
-    assert resolve_staged_transactions_path(settings) == legacy_staged
+    with pytest.warns(FutureWarning, match="legacy source registry path"):
+        assert source_registry_path(settings) == legacy_registry
+    with pytest.warns(FutureWarning, match="legacy staged batch manifest path"):
+        assert resolve_staged_batch_manifest_path(settings) == legacy_manifest
+    with pytest.warns(FutureWarning, match="legacy staged transactions path"):
+        assert resolve_staged_transactions_path(settings) == legacy_staged
 
 
 def test_transaction_override_changes_do_not_report_config_drift(tmp_path: Path) -> None:

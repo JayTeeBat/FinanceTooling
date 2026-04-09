@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from finance_tooling.fx import (
+from finance_tooling.core.fx import (
     build_fx_lookup_index,
     ensure_fx_cache,
     parse_ecb_csv,
     resolve_rate,
     resolve_rate_from_index,
 )
-from finance_tooling.models import Transaction
+from finance_tooling.core.models import Transaction
 
 _USD_CSV = (
     "KEY,TIME_PERIOD,OBS_VALUE\n"
@@ -67,7 +67,7 @@ def test_ensure_fx_cache_fetches_missing_ranges(tmp_path: Path, monkeypatch) -> 
             "KEY,TIME_PERIOD,OBS_VALUE\nEXR.D.USD.EUR.SP00.A,2026-02-20,1.1767\n", currency
         )
 
-    monkeypatch.setattr("finance_tooling.fx.fetch_ecb_rates", fake_fetch)
+    monkeypatch.setattr("finance_tooling.core.fx.fetch_ecb_rates", fake_fetch)
 
     cache, warnings = ensure_fx_cache(
         cache_path,

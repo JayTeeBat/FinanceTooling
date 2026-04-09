@@ -9,9 +9,9 @@ from typing import TypedDict
 
 import pandas as pd
 
-from finance_tooling.config import Settings, state_root_path
-from finance_tooling.scanner import discover_statement_pdfs
-from finance_tooling.source_inventory import (
+from finance_tooling.core.config import Settings, state_root_path
+from finance_tooling.core.scanner import discover_statement_pdfs
+from finance_tooling.core.source_inventory import (
     SourceInventorySnapshot,
     build_source_inventory,
     duplicate_groups,

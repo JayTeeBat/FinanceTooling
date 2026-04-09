@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from finance_tooling.models import Transaction
-from finance_tooling.store import (
+from finance_tooling.core.models import Transaction
+from finance_tooling.core.store import (
     compute_legacy_transaction_id,
     compute_path_based_transaction_id,
     compute_transaction_id,
