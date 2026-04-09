@@ -24,6 +24,13 @@ from finance_tooling.categorization.transaction_overrides import (
 )
 from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS
 from finance_tooling.core.store import transactions_from_dataframe
+from finance_tooling.workflow.types import (
+    CashflowCurrentYtd,
+    CashflowPeriodMetrics,
+    CashflowYearRow,
+    CashflowYoYSummary,
+    CashflowYtdDelta,
+)
 
 _VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
 _VALID_ECONOMIC_ROLES = frozenset({"income", "expense", "transfer", "exclude"})
@@ -155,7 +162,7 @@ def resolve_cashflow_types_for_dataframe(
         override_cashflow_type: str | None = None
         for entry in iter_matching_override_entries(tx, transaction_override_store):
             if entry.set_cashflow_type and entry.cashflow_type is not None:
-                override_cashflow_type = cast(str, entry.cashflow_type)
+                override_cashflow_type = entry.cashflow_type
 
         category_id = tx.reporting_category_id or tx.category_id or resolve_category_id_from_labels(
             tx.category,
@@ -373,7 +380,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     ].sort_values("booking_date", kind="stable", ignore_index=True)
 
 
-def _period_metrics(rows: pd.DataFrame) -> dict[str, float | None]:
+def _period_metrics(rows: pd.DataFrame) -> CashflowPeriodMetrics:
     if rows.empty:
         return {
             "income": 0.0,
@@ -402,15 +409,19 @@ def _period_metrics(rows: pd.DataFrame) -> dict[str, float | None]:
     }
 
 
+def _metric_delta(current: float, previous: float, digits: int) -> float:
+    return round(current - previous, digits)
+
+
 def build_cashflow_yoy_summary(
     dataframe: pd.DataFrame,
     *,
     as_of_date: date | None = None,
-) -> dict[str, object]:
+) -> CashflowYoYSummary:
     """Build full-year and YTD cashflow reporting metrics."""
     rows = build_cashflow_rows_frame(dataframe)
     effective_as_of = as_of_date or datetime.now(UTC).date()
-    payload: dict[str, object] = {
+    payload: CashflowYoYSummary = {
         "generated_at": datetime.now(UTC).isoformat(),
         "as_of_date": effective_as_of.isoformat(),
         "covered_start_date": None,
@@ -424,40 +435,39 @@ def build_cashflow_yoy_summary(
     payload["covered_start_date"] = str(rows["booking_date"].iloc[0])
     payload["covered_end_date"] = str(rows["booking_date"].iloc[-1])
 
-    yearly_rows: list[dict[str, object]] = []
+    yearly_rows: list[CashflowYearRow] = []
     completed_years = sorted(
-        year for year in rows["year"].unique() if int(year) < effective_as_of.year
+        int(year) for year in rows["year"].unique() if int(year) < effective_as_of.year
     )
-    previous_metrics: dict[str, float | None] | None = None
+    previous_metrics: CashflowPeriodMetrics | None = None
     for year in completed_years:
-        year_rows = rows.loc[rows["year"] == int(year)]
+        year_rows = rows.loc[rows["year"] == year]
         metrics = _period_metrics(year_rows)
-        yearly_row = {
-            "year": int(year),
-            **metrics,
+        yearly_row: CashflowYearRow = {
+            "year": year,
+            "income": metrics["income"],
+            "expenses": metrics["expenses"],
+            "net_cashflow": metrics["net_cashflow"],
+            "cashflow_margin": metrics["cashflow_margin"],
+            "transfer_volume": metrics["transfer_volume"],
+            "uncategorized_volume": metrics["uncategorized_volume"],
             "income_yoy_delta": (
-                round(float(metrics["income"]) - float(previous_metrics["income"]), 2)
+                _metric_delta(metrics["income"], previous_metrics["income"], 2)
                 if previous_metrics is not None
                 else None
             ),
             "expenses_yoy_delta": (
-                round(float(metrics["expenses"]) - float(previous_metrics["expenses"]), 2)
+                _metric_delta(metrics["expenses"], previous_metrics["expenses"], 2)
                 if previous_metrics is not None
                 else None
             ),
             "net_cashflow_yoy_delta": (
-                round(
-                    float(metrics["net_cashflow"]) - float(previous_metrics["net_cashflow"]),
-                    2,
-                )
+                _metric_delta(metrics["net_cashflow"], previous_metrics["net_cashflow"], 2)
                 if previous_metrics is not None
                 else None
             ),
             "cashflow_margin_yoy_delta": (
-                round(
-                    float(metrics["cashflow_margin"]) - float(previous_metrics["cashflow_margin"]),
-                    4,
-                )
+                _metric_delta(metrics["cashflow_margin"], previous_metrics["cashflow_margin"], 4)
                 if previous_metrics is not None
                 and metrics["cashflow_margin"] is not None
                 and previous_metrics["cashflow_margin"] is not None
@@ -489,7 +499,27 @@ def build_cashflow_yoy_summary(
     ]
     current_metrics = _period_metrics(current_ytd_rows)
     previous_metrics = _period_metrics(previous_ytd_rows)
-    payload["current_ytd"] = {
+    ytd_delta: CashflowYtdDelta = {
+        "income": _metric_delta(current_metrics["income"], previous_metrics["income"], 2),
+        "expenses": _metric_delta(current_metrics["expenses"], previous_metrics["expenses"], 2),
+        "net_cashflow": _metric_delta(
+            current_metrics["net_cashflow"],
+            previous_metrics["net_cashflow"],
+            2,
+        ),
+        "cashflow_margin": (
+            _metric_delta(
+                current_metrics["cashflow_margin"],
+                previous_metrics["cashflow_margin"],
+                4,
+            )
+            if current_metrics["cashflow_margin"] is not None
+            and previous_metrics["cashflow_margin"] is not None
+            else None
+        ),
+    }
+    payload["current_ytd"] = CashflowCurrentYtd(
+        {
         "label": f"{effective_as_of.year} YTD vs {effective_as_of.year - 1} YTD",
         "current_period_start": f"{effective_as_of.year}-01-01",
         "current_period_end": current_period_end.isoformat(),
@@ -497,29 +527,7 @@ def build_cashflow_yoy_summary(
         "prior_period_end": prior_period_end.isoformat(),
         "current": current_metrics,
         "prior": previous_metrics,
-        "delta": {
-            "income": round(
-                float(current_metrics["income"]) - float(previous_metrics["income"]),
-                2,
-            ),
-            "expenses": round(
-                float(current_metrics["expenses"]) - float(previous_metrics["expenses"]), 2
-            ),
-            "net_cashflow": round(
-                float(current_metrics["net_cashflow"])
-                - float(previous_metrics["net_cashflow"]),
-                2,
-            ),
-            "cashflow_margin": (
-                round(
-                    float(current_metrics["cashflow_margin"])
-                    - float(previous_metrics["cashflow_margin"]),
-                    4,
-                )
-                if current_metrics["cashflow_margin"] is not None
-                and previous_metrics["cashflow_margin"] is not None
-                else None
-            ),
-        },
+        "delta": ytd_delta,
     }
+    )
     return payload

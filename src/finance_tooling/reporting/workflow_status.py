@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import pandas as pd
 
@@ -182,7 +182,7 @@ def _context_dict(payload: dict[str, object] | None, key: str) -> dict[str, obje
     if payload is None:
         return {}
     value = payload.get(key)
-    return value if isinstance(value, dict) else {}
+    return cast(dict[str, object], value) if isinstance(value, dict) else {}
 
 
 def _context_list(payload: dict[str, object] | None, key: str) -> list[dict[str, object]]:
@@ -191,7 +191,16 @@ def _context_list(payload: dict[str, object] | None, key: str) -> list[dict[str,
     value = payload.get(key)
     if not isinstance(value, list):
         return []
-    return [item for item in value if isinstance(item, dict)]
+    return [cast(dict[str, object], item) for item in value if isinstance(item, dict)]
+
+
+def _context_str_list(payload: dict[str, object] | None, key: str) -> list[str]:
+    if payload is None:
+        return []
+    value = payload.get(key)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _context_int(payload: dict[str, object] | None, key: str) -> int:
@@ -609,11 +618,7 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
                     else []
                 ),
             },
-            "warnings": (
-                list(summary_payload.get("warnings", []))
-                if summary_payload is not None and isinstance(summary_payload.get("warnings"), list)
-                else []
-            ),
+            "warnings": _context_str_list(summary_payload, "warnings"),
         },
         "findings": findings,
     }

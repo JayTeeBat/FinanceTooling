@@ -609,6 +609,7 @@ def test_import_review_into_overrides_defaults_backup_into_config_backup_folder(
     assert result.backup_run.backup_root == data_dir / "backup"
     assert result.transaction_backup_path == result.backup_run.snapshot_dir
     assert result.backup_run.snapshot_dir is not None
+    assert result.backup_run.config_backup_dir is not None
     assert (result.backup_run.snapshot_dir / "manifest.json").exists()
     assert (result.backup_run.config_backup_dir / "transaction_overrides.yaml").exists()
 

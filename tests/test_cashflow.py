@@ -17,6 +17,7 @@ from finance_tooling.reporting.cashflow import (
     resolve_cashflow_types_for_dataframe,
     resolve_economic_roles_for_dataframe,
 )
+from finance_tooling.workflow.types import CashflowYearRow
 
 
 def _rules() -> ClassificationRules:
@@ -192,7 +193,7 @@ def test_build_cashflow_yoy_summary_excludes_exclude_rows_from_metrics() -> None
 
     dataframe = _frame_from_transactions(transactions)
     summary = build_cashflow_yoy_summary(dataframe)
-    years = summary["years"]
+    years: list[CashflowYearRow] = summary["years"]
 
     assert len(years) == 1
     assert years[0]["year"] == 2025
@@ -254,7 +255,7 @@ def test_build_cashflow_yoy_summary_includes_transfer_and_uncategorized_volumes(
     ]
 
     summary = build_cashflow_yoy_summary(_frame_from_transactions(transactions))
-    years = summary["years"]
+    years: list[CashflowYearRow] = summary["years"]
 
     assert years[0]["transfer_volume"] == 300.0
     assert years[0]["uncategorized_volume"] == 75.0

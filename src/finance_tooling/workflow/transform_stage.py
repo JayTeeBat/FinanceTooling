@@ -187,6 +187,7 @@ def _workflow_result_from_summary(
     reconciliation = completeness_payload.get("statement_reconciliation", {})
     if not isinstance(reconciliation, dict):
         reconciliation = {}
+    reconciliation_payload = cast(Mapping[str, object], reconciliation)
     return WorkflowResult(
         dashboard_path=settings.output_path,
         parquet_path=settings.master_parquet_path,
@@ -203,13 +204,13 @@ def _workflow_result_from_summary(
         completeness_coverage_ratio=completeness_coverage_ratio,
         missing_source_file_count=missing_source_file_count,
         reconciliation_checkable_file_count=_summary_int(
-            reconciliation, "checkable_file_count"
+            reconciliation_payload, "checkable_file_count"
         ),
-        reconciliation_fail_count=_summary_int(reconciliation, "fail_count"),
+        reconciliation_fail_count=_summary_int(reconciliation_payload, "fail_count"),
         reconciliation_uncheckable_file_count=_summary_int(
-            reconciliation, "uncheckable_file_count"
+            reconciliation_payload, "uncheckable_file_count"
         ),
-        reconciliation_pass_ratio=cast(float | None, reconciliation.get("pass_ratio")),
+        reconciliation_pass_ratio=_summary_float(reconciliation_payload, "pass_ratio"),
         categorized_count=_summary_int(summary_payload, "categorized_count"),
         uncategorized_count=_summary_int(summary_payload, "uncategorized_count"),
         categorized_amount_eur_abs=_summary_float(summary_payload, "categorized_amount_eur_abs"),

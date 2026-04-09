@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 
 import yaml
 
@@ -332,6 +332,16 @@ class OverrideStore:
         return None
 
 
+class UncategorizedDescriptionSummary(TypedDict):
+    description: str
+    count: int
+
+
+class TopRuleHitSummary(TypedDict):
+    rule_id: str
+    count: int
+
+
 @dataclass(frozen=True)
 class ClassificationDiagnostics:
     """Summary statistics for a classification run."""
@@ -340,8 +350,8 @@ class ClassificationDiagnostics:
     uncategorized_count: int
     uncategorized_ratio: float
     category_source_counts: dict[str, int]
-    top_uncategorized_descriptions: list[dict[str, object]]
-    top_rules_by_hits: list[dict[str, object]]
+    top_uncategorized_descriptions: list[UncategorizedDescriptionSummary]
+    top_rules_by_hits: list[TopRuleHitSummary]
 
 
 def normalize_description(description: str) -> str:
@@ -933,14 +943,14 @@ def build_classification_diagnostics(transactions: list[Transaction]) -> Classif
     uncategorized_count = sum(uncategorized_descriptions.values())
     categorized_count = len(transactions) - uncategorized_count
     uncategorized_ratio = (uncategorized_count / len(transactions)) if transactions else 0.0
-    top_uncategorized = [
+    top_uncategorized: list[UncategorizedDescriptionSummary] = [
         {"description": description, "count": count}
         for description, count in sorted(
             uncategorized_descriptions.items(),
             key=lambda item: (-item[1], item[0]),
         )[:10]
     ]
-    top_rules = [
+    top_rules: list[TopRuleHitSummary] = [
         {"rule_id": rule_id, "count": count}
         for rule_id, count in sorted(rule_hit_counts.items(), key=lambda item: (-item[1], item[0]))[
             :10

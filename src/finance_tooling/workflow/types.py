@@ -77,6 +77,76 @@ class HsbcSignDiagnostic(TypedDict):
     sign_unresolved_ambiguous_count: int
 
 
+class CategoryMetricByBankRow(TypedDict):
+    bank: str
+    transactions_count: int
+    categorized_count: int
+    uncategorized_count: int
+    reviewed_count: int
+    income_amount_eur: float
+    categorized_amount_eur_abs: float
+    uncategorized_amount_eur_abs: float
+    categorized_pct: float
+    uncategorized_pct: float
+    categorized_amount_eur_abs_ratio: float
+    uncategorized_amount_eur_abs_ratio: float
+    reviewed_pct: float
+
+
+class UncategorizedDescriptionRow(TypedDict):
+    description: str
+    count: int
+
+
+class TopRuleByHitsRow(TypedDict):
+    rule_id: str
+    count: int
+
+
+class CashflowPeriodMetrics(TypedDict):
+    income: float
+    expenses: float
+    net_cashflow: float
+    cashflow_margin: float | None
+    transfer_volume: float
+    uncategorized_volume: float
+
+
+class CashflowYearRow(CashflowPeriodMetrics):
+    year: int
+    income_yoy_delta: float | None
+    expenses_yoy_delta: float | None
+    net_cashflow_yoy_delta: float | None
+    cashflow_margin_yoy_delta: float | None
+
+
+class CashflowYtdDelta(TypedDict):
+    income: float
+    expenses: float
+    net_cashflow: float
+    cashflow_margin: float | None
+
+
+class CashflowCurrentYtd(TypedDict):
+    label: str
+    current_period_start: str
+    current_period_end: str
+    prior_period_start: str
+    prior_period_end: str
+    current: CashflowPeriodMetrics
+    prior: CashflowPeriodMetrics
+    delta: CashflowYtdDelta
+
+
+class CashflowYoYSummary(TypedDict):
+    generated_at: str
+    as_of_date: str
+    covered_start_date: str | None
+    covered_end_date: str | None
+    years: list[CashflowYearRow]
+    current_ytd: CashflowCurrentYtd | None
+
+
 class SummaryPayload(TypedDict):
     """Run summary payload persisted to JSON."""
 
@@ -105,9 +175,9 @@ class SummaryPayload(TypedDict):
     manual_category_carry_forward_ambiguous_skipped_count: int
     manual_category_carry_forward_unmatched_count: int
     category_source_counts: dict[str, int]
-    category_metrics_by_bank: list[dict[str, object]]
-    top_uncategorized_descriptions: list[dict[str, object]]
-    top_rules_by_hits: list[dict[str, object]]
+    category_metrics_by_bank: list[CategoryMetricByBankRow]
+    top_uncategorized_descriptions: list[UncategorizedDescriptionRow]
+    top_rules_by_hits: list[TopRuleByHitsRow]
     category_rules_path: str
     project_rules_path: str
     budget_targets_path: str
@@ -127,7 +197,16 @@ class SummaryPayload(TypedDict):
     account_boundary_unknown_count: int
     account_boundary_unknown_side_count: int
     account_inference_source_counts: dict[str, int]
-    cashflow_yoy: dict[str, object]
+    cashflow_yoy: CashflowYoYSummary
+    backup_run_id: str | None
+    backup_root: str | None
+    backup_snapshot_dir: str | None
+    backup_processed_dir: str | None
+    backup_config_dir: str | None
+    backup_manifest_paths: list[str]
+    backup_copied_file_count: int
+    backup_missing_file_count: int
+    backup_pruned_run_ids: list[str]
 
 
 @dataclass(frozen=True)

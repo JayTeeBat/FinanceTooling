@@ -183,6 +183,21 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-04-09 - codex
+- Branch: `fix/ty-cleanup`
+- Completed:
+  - Drove `uv run ty check src/finance_tooling tests` to green by tightening reporting/workflow typed payloads, cashflow YoY summary typing, and a few JSON/dict boundary helpers.
+  - Fixed stale typed call sites in `perf_check`, safer numeric parsing in account inference, and pandas datetime coercion paths in FX enrichment.
+  - Updated focused tests to use clearer typed assertions around dashboard/cashflow/audit payloads and backup-path invariants.
+- Checks:
+  - `uv run ruff check src/finance_tooling/__init__.py src/finance_tooling/categorization/account_inference.py src/finance_tooling/workflow/types.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/maintenance/perf_check.py src/finance_tooling/reporting/metrics_log.py src/finance_tooling/reporting/workflow_status.py src/finance_tooling/workflow/enrichment.py tests/test_healthcheck.py tests/test_cashflow.py tests/test_categorization_audit.py tests/test_category_id_migration_audit.py tests/test_category_normalization.py tests/test_dashboard.py tests/test_review_workflow.py`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest -q tests/test_healthcheck.py tests/test_cashflow.py tests/test_dashboard.py tests/test_category_normalization.py tests/test_categorization_audit.py tests/test_category_id_migration_audit.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_backup.py tests/test_perf_check.py tests/test_workflow_stages.py`: pass
+- Open items:
+  - This branch has the ty cleanup locally but is not yet committed or pushed.
+- Next action:
+  - Commit the `fix/ty-cleanup` branch and open a focused PR for the type-cleanup slice.
+
+### 2026-04-09 - codex
 - Branch: `codex/package-layout-cleanup`
 - Completed:
   - Fixed `review-import` backup/path resolution so explicit review and override paths no longer get redirected through ambient env-backed processed paths.
@@ -217,17 +232,3 @@ Success target for the 2026 validation campaign:
   - The broader repo still has unrelated untracked local files outside this branch, so only the backup-system work should be included in the PR.
 - Next action:
   - Merge the unified backup snapshot PR after review, then decide whether migration helpers such as transaction-id recovery tooling should be folded onto the same backup contract.
-
-### 2026-04-07 - codex
-- Branch: `codex/example-config-starters`
-- Completed:
-  - Reframed the repo `category_rules.yaml` and `transaction_overrides.yaml` copies as generic starter examples instead of personal production config, including a leaner sample taxonomy/rule set.
-  - Updated the README language to make the starter-config intent explicit and added focused tests for generic example-rule classification plus deprecated category-id migration.
-- Checks:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check tests/test_category_id_migrate_live.py tests/test_classify.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check tests/test_category_id_migrate_live.py tests/test_classify.py`: pass
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/test_category_id_migrate_live.py tests/test_classify.py`: pass
-- Open items:
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q` still fails on the pre-existing `tests/test_cli_dispatch.py::test_review_import_runs_transform_by_default` fixture/setup mismatch outside this PR's scope.
-- Next action:
-  - Publish the starter-config cleanup as a draft PR and decide whether to fix the unrelated full-suite `review-import` test in a separate follow-up.

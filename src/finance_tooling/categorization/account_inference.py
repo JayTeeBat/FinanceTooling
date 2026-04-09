@@ -102,6 +102,22 @@ def _normalize_account_ref(value: object) -> str | None:
     return normalized or None
 
 
+def _coerce_int(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return default
+        try:
+            return int(stripped)
+        except ValueError:
+            return default
+    return default
+
+
 def _normalize_account_type(value: object) -> AccountType | None:
     if not isinstance(value, str):
         return None
@@ -193,7 +209,7 @@ def _parse_counterparty_rules(raw_rules: object) -> tuple[CounterpartyRule, ...]
                     if isinstance(rule.get("id"), str) and str(rule.get("id")).strip()
                     else f"account_rule_{index + 1}"
                 ),
-                priority=int(rule.get("priority", 0)),
+                priority=_coerce_int(rule.get("priority", 0)),
                 match_type=match_type,
                 patterns=patterns,
                 expense_only=bool(rule.get("expense_only")),
