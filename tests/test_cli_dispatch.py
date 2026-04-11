@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pandas as pd
+
 from finance_tooling.__main__ import _build_parser, main
 from finance_tooling.categorization.transaction_overrides import TransactionOverrideStore
 from finance_tooling.core.backup import BackupRunResult
@@ -29,6 +31,7 @@ def test_build_parser_help_labels_primary_and_advanced_commands() -> None:
     assert "Recommended: run the end-to-end workflow" in help_text
     assert "Recommended: export review rows" in help_text
     assert "Recommended: import reviewed workbook changes" in help_text
+    assert "Generate a static HTML helper for review triage" in help_text
     assert "Recommended: inspect pipeline health" in help_text
     assert "Advanced: parse raw statements" in help_text
     assert "Advanced: rebuild canonical outputs" in help_text
@@ -193,11 +196,12 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     processed_dir.mkdir()
     captured: dict[str, Path | bool | str | None] = {}
 
-    def _export(
+    def _build_review_dataframe(
         normalized_path: Path,
         output_path: Path,
         *,
         include_categorized: bool = False,
+        month: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
         contains: str | None = None,
@@ -210,14 +214,15 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         only_unreviewed: bool = False,
         preserve_review_state: bool = True,
         review_state_path: Path | None = None,
-        dark_safe: bool = True,
-    ) -> int:
+        category_rules_path: Path | None = None,
+    ) -> tuple[pd.DataFrame, None]:
         captured["normalized_path"] = normalized_path
         captured["output_path"] = output_path
-        captured["dark_safe"] = dark_safe
         captured["include_categorized"] = include_categorized
         captured["review_state_path"] = review_state_path
-        return 4
+        captured["month"] = month
+        captured["category_rules_path"] = category_rules_path
+        return (pd.DataFrame([{"transaction_id": "tx_1"}] * 4), None)
 
     monkeypatch.setattr(
         "finance_tooling.commands.common.try_load_settings_for_defaults",
@@ -225,9 +230,25 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
             summary_json_path=processed_dir / "run_summary.json",
             review_export_dark_safe=True,
             review_state_path=processed_dir / "review_state.parquet",
+            category_rules_path=processed_dir / "category_rules.yaml",
         ),
     )
-    monkeypatch.setattr("finance_tooling.commands.review_export.export_review_rows", _export)
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.build_review_dataframe",
+        _build_review_dataframe,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.write_table",
+        lambda output_path, review_rows, *, dark_safe, review_rules: captured.update(
+            {"dark_safe": dark_safe}
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.render_review_helper_html",
+        lambda review_rows, output_path, *, rules=None: captured.update(
+            {"helper_path": output_path}
+        ),
+    )
 
     exit_code = main(["review-export"])
     stdio = capsys.readouterr()
@@ -237,19 +258,23 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
     assert captured["output_path"] == processed_dir / "transactions_review.xlsx"
     assert captured["include_categorized"] is False
     assert captured["review_state_path"] == processed_dir / "review_state.parquet"
+    assert captured["category_rules_path"] == processed_dir / "category_rules.yaml"
     assert captured["dark_safe"] is True
     assert "Review export: 4 rows" in stdio.out
+    assert captured["helper_path"] == processed_dir / "review_helper.html"
+    assert "Review helper: review_helper.html" in stdio.out
     assert str(captured["output_path"]) not in stdio.out
 
 
 def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None:
     captured: dict[str, Path | bool | str | None] = {}
 
-    def _export(
+    def _build_review_dataframe(
         normalized_path: Path,
         output_path: Path,
         *,
         include_categorized: bool = False,
+        month: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
         contains: str | None = None,
@@ -262,8 +287,8 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
         only_unreviewed: bool = False,
         preserve_review_state: bool = True,
         review_state_path: Path | None = None,
-        dark_safe: bool = True,
-    ) -> int:
+        category_rules_path: Path | None = None,
+    ) -> tuple[pd.DataFrame, None]:
         captured.update(
             {
                 "normalized_path": normalized_path,
@@ -281,12 +306,27 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
                 "only_unreviewed": only_unreviewed,
                 "preserve_review_state": preserve_review_state,
                 "review_state_path": review_state_path,
-                "dark_safe": dark_safe,
+                "category_rules_path": category_rules_path,
             }
         )
-        return 1
+        return (pd.DataFrame([{"transaction_id": "tx_1"}]), None)
 
-    monkeypatch.setattr("finance_tooling.commands.review_export.export_review_rows", _export)
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.build_review_dataframe",
+        _build_review_dataframe,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.write_table",
+        lambda output_path, review_rows, *, dark_safe, review_rules: captured.update(
+            {"dark_safe": dark_safe}
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.render_review_helper_html",
+        lambda review_rows, output_path, *, rules=None: captured.update(
+            {"helper_path": output_path}
+        ),
+    )
 
     exit_code = main(
         [
@@ -332,7 +372,47 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert captured["only_unreviewed"] is True
     assert captured["dark_safe"] is False
     assert "Review export: 1 rows" in stdio.out
+    assert captured["helper_path"] == Path("review_helper.html")
     assert "transactions_review.csv" not in stdio.out
+
+
+def test_review_export_can_disable_helper_generation(monkeypatch, capsys) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.build_review_dataframe",
+        lambda normalized_path, output_path, **kwargs: (
+            pd.DataFrame([{"transaction_id": "tx_1"}]),
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.write_table",
+        lambda output_path, review_rows, *, dark_safe, review_rules: captured.update(
+            {"wrote_table": True}
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_export.render_review_helper_html",
+        lambda review_rows, output_path, *, rules=None: captured.update({"helper_called": True}),
+    )
+
+    exit_code = main(
+        [
+            "review-export",
+            "--normalized-path",
+            "transactions_normalized.csv",
+            "--output-path",
+            "transactions_review.csv",
+            "--no-helper",
+        ]
+    )
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured["wrote_table"] is True
+    assert "helper_called" not in captured
+    assert "Review helper:" not in stdio.out
 
 
 def test_review_export_reports_error_for_mixed_amount_filter_types(
@@ -368,6 +448,40 @@ def test_review_export_reports_error_for_mixed_amount_filter_types(
         "Review export error: min_amount/max_amount cannot be combined with "
         "min_abs_amount/max_abs_amount" in stdio.out
     )
+
+
+def test_review_helper_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    outputs_dir = processed_dir / "outputs"
+    outputs_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.common.try_load_settings_for_defaults",
+        lambda: SimpleNamespace(
+            processed_path=processed_dir,
+            export_csv_path=outputs_dir / "transform_transactions.csv",
+            review_state_path=processed_dir / "state" / "review_state.parquet",
+            category_rules_path=processed_dir / "category_rules.yaml",
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_helper.build_review_dataframe",
+        lambda normalized_path, *args, **kwargs: (
+            [{"transaction_id": "tx_1"}],
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.commands.review_helper.render_review_helper_html",
+        lambda review_rows, output_path, rules=None: output_path,
+    )
+
+    exit_code = main(["review-helper"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Review helper: 1 rows" in stdio.out
+    assert "review_helper.html" in stdio.out
 
 
 def test_review_import_defaults_paths_from_settings(monkeypatch, tmp_path: Path, capsys) -> None:

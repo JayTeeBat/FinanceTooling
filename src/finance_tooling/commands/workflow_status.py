@@ -59,6 +59,14 @@ def handle(args: argparse.Namespace) -> int:
     )
     transformed_state = payload["transformed_state"]
     master_state = transformed_state["master"]
+    review_queue = payload.get(
+        "review_queue",
+        {
+            "unreviewed_uncategorized_count": 0,
+            "needs_rule_count": 0,
+            "top_review_groups": [],
+        },
+    )
     findings: list[PipelineFinding] = payload["findings"]
 
     print(f"Pipeline health: {payload['status']}")
@@ -84,6 +92,11 @@ def handle(args: argparse.Namespace) -> int:
         f"stale={drift_state['dataset_stale']}, "
         f"full refresh risk={drift_state['full_refresh_risk']}"
     )
+    print(
+        "Review queue: "
+        f"{review_queue['unreviewed_uncategorized_count']} unreviewed uncategorized, "
+        f"{review_queue['needs_rule_count']} marked needs_rule"
+    )
     if args.verbose:
         print(
             "Committed registry: "
@@ -96,6 +109,13 @@ def handle(args: argparse.Namespace) -> int:
             f"present={staged_state['manifest_exists']}, "
             f"summary_present={transformed_state['summary_exists']}"
         )
+        if review_queue["top_review_groups"]:
+            print("Top review groups:")
+            for group in review_queue["top_review_groups"][:5]:
+                print(
+                    f"- {group.get('count', 0)} x "
+                    f"{group.get('review_group_key', 'unknown')}"
+                )
     if findings:
         print(f"Findings: {len(findings)}")
         for finding in findings:

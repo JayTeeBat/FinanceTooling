@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 from finance_tooling.categorization.classify import (
+    ClassificationRules,
     load_classification_rules,
     resolve_category_id_from_labels,
+    resolve_taxonomy_labels,
 )
 from finance_tooling.categorization.transaction_overrides import (
     TransactionOverrideEntry,
@@ -26,11 +29,13 @@ from finance_tooling.review.common import (
     PROJECT_TAGS_COLUMN,
     REQUIRED_REVIEW_COLUMNS,
     REVIEW_COMMENT_COLUMN,
+    REVIEW_STATUS_COLUMN,
     REVIEWED_COLUMN,
     normalize_optional_text,
     normalize_project_tags,
-    normalize_reviewed_value,
+    normalize_review_status_value,
     read_table,
+    review_status_is_reviewed,
 )
 from finance_tooling.review.state import build_review_state_updates, upsert_review_state
 
@@ -44,6 +49,10 @@ class ReviewImportResult:
     transaction_overrides_updated: int = 0
     transaction_overrides_inserted: int = 0
     project_tags_applied: int = 0
+    status_only_rows: int = 0
+    unchanged_rows: int = 0
+    duplicate_transaction_id_rows: int = 0
+    invalid_row_messages: tuple[str, ...] = ()
     review_state_upserted: int = 0
     review_state_updated: int = 0
     review_state_inserted: int = 0
@@ -102,86 +111,126 @@ def _resolve_category_rules_path(
         return None
 
 
+def _is_known_taxonomy_pair(
+    category: str,
+    subcategory: str | None,
+    *,
+    rules: ClassificationRules | None,
+) -> bool:
+    if rules is None:
+        return True
+    if not rules.taxonomy:
+        return True
+    resolved_category_id = resolve_category_id_from_labels(
+        category,
+        subcategory,
+        rules=rules,
+        prefer_active=True,
+    )
+    resolved_category, resolved_subcategory = resolve_taxonomy_labels(
+        resolved_category_id,
+        rules=rules,
+    )
+    if resolved_category is None:
+        return False
+    return (
+        resolved_category.casefold() == category.casefold()
+        and ((resolved_subcategory or "").casefold() == (subcategory or "").casefold())
+    )
+
+
 def _parse_category_transaction_override_row(
     row: dict[str, object],
     *,
-    category_rules_path: Path | None,
-) -> TransactionOverrideEntry | None:
+    category_rules: ClassificationRules | None,
+) -> tuple[TransactionOverrideEntry | None, str | None]:
     category = normalize_optional_text(row.get("category"))
     if category is None or category.lower() == "uncategorized":
-        return None
+        return None, None
 
     original_category = normalize_optional_text(row.get(ORIGINAL_CATEGORY_COLUMN))
     original_subcategory = normalize_optional_text(row.get(ORIGINAL_SUBCATEGORY_COLUMN))
 
     transaction_id = normalize_optional_text(row.get("transaction_id"))
     if transaction_id is None:
-        return None
+        return None, "missing_transaction_id"
 
     subcategory = normalize_optional_text(row.get("subcategory"))
     original_category_id = normalize_optional_text(row.get("original_category_id"))
     if category == original_category and subcategory == original_subcategory:
-        return None
+        return None, None
+
+    if not _is_known_taxonomy_pair(category, subcategory, rules=category_rules):
+        return None, "unknown_category_pair"
 
     resolved_category_id = None
-    if category_rules_path is not None:
-        classification_rules, _warnings = load_classification_rules(category_rules_path)
+    if category_rules is not None:
         resolved_category_id = resolve_category_id_from_labels(
             category,
             subcategory,
-            rules=classification_rules,
+            rules=category_rules,
             prefer_active=True,
         )
 
-    return TransactionOverrideEntry(
-        override_id=None,
-        transaction_id=transaction_id,
-        fingerprint=None,
-        booking_date=None,
-        amount_native=None,
-        currency=None,
-        bank=None,
-        account_label=None,
-        category_id=resolved_category_id or original_category_id,
-        set_category_id=resolved_category_id is not None,
-        category=category,
-        set_category=True,
-        subcategory=subcategory,
-        set_subcategory=True,
-        project=None,
-        set_project=False,
-        project_tags=(),
-        set_project_tags=False,
+    return (
+        TransactionOverrideEntry(
+            override_id=None,
+            transaction_id=transaction_id,
+            fingerprint=None,
+            booking_date=None,
+            amount_native=None,
+            currency=None,
+            bank=None,
+            account_label=None,
+            category_id=resolved_category_id or original_category_id,
+            set_category_id=resolved_category_id is not None,
+            category=category,
+            set_category=True,
+            subcategory=subcategory,
+            set_subcategory=True,
+            project=None,
+            set_project=False,
+            project_tags=(),
+            set_project_tags=False,
+        ),
+        None,
     )
 
 
 def _parse_project_transaction_override_row(
     row: dict[str, object],
     tags: tuple[str, ...],
-) -> TransactionOverrideEntry | None:
+) -> tuple[TransactionOverrideEntry | None, str | None]:
     transaction_id = normalize_optional_text(row.get("transaction_id"))
     if transaction_id is None:
-        return None
-    return TransactionOverrideEntry(
-        override_id=None,
-        transaction_id=transaction_id,
-        fingerprint=None,
-        booking_date=None,
-        amount_native=None,
-        currency=None,
-        bank=None,
-        account_label=None,
-        category_id=None,
-        set_category_id=False,
-        category=None,
-        set_category=False,
-        subcategory=None,
-        set_subcategory=False,
-        project=None,
-        set_project=False,
-        project_tags=tags,
-        set_project_tags=True,
+        return None, "missing_transaction_id"
+    return (
+        TransactionOverrideEntry(
+            override_id=None,
+            transaction_id=transaction_id,
+            fingerprint=None,
+            booking_date=None,
+            amount_native=None,
+            currency=None,
+            bank=None,
+            account_label=None,
+            category_id=None,
+            set_category_id=False,
+            category=None,
+            set_category=False,
+            subcategory=None,
+            set_subcategory=False,
+            project=None,
+            set_project=False,
+            project_tags=tags,
+            set_project_tags=True,
+        ),
+        None,
     )
+
+
+def _invalid_message(row_number: int, reason: str) -> str:
+    return f"row {row_number}: {reason}"
 
 
 def import_review_into_overrides(
@@ -213,34 +262,69 @@ def import_review_into_overrides(
         ),
         category_rules_path=category_rules_path,
     )
+    category_rules: ClassificationRules | None = None
+    if resolved_category_rules_path is not None and resolved_category_rules_path.exists():
+        category_rules, _warnings = load_classification_rules(resolved_category_rules_path)
 
     raw_rows = dataframe.to_dict(orient="records")
+    has_review_status_column = REVIEW_STATUS_COLUMN in dataframe.columns
+    duplicate_transaction_id_rows = 0
+    duplicate_counter = Counter(
+        transaction_id
+        for row in raw_rows
+        if (transaction_id := normalize_optional_text(row.get("transaction_id"))) is not None
+    )
+    duplicate_transaction_id_rows = sum(
+        count - 1 for count in duplicate_counter.values() if count > 1
+    )
+
     parsed_transaction_entries: dict[tuple[str, ...], TransactionOverrideEntry] = {}
     invalid_rows: set[int] = set()
     invalid_category_rows: set[int] = set()
     invalid_project_rows: set[int] = set()
     invalid_review_state_rows: set[int] = set()
+    invalid_row_messages: list[str] = []
     project_tags_applied = 0
+    status_only_rows = 0
+    unchanged_rows = 0
 
     for index, row in enumerate(raw_rows):
+        row_number = index + 2
         tags = normalize_project_tags(row.get(PROJECT_TAGS_COLUMN))
         category = normalize_optional_text(row.get("category"))
         subcategory = normalize_optional_text(row.get("subcategory"))
+        review_status = normalize_review_status_value(
+            row.get(REVIEW_STATUS_COLUMN),
+            reviewed_fallback=row.get(REVIEWED_COLUMN),
+        )
+        transaction_id = normalize_optional_text(row.get("transaction_id"))
+        category_override_created = False
+        project_override_created = False
+
+        category_edit_is_actionable = category is not None and (
+            review_status == "done" or not has_review_status_column
+        )
 
         if subcategory is not None and category is None:
             invalid_rows.add(index)
             invalid_category_rows.add(index)
-        elif category is not None:
-            parsed_transaction = _parse_category_transaction_override_row(
-                row,
-                category_rules_path=resolved_category_rules_path,
+            invalid_row_messages.append(
+                _invalid_message(row_number, "subcategory_without_category")
             )
-            if parsed_transaction is None:
+        elif category_edit_is_actionable:
+            parsed_transaction, category_error = _parse_category_transaction_override_row(
+                row,
+                category_rules=category_rules,
+            )
+            if category_error is not None:
+                invalid_rows.add(index)
+                invalid_category_rows.add(index)
+                invalid_row_messages.append(_invalid_message(row_number, category_error))
+            elif parsed_transaction is None:
                 original_category = normalize_optional_text(row.get(ORIGINAL_CATEGORY_COLUMN))
                 original_subcategory = normalize_optional_text(row.get(ORIGINAL_SUBCATEGORY_COLUMN))
-                if category != original_category or subcategory != original_subcategory:
-                    invalid_rows.add(index)
-                    invalid_category_rows.add(index)
+                if category == original_category and subcategory == original_subcategory:
+                    unchanged_rows += 1
             else:
                 dedupe_key = transaction_override_entry_key(parsed_transaction)
                 existing = parsed_transaction_entries.get(dedupe_key)
@@ -251,13 +335,15 @@ def import_review_into_overrides(
                         existing,
                         parsed_transaction,
                     )
+                category_override_created = True
 
         if tags:
-            parsed_project = _parse_project_transaction_override_row(row, tags)
-            if parsed_project is None:
+            parsed_project, project_error = _parse_project_transaction_override_row(row, tags)
+            if project_error is not None:
                 invalid_rows.add(index)
                 invalid_project_rows.add(index)
-            else:
+                invalid_row_messages.append(_invalid_message(row_number, project_error))
+            elif parsed_project is not None:
                 dedupe_key = transaction_override_entry_key(parsed_project)
                 existing = parsed_transaction_entries.get(dedupe_key)
                 if existing is None:
@@ -268,13 +354,26 @@ def import_review_into_overrides(
                         parsed_project,
                     )
                 project_tags_applied += 1
+                project_override_created = True
 
-        transaction_id = normalize_optional_text(row.get("transaction_id"))
-        if transaction_id is None and (REVIEWED_COLUMN in row or REVIEW_COMMENT_COLUMN in row):
-            reviewed = normalize_reviewed_value(row.get(REVIEWED_COLUMN))
-            comment = normalize_optional_text(row.get(REVIEW_COMMENT_COLUMN))
-            if reviewed or comment is not None:
-                invalid_review_state_rows.add(index)
+        comment = normalize_optional_text(row.get(REVIEW_COMMENT_COLUMN))
+        if transaction_id is None and (
+            review_status_is_reviewed(review_status, reviewed_fallback=row.get(REVIEWED_COLUMN))
+            or comment is not None
+        ):
+            invalid_review_state_rows.add(index)
+            invalid_row_messages.append(_invalid_message(row_number, "missing_transaction_id"))
+
+        if (
+            transaction_id is not None
+            and not category_override_created
+            and not project_override_created
+            and (
+                review_status_is_reviewed(review_status, reviewed_fallback=row.get(REVIEWED_COLUMN))
+                or comment is not None
+            )
+        ):
+            status_only_rows += 1
 
     created_backup_run = backup_run
     if not dry_run and backup and created_backup_run is None:
@@ -306,6 +405,7 @@ def import_review_into_overrides(
         raw_rows,
         reviewed_column=REVIEWED_COLUMN,
         review_comment_column=REVIEW_COMMENT_COLUMN,
+        review_status_column=REVIEW_STATUS_COLUMN,
     )
     if not dry_run and review_state_path is not None and not review_state_updates.empty:
         review_state_result = upsert_review_state(review_state_path, review_state_updates)
@@ -315,12 +415,11 @@ def import_review_into_overrides(
     elif dry_run and review_state_path is not None:
         review_state_upserted = len(review_state_updates)
 
-    if not dry_run:
-        if merged_transaction_store is not None and (tx_updated > 0 or tx_inserted > 0):
-            write_transaction_override_store(
-                resolved_transaction_path,
-                merged_transaction_store,
-            )
+    if not dry_run and merged_transaction_store is not None and (tx_updated > 0 or tx_inserted > 0):
+        write_transaction_override_store(
+            resolved_transaction_path,
+            merged_transaction_store,
+        )
 
     skipped_rows = invalid_rows | invalid_review_state_rows
     return ReviewImportResult(
@@ -329,6 +428,10 @@ def import_review_into_overrides(
         transaction_overrides_updated=tx_updated,
         transaction_overrides_inserted=tx_inserted,
         project_tags_applied=project_tags_applied,
+        status_only_rows=status_only_rows,
+        unchanged_rows=unchanged_rows,
+        duplicate_transaction_id_rows=duplicate_transaction_id_rows,
+        invalid_row_messages=tuple(invalid_row_messages[:10]),
         review_state_upserted=review_state_upserted,
         review_state_updated=review_state_updated,
         review_state_inserted=review_state_inserted,

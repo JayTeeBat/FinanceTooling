@@ -26,6 +26,7 @@ transform = "finance_tooling.commands.transform:main"
 update = "finance_tooling.commands.update:main"
 review-export = "finance_tooling.commands.review_export:main"
 review-import = "finance_tooling.commands.review_import:main"
+review-helper = "finance_tooling.commands.review_helper:main"
 workflow-status = "finance_tooling.commands.workflow_status:main"
 
 [dependency-groups]

@@ -103,6 +103,11 @@ class TopRuleByHitsRow(TypedDict):
     count: int
 
 
+class ReviewGroupSummaryRow(TypedDict):
+    review_group_key: str
+    count: int
+
+
 class CashflowPeriodMetrics(TypedDict):
     income: float
     expenses: float
@@ -171,12 +176,15 @@ class SummaryPayload(TypedDict):
     uncategorized_amount_eur_abs_ratio: float
     reviewed_count: int
     reviewed_ratio: float
+    unreviewed_uncategorized_count: int
+    needs_rule_count: int
     manual_category_carry_forward_applied_count: int
     manual_category_carry_forward_ambiguous_skipped_count: int
     manual_category_carry_forward_unmatched_count: int
     category_source_counts: dict[str, int]
     category_metrics_by_bank: list[CategoryMetricByBankRow]
     top_uncategorized_descriptions: list[UncategorizedDescriptionRow]
+    top_review_groups: list[ReviewGroupSummaryRow]
     top_rules_by_hits: list[TopRuleByHitsRow]
     category_rules_path: str
     project_rules_path: str
