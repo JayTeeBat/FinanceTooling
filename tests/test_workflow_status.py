@@ -104,6 +104,30 @@ def test_build_pipeline_state_reports_staged_newer_than_transform(tmp_path: Path
     assert any(item["code"] == "staged_newer_than_transform" for item in findings)
 
 
+def test_build_pipeline_state_exposes_review_queue_summary(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    settings.summary_json_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-04-11T12:00:00+00:00",
+                "unreviewed_uncategorized_count": 5,
+                "needs_rule_count": 2,
+                "top_review_groups": [
+                    {"review_group_key": "merchant alpha | REVOLUT | Main", "count": 3}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings.completeness_json_path.write_text("{}", encoding="utf-8")
+
+    payload, _ = build_pipeline_state(settings)
+
+    assert payload["review_queue"]["unreviewed_uncategorized_count"] == 5
+    assert payload["review_queue"]["needs_rule_count"] == 2
+    assert payload["review_queue"]["top_review_groups"][0]["count"] == 3
+
+
 def test_bootstrap_incremental_registry_does_not_report_config_drift(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     source = settings.input_path / "statement.pdf"

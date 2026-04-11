@@ -13,8 +13,11 @@ is intentionally not surfaced in the review workbook.
 
 - Export uncategorized rows with full transaction detail for review in an Excel
   workbook.
+- Optionally generate a static HTML helper for grouped triage and draft review
+  export.
 - Let an analyst edit category/subcategory and project tags independently.
-- Persist review progress (`reviewed`, `review_comment`) across review sessions.
+- Persist review progress (`review_status`, `reviewed`, `review_comment`) across
+  review sessions.
 - Re-import reviewed rows into persistent transaction overrides safely.
 - Re-run transform to apply new overrides and reduce uncategorized volume.
 
@@ -48,10 +51,12 @@ Default input/output paths when flags are omitted:
 
 - normalized input: `${FINANCE_PROCESSED_PATH}/outputs/transform_transactions.csv`
 - review output: `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`
+- helper output: `${FINANCE_PROCESSED_PATH}/review_helper.html`
 
 Default export behavior is uncategorized-only. Optional filters:
 
 - `--include-categorized`: include categorized rows in the review export.
+- `--month YYYY-MM`: month shortcut for inclusive booking-date bounds.
 - `--start-date YYYY-MM-DD`: inclusive lower `booking_date` bound.
 - `--end-date YYYY-MM-DD`: inclusive upper `booking_date` bound.
 - `--contains TEXT`: case-insensitive match across description/normalized description/bank/account.
@@ -71,20 +76,38 @@ uv run review-export \
   --end-date "2026-01-31"
 ```
 
+By default, `review-export` also generates the static HTML helper. Use
+`--no-helper` to skip it. `review-helper` remains available when you want to
+regenerate just the helper for the same or a different filter slice.
+
+The HTML helper is not the system of record. It is intended for queue review,
+grouped triage, and draft export. Final persistence still goes through
+`review-import`.
+
 ### 2. Analyst review
 
 Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
 
 - Keep `description`, `bank`, `account_label` unchanged.
 - Set `category` and optional `subcategory` when a category correction is needed.
+- Use `review_status` for workflow intent:
+  - `todo`: still needs review
+  - `done`: reviewed and ready for import
+  - `needs_rule`: reviewed, but should become a reusable rule instead of a
+    transaction override
+  - `skip`: intentionally reviewed without a categorization change
 - Use `normalized_description` as a read-only normalized search/grouping helper.
+- Use `review_group_key` and `review_group_size` as read-only repeated-merchant
+  triage helpers.
 - `original_category_id` is a read-only durable category-assignment reference.
 - `original_reporting_category_id` is a read-only active taxonomy target.
 - Use extra transaction columns (for example `booking_date`, `amount_native`,
   `currency`, `source_file`) to disambiguate similar descriptions when needed.
-- Use `reviewed` to mark a transaction as reviewed.
+- `reviewed` remains in the workbook as a compatibility field and is derived
+  from `review_status`.
 - Use `review_comment` for freeform reviewer notes.
-- Category/subcategory edits always write into `transaction_overrides.yaml`.
+- Category/subcategory edits write into `transaction_overrides.yaml` when the
+  row is marked `review_status=done`.
 - Review edits stay label-based for humans, but import resolves them to durable
   `category_id` under the active taxonomy.
 - If category/subcategory labels are unchanged from export, `review-import`
@@ -112,6 +135,9 @@ Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
   `outputs/transform_transactions.csv` after `transform`.
 - `review_comment` is review metadata only; it is not used as `project` data and
   is not written into canonical normalized outputs.
+- The `.xlsx` workbook also includes:
+  - `instructions`: quick operator guidance
+  - `taxonomy`: active category/subcategory pairs for reference
 
 ### 3. Dry-run import (recommended)
 
@@ -120,6 +146,13 @@ uv run review-import --dry-run
 ```
 
 Dry-run reports row and upsert counters without writing override files.
+It also reports:
+
+- status-only review rows
+- unchanged rows
+- inserted vs updated overrides
+- duplicate `transaction_id` rows
+- the first invalid row reasons when present
 
 ### 4. Apply import
 
@@ -148,6 +181,8 @@ Default safety behavior:
 - create timestamped backup before writing changed files (disable with
   `--no-backup`); by default backups are written under the config `backup/`
   folder
+- `needs_rule` and `skip` rows update review state only; they do not create
+  transaction overrides
 
 ### 5. Re-run transform
 
@@ -215,7 +250,8 @@ Review file must include:
 - `category=Uncategorized` is treated as no manual category correction.
 - `subcategory` without `category` is invalid.
 - `project_tags` import requires `transaction_id`.
-- `reviewed` / `review_comment` persistence requires `transaction_id`.
+- `review_status` / `reviewed` / `review_comment` persistence requires
+  `transaction_id`.
 - If multiple rows map to the same `transaction_id`, import keeps the last row
   (last-row wins).
 

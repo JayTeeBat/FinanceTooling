@@ -19,6 +19,7 @@ from finance_tooling.workflow.ingest_stage import IngestExecutionResult
 
 DEFAULT_REVIEW_WORKBOOK_FILENAME = "transactions_review.xlsx"
 LEGACY_REVIEW_CSV_FILENAME = "transactions_review.csv"
+DEFAULT_REVIEW_HELPER_FILENAME = "review_helper.html"
 
 
 def try_load_settings_for_defaults() -> Settings | None:
@@ -141,6 +142,44 @@ def resolve_review_import_paths(
     return (
         resolved_review_path,
         resolved_transaction_overrides,
+        getattr(settings, "review_state_path", None),
+    )
+
+
+def resolve_review_helper_paths(
+    normalized_path: Path | None,
+    output_path: Path | None,
+) -> tuple[Path, Path, Path | None]:
+    """Resolve canonical CSV input and the standard HTML helper output path."""
+    if normalized_path is not None and output_path is not None:
+        settings = try_load_settings_for_defaults()
+        review_state_path = (
+            getattr(settings, "review_state_path", None) if settings is not None else None
+        )
+        return normalized_path, output_path, review_state_path
+
+    settings = try_load_settings_for_defaults()
+    if settings is None:
+        missing_flags: list[str] = []
+        if normalized_path is None:
+            missing_flags.append("--normalized-path")
+        if output_path is None:
+            missing_flags.append("--output-path")
+        joined = ", ".join(missing_flags)
+        raise ValueError(
+            f"Missing {joined}; provide explicit flags or configure .env "
+            "with FINANCE_STATEMENTS_PATH and FINANCE_PROCESSED_PATH."
+        )
+
+    processed_dir = processed_dir_from_settings(settings)
+    default_normalized_path = getattr(
+        settings,
+        "export_csv_path",
+        processed_dir / PIPELINE_OUTPUTS_DIRNAME / TRANSFORM_TRANSACTIONS_CSV_FILENAME,
+    )
+    return (
+        normalized_path or default_normalized_path,
+        output_path or (processed_dir / DEFAULT_REVIEW_HELPER_FILENAME),
         getattr(settings, "review_state_path", None),
     )
 

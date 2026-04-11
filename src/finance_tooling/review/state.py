@@ -10,8 +10,20 @@ import pandas as pd
 
 from finance_tooling.core.models import Transaction
 from finance_tooling.core.store import compute_transaction_id
+from finance_tooling.review.common import (
+    REVIEW_STATUS_COLUMN,
+    REVIEWED_COLUMN,
+    normalize_review_status_value,
+    review_status_is_reviewed,
+)
 
-REVIEW_STATE_COLUMNS = ("transaction_id", "reviewed", "review_comment", "updated_at")
+REVIEW_STATE_COLUMNS = (
+    "transaction_id",
+    REVIEW_STATUS_COLUMN,
+    REVIEWED_COLUMN,
+    "review_comment",
+    "updated_at",
+)
 
 
 @dataclass(frozen=True)
@@ -37,13 +49,8 @@ def _empty_review_state() -> pd.DataFrame:
     return pd.DataFrame(columns=list(REVIEW_STATE_COLUMNS))
 
 
-def _normalize_reviewed(value: object) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, bool):
-        return value
-    text = str(value).strip().lower()
-    return text in {"1", "true", "yes", "y"}
+def _normalize_reviewed(value: object, *, review_status: object | None = None) -> bool:
+    return review_status_is_reviewed(review_status, reviewed_fallback=value)
 
 
 def _normalize_comment(value: object) -> str | None:
@@ -68,7 +75,22 @@ def load_review_state(path: Path) -> pd.DataFrame:
             dataframe[column] = None
     normalized = dataframe.loc[:, list(REVIEW_STATE_COLUMNS)].copy()
     normalized["transaction_id"] = normalized["transaction_id"].astype(str)
-    normalized["reviewed"] = normalized["reviewed"].map(_normalize_reviewed)
+    normalized[REVIEW_STATUS_COLUMN] = [
+        normalize_review_status_value(status, reviewed_fallback=reviewed)
+        for status, reviewed in zip(
+            normalized[REVIEW_STATUS_COLUMN],
+            normalized[REVIEWED_COLUMN],
+            strict=False,
+        )
+    ]
+    normalized[REVIEWED_COLUMN] = [
+        _normalize_reviewed(reviewed, review_status=status)
+        for reviewed, status in zip(
+            normalized[REVIEWED_COLUMN],
+            normalized[REVIEW_STATUS_COLUMN],
+            strict=False,
+        )
+    ]
     normalized["review_comment"] = normalized["review_comment"].map(_normalize_comment)
     return normalized.drop_duplicates(subset=["transaction_id"], keep="last").reset_index(drop=True)
 
@@ -87,9 +109,28 @@ def upsert_review_state(path: Path, updates: pd.DataFrame) -> ReviewStateUpdateR
         return ReviewStateUpdateResult(path=path, rows_upserted=0, rows_updated=0, rows_inserted=0)
 
     current = load_review_state(path)
-    incoming = updates.loc[:, list(REVIEW_STATE_COLUMNS)].copy()
+    normalized_updates = updates.copy()
+    for column in REVIEW_STATE_COLUMNS:
+        if column not in normalized_updates.columns:
+            normalized_updates[column] = None
+    incoming = normalized_updates.loc[:, list(REVIEW_STATE_COLUMNS)].copy()
     incoming["transaction_id"] = incoming["transaction_id"].astype(str)
-    incoming["reviewed"] = incoming["reviewed"].map(_normalize_reviewed)
+    incoming[REVIEW_STATUS_COLUMN] = [
+        normalize_review_status_value(status, reviewed_fallback=reviewed)
+        for status, reviewed in zip(
+            incoming[REVIEW_STATUS_COLUMN],
+            incoming[REVIEWED_COLUMN],
+            strict=False,
+        )
+    ]
+    incoming[REVIEWED_COLUMN] = [
+        _normalize_reviewed(reviewed, review_status=status)
+        for reviewed, status in zip(
+            incoming[REVIEWED_COLUMN],
+            incoming[REVIEW_STATUS_COLUMN],
+            strict=False,
+        )
+    ]
     incoming["review_comment"] = incoming["review_comment"].map(_normalize_comment)
     incoming = incoming.drop_duplicates(subset=["transaction_id"], keep="last")
 
@@ -118,6 +159,7 @@ def build_review_state_updates(
     *,
     reviewed_column: str,
     review_comment_column: str,
+    review_status_column: str | None = None,
 ) -> pd.DataFrame:
     """Build review-state update rows from imported review records."""
     payload_rows: list[dict[str, object]] = []
@@ -132,7 +174,16 @@ def build_review_state_updates(
         payload_rows.append(
             {
                 "transaction_id": normalized_transaction_id,
-                "reviewed": _normalize_reviewed(row.get(reviewed_column)),
+                REVIEW_STATUS_COLUMN: normalize_review_status_value(
+                    row.get(review_status_column) if review_status_column is not None else None,
+                    reviewed_fallback=row.get(reviewed_column),
+                ),
+                REVIEWED_COLUMN: _normalize_reviewed(
+                    row.get(reviewed_column),
+                    review_status=(
+                        row.get(review_status_column) if review_status_column is not None else None
+                    ),
+                ),
                 "review_comment": _normalize_comment(row.get(review_comment_column)),
                 "updated_at": timestamp,
             }
@@ -150,7 +201,7 @@ def apply_review_state(transactions: list[Transaction], path: Path) -> list[Tran
 
     reviewed_by_id = (
         state.drop_duplicates(subset=["transaction_id"], keep="last")
-        .set_index("transaction_id")["reviewed"]
+        .set_index("transaction_id")[REVIEWED_COLUMN]
         .to_dict()
     )
     updated: list[Transaction] = []

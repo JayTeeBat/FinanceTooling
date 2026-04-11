@@ -182,6 +182,24 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-04-11 - codex
+- Branch: `feature-categorization-review-ux`
+- Completed:
+  - Added grouped review export/import UX improvements: `review_status`, review group metadata, month filtering, workbook instruction/taxonomy sheets, import compatibility, richer import counters, and review-queue metrics in workflow reporting.
+  - Added a new static `review-helper` command and HTML output for grouped triage and draft review export while keeping `review-import` as the authoritative apply path.
+  - Updated README and `docs/categorization_review_workflow.md` to document the workbook changes, helper layer, and queue visibility behavior.
+- Checks:
+  - `PYTHONPATH=src /home/thomazo/dev/FinanceTooling/.venv/bin/ruff check src/finance_tooling/__main__.py src/finance_tooling/commands/common.py src/finance_tooling/commands/review_export.py src/finance_tooling/commands/review_helper.py src/finance_tooling/commands/review_import.py src/finance_tooling/commands/workflow_status.py src/finance_tooling/reporting/review_helper.py src/finance_tooling/reporting/workflow_status.py src/finance_tooling/review/common.py src/finance_tooling/review/export.py src/finance_tooling/review/importer.py src/finance_tooling/review/state.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow/types.py tests/test_cli_dispatch.py tests/test_review_helper.py tests/test_review_state.py tests/test_review_workflow.py tests/test_workflow_status.py`: pass
+  - `PYTHONPATH=src /home/thomazo/dev/FinanceTooling/.venv/bin/pytest -q tests/test_review_state.py tests/test_review_workflow.py tests/test_review_helper.py tests/test_cli_dispatch.py tests/test_workflow_status.py`: pass
+  - `PYTHONPATH=src /home/thomazo/dev/FinanceTooling/.venv/bin/pytest -q tests/test_workflow_stages.py tests/test_command_entrypoints.py`: pass
+  - `PYTHONPATH=src /home/thomazo/dev/FinanceTooling/.venv/bin/python -m finance_tooling review-helper --help`: pass
+  - `PYTHONPATH=src /home/thomazo/dev/FinanceTooling/.venv/bin/python -m ty check src/finance_tooling/review/export.py src/finance_tooling/review/importer.py src/finance_tooling/reporting/review_helper.py src/finance_tooling/commands/review_helper.py`: fail (`ty` unresolved-import diagnostics for `pandas` in this shell environment)
+- Open items:
+  - `pyproject.toml` already has local branch changes in this worktree and should be reviewed carefully before commit so only the intended script entry change lands.
+  - End-to-end manual UX validation with a real monthly review batch is still worth doing before merge, especially the helper JSON draft path and workbook dropdown behavior in LibreOffice/Excel.
+- Next action:
+  - Run one real month through `review-helper` -> workbook/json draft -> `review-import --dry-run` -> `review-import` and then prepare a focused PR.
+
 ### 2026-04-09 - codex
 - Branch: `fix/ty-cleanup`
 - Completed:
@@ -218,17 +236,3 @@ Success target for the 2026 validation campaign:
   - Draft PR opened: `#79`
 - Next action:
   - Attack the remaining `ty` diagnostics with typed payload cleanup, starting with reporting/status JSON payload contracts.
-
-### 2026-04-08 - codex
-- Branch: `codex/unified-backup-snapshots`
-- Completed:
-  - Replaced scattered stage/config backup behavior with one unified snapshot root under `data/backup`, including manifest-based retention of the latest 3 snapshots per retained run day and the latest 7 active run days.
-  - Reworked `update`, `transform`, `ingest`, and `review-import` so top-level mutating commands reuse a single pre-run snapshot and review-import no longer creates config-side `.bak` files.
-  - Updated drift lookup, workflow diagnostics, README docs, and focused tests to the new backup layout and retention model.
-- Checks:
-  - `uv run ruff check src/finance_tooling/backup.py src/finance_tooling/review_import.py src/finance_tooling/commands/review_import.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py src/finance_tooling/workflow/incremental_state.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow_status.py tests/test_backup.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_cli_dispatch.py README.md`: pass
-  - `uv run pytest -q tests/test_backup.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_cli_dispatch.py`: pass
-- Open items:
-  - The broader repo still has unrelated untracked local files outside this branch, so only the backup-system work should be included in the PR.
-- Next action:
-  - Merge the unified backup snapshot PR after review, then decide whether migration helpers such as transaction-id recovery tooling should be folded onto the same backup contract.

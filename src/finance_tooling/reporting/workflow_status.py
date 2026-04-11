@@ -102,6 +102,14 @@ class TransformedState(TypedDict):
     completeness_path: str
 
 
+class ReviewQueueState(TypedDict):
+    """Review-queue summary for operator triage."""
+
+    unreviewed_uncategorized_count: int
+    needs_rule_count: int
+    top_review_groups: list[dict[str, object]]
+
+
 class IngestDiagnosticsState(TypedDict):
     """Operational diagnostics sourced from the staged manifest context."""
 
@@ -154,6 +162,7 @@ class PipelineStatePayload(TypedDict):
     committed_state: CommittedState
     drift_state: DriftState
     transformed_state: TransformedState
+    review_queue: ReviewQueueState
     ingest_diagnostics: IngestDiagnosticsState
     transform_diagnostics: TransformDiagnosticsState
     findings: list[PipelineFinding]
@@ -487,6 +496,13 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
             "master": master_state,
             "summary_path": str(settings.summary_json_path),
             "completeness_path": str(settings.completeness_json_path),
+        },
+        "review_queue": {
+            "unreviewed_uncategorized_count": _context_int(
+                summary_payload, "unreviewed_uncategorized_count"
+            ),
+            "needs_rule_count": _context_int(summary_payload, "needs_rule_count"),
+            "top_review_groups": _context_list(summary_payload, "top_review_groups"),
         },
         "ingest_diagnostics": {
             "parser_low_confidence_file_count": _context_int(

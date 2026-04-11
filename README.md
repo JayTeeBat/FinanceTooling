@@ -30,6 +30,7 @@ Recommended day-to-day commands:
 
 - `uv run update`
 - `uv run review-export`
+- `uv run review-helper`
 - `uv run review-import`
 - `uv run workflow-status`
 
@@ -93,11 +94,19 @@ outputs in `${FINANCE_PROCESSED_PATH}/outputs/`.
 uv run review-export
 ```
 
+- This also generates `${FINANCE_PROCESSED_PATH}/review_helper.html`
+  by default. Use `--no-helper` to skip it.
+
 - Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`.
 - The review workbook includes:
-  - `reviewed`: persistent review-progress marker
+  - `review_status`: persistent review-progress marker (`todo`, `done`,
+    `needs_rule`, `skip`)
+  - `review_group_key` / `review_group_size`: repeated-merchant grouping helpers
+  - `reviewed`: compatibility field derived from `review_status`
   - `review_comment`: freeform review note
   - `normalized_description`: normalized description helper for search/filtering
+- The `.xlsx` export also includes `instructions` and `taxonomy` sheets plus
+  dropdown validation for `review_status` and `category`.
 - Dry-run import:
 
 ```bash
@@ -289,7 +298,8 @@ uv run workflow-status
 This writes `${FINANCE_PROCESSED_PATH}/state/workflow_pipeline_state.json` and prints a compact
 health summary, including duplicate raw-source detection, staged-vs-transform
 timestamp drift, committed source-registry state, stale reasons, full-refresh
-risk, parser diagnostics, and reconciliation/data-quality diagnostics.
+risk, parser diagnostics, review-queue counts, and reconciliation/data-quality
+diagnostics.
 
 ### Review command examples
 
@@ -299,12 +309,15 @@ uv run review-export \
   --start-date "2026-01-01" \
   --end-date "2026-03-31"
 
+# month shortcut
+uv run review-export --month "2026-01"
+
 # explicit paths
 uv run review-export \
   --normalized-path "$FINANCE_PROCESSED_PATH/outputs/transform_transactions.csv" \
   --output-path "$FINANCE_PROCESSED_PATH/transactions_review.xlsx"
 
-# edit transactions_review.xlsx (set category/subcategory, reviewed, notes)
+# edit transactions_review.xlsx (set category/subcategory, review_status, notes)
 
 # defaults (review file from processed path, overrides from env or data-adjacent config,
 # then rebuild canonical outputs)
@@ -330,7 +343,8 @@ live config files.
 Use `--allow-load-warnings` only for deliberate recovery flows.
 For `review-export`, output is uncategorized-only by default; use
 `--include-categorized` to include already-categorized rows. Optional
-`--start-date` and `--end-date` apply inclusive `booking_date` filters.
+`--month`, `--start-date`, and `--end-date` apply inclusive `booking_date`
+filters.
 Additional review filters:
 - `--min-amount`
 - `--max-amount`
@@ -353,6 +367,16 @@ LibreOffice/Excel setups without manual theme tweaks. Override via
 Review progress is stored separately in
 `${FINANCE_PROCESSED_PATH}/state/workflow_review_state.parquet` by default and projected into
 `transform_transactions.csv` as the `reviewed` column after `transform`.
+`workflow-status` also surfaces a compact review queue summary, including
+unreviewed uncategorized count, `needs_rule` count, and top repeated review
+groups.
+
+`review-export` generates a static helper page at
+`${FINANCE_PROCESSED_PATH}/review_helper.html` by default, and
+`review-helper` remains available as a standalone regeneration command. The
+helper is a triage and draft surface only: it can help group/filter
+transactions and export a review JSON draft, but final persistence still goes
+through `review-import`.
 
 Transaction identity now includes a parser-assigned `source_record_index` so
 repeated same-day same-amount statement rows do not collapse into a single

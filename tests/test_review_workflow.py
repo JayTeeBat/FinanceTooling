@@ -128,7 +128,7 @@ def test_export_review_rows_include_categorized_option_includes_all_sources(
 
     assert exported == 2
     exported_df = pd.read_csv(output_path)
-    assert exported_df["transaction_id"].tolist() == ["tx_1", "tx_2"]
+    assert set(exported_df["transaction_id"].tolist()) == {"tx_1", "tx_2"}
 
 
 def test_export_review_rows_includes_legacy_fallback_uncategorized_rows(
@@ -208,6 +208,7 @@ def test_export_review_rows_applies_review_state_and_only_unreviewed(tmp_path: P
         [
             {
                 "transaction_id": "tx_1",
+                "review_status": "done",
                 "reviewed": True,
                 "review_comment": "checked",
                 "updated_at": "2026-03-07T10:00:00+00:00",
@@ -225,6 +226,59 @@ def test_export_review_rows_applies_review_state_and_only_unreviewed(tmp_path: P
     assert exported == 1
     exported_df = pd.read_excel(output_path, engine="openpyxl")
     assert exported_df["transaction_id"].tolist() == ["tx_2"]
+
+
+def test_export_review_rows_month_shortcut_and_grouping(tmp_path: Path) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "Merchant Alpha 1111",
+                "amount_native": -10.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": "Main",
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_2",
+                "booking_date": "2026-01-02",
+                "description": "Merchant Alpha 2222",
+                "amount_native": -12.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": "Main",
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_3",
+                "booking_date": "2026-02-01",
+                "description": "Merchant Beta",
+                "amount_native": -15.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": "Main",
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_source": "uncategorized",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_review_rows(normalized_path, output_path, month="2026-01")
+
+    assert exported == 2
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == ["tx_1", "tx_2"]
+    assert exported_df["review_group_size"].tolist() == [2, 2]
+    assert exported_df["review_status"].tolist() == ["todo", "todo"]
 
 
 def test_export_review_rows_invalid_date_filters_raise_value_error(tmp_path: Path) -> None:
@@ -377,11 +431,11 @@ def test_export_review_rows_filters_by_signed_amount_bounds(tmp_path: Path) -> N
 
     assert exported == 3
     exported_df = pd.read_csv(output_path)
-    assert exported_df["transaction_id"].tolist() == [
+    assert set(exported_df["transaction_id"].tolist()) == {
         "tx_negative_small",
         "tx_zero",
         "tx_positive",
-    ]
+    }
 
 
 def test_export_review_rows_rejects_invalid_absolute_amount_bounds(tmp_path: Path) -> None:
@@ -514,6 +568,7 @@ def test_import_review_into_overrides_writes_transaction_overrides_and_review_st
                 "original_category": "Uncategorized",
                 "original_subcategory": None,
                 "project_tags": "Family|Shared",
+                "review_status": "done",
                 "reviewed": True,
                 "review_comment": "done",
             }
@@ -537,9 +592,100 @@ def test_import_review_into_overrides_writes_transaction_overrides_and_review_st
     assert transaction_overrides.entries[0].project_tags == ("Family", "Shared")
     review_state = load_review_state(review_state_path)
     assert review_state.loc[0, "transaction_id"] == "tx_1"
+    assert review_state.loc[0, "review_status"] == "done"
     assert bool(review_state.loc[0, "reviewed"]) is True
     assert review_state.loc[0, "review_comment"] == "done"
     assert result.backup_run is not None
+
+
+def test_import_review_into_overrides_supports_status_only_rows(tmp_path: Path) -> None:
+    review_path = tmp_path / "transactions_review.json"
+    review_state_path = tmp_path / "review_state.parquet"
+    review_path.write_text(
+        json.dumps(
+            [
+                {
+                    "transaction_id": "tx_1",
+                    "booking_date": "2026-01-01",
+                    "description": "UNKNOWN MERCHANT 123",
+                    "amount_native": -10.0,
+                    "currency": "EUR",
+                    "bank": "REVOLUT",
+                    "account_label": None,
+                    "category": "Uncategorized",
+                    "subcategory": None,
+                    "original_category": "Uncategorized",
+                    "original_subcategory": None,
+                    "project_tags": None,
+                    "review_status": "needs_rule",
+                    "reviewed": True,
+                    "review_comment": "convert to reusable rule",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = import_review_into_overrides(
+        review_path=review_path,
+        transaction_overrides_path=tmp_path / "transaction_overrides.yaml",
+        review_state_path=review_state_path,
+    )
+
+    assert result.transaction_overrides_upserted == 0
+    assert result.status_only_rows == 1
+    review_state = load_review_state(review_state_path)
+    assert review_state.loc[0, "review_status"] == "needs_rule"
+
+
+def test_import_review_into_overrides_rejects_unknown_category_pair(tmp_path: Path) -> None:
+    review_path = tmp_path / "transactions_review.json"
+    category_rules_path = tmp_path / "category_rules.yaml"
+    category_rules_path.write_text(
+        (
+            "version: 1\n"
+            "taxonomy:\n"
+            "  shopping.general:\n"
+            "    name: Shopping\n"
+            "    category_label: Shopping\n"
+            "    subcategory_label: General Retail\n"
+            "rules: []\n"
+        ),
+        encoding="utf-8",
+    )
+    review_path.write_text(
+        json.dumps(
+            [
+                {
+                    "transaction_id": "tx_1",
+                    "booking_date": "2026-01-01",
+                    "description": "UNKNOWN MERCHANT 123",
+                    "amount_native": -10.0,
+                    "currency": "EUR",
+                    "bank": "REVOLUT",
+                    "account_label": None,
+                    "category": "Shopping",
+                    "subcategory": "Wrong Pair",
+                    "original_category": "Uncategorized",
+                    "original_subcategory": None,
+                    "project_tags": None,
+                    "review_status": "done",
+                    "reviewed": True,
+                    "review_comment": None,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = import_review_into_overrides(
+        review_path=review_path,
+        category_rules_path=category_rules_path,
+        dry_run=True,
+    )
+
+    assert result.rows_skipped_invalid_category == 1
+    assert result.invalid_row_messages == ("row 2: unknown_category_pair",)
 
 
 def test_import_review_into_overrides_defaults_backup_into_config_backup_folder(

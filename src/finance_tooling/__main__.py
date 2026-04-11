@@ -11,6 +11,9 @@ from finance_tooling.commands import (
     review_export as review_export_command,
 )
 from finance_tooling.commands import (
+    review_helper as review_helper_command,
+)
+from finance_tooling.commands import (
     review_import as review_import_command,
 )
 from finance_tooling.commands import (
@@ -63,6 +66,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Recommended: import reviewed workbook changes into overrides.",
     )
     review_import_command.configure_parser(review_import_parser)
+
+    review_helper_parser = subparsers.add_parser(
+        "review-helper",
+        help="Generate a static HTML helper for review triage and draft export.",
+    )
+    review_helper_command.configure_parser(review_helper_parser)
 
     workflow_status_parser = subparsers.add_parser(
         "workflow-status",

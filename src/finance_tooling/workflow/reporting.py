@@ -43,6 +43,14 @@ from finance_tooling.reporting.cashflow import (
 from finance_tooling.reporting.completeness import build_completeness_report_from_dataframe
 from finance_tooling.reporting.dashboard import render_dashboard_html
 from finance_tooling.reporting.household_healthcheck import render_household_healthcheck_html
+from finance_tooling.review.common import (
+    REVIEW_GROUP_KEY_COLUMN,
+    REVIEW_STATUS_COLUMN,
+    build_review_group_keys,
+    normalize_review_status_value,
+    review_status_is_reviewed,
+)
+from finance_tooling.review.state import load_review_state
 from finance_tooling.workflow.enrichment import recompute_dataframe_fx
 from finance_tooling.workflow.types import (
     CategoryMetricByBankRow,
@@ -50,6 +58,7 @@ from finance_tooling.workflow.types import (
     HsbcSelectionDiagnostic,
     HsbcSignDiagnostic,
     ParserSelectionDiagnostic,
+    ReviewGroupSummaryRow,
     SummaryPayload,
 )
 
@@ -411,6 +420,71 @@ def _build_economic_role_metrics_from_dataframe(dataframe: DataFrame) -> dict[st
     }
 
 
+def _build_review_queue_metrics_from_dataframe(
+    dataframe: DataFrame,
+    *,
+    review_state_path: Path,
+) -> tuple[int, int, list[ReviewGroupSummaryRow]]:
+    if dataframe.empty or "transaction_id" not in dataframe.columns:
+        return 0, 0, []
+
+    review_state = load_review_state(review_state_path)
+    review_status_by_id: dict[str, str] = {}
+    if not review_state.empty:
+        review_status_by_id = (
+            review_state.drop_duplicates(subset=["transaction_id"], keep="last")
+            .set_index("transaction_id")[REVIEW_STATUS_COLUMN]
+            .to_dict()
+        )
+
+    transaction_ids = dataframe["transaction_id"].astype(str)
+    review_status_series = pd.Series(
+        [
+            normalize_review_status_value(review_status_by_id.get(transaction_id))
+            for transaction_id in transaction_ids
+        ],
+        index=dataframe.index,
+        dtype="object",
+    )
+    reviewed_series = pd.Series(
+        [review_status_is_reviewed(status) for status in review_status_series],
+        index=dataframe.index,
+        dtype="bool",
+    )
+    category_series = (
+        dataframe.get("category", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    category_source_series = (
+        dataframe.get("category_source", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    uncategorized_mask = category_series.eq("uncategorized") | category_source_series.eq(
+        "uncategorized"
+    )
+    unreviewed_uncategorized_count = int((uncategorized_mask & ~reviewed_series).sum())
+    needs_rule_count = int(
+        review_status_series.astype("string").str.casefold().eq("needs_rule").sum()
+    )
+
+    grouped_frame = dataframe.loc[uncategorized_mask].copy()
+    if grouped_frame.empty:
+        return unreviewed_uncategorized_count, needs_rule_count, []
+    grouped_frame[REVIEW_GROUP_KEY_COLUMN] = build_review_group_keys(grouped_frame)
+    grouped = grouped_frame[REVIEW_GROUP_KEY_COLUMN].value_counts()
+    top_review_groups: list[ReviewGroupSummaryRow] = [
+        {"review_group_key": str(key), "count": int(count)}
+        for key, count in grouped.iloc[:10].items()
+    ]
+    return unreviewed_uncategorized_count, needs_rule_count, top_review_groups
+
+
 def persist_and_report(
     *,
     settings: Settings,
@@ -550,6 +624,14 @@ def persist_and_report(
         account_inference_source_counts,
     ) = _build_account_inference_metrics_from_dataframe(dataframe)
     economic_role_counts = _build_economic_role_metrics_from_dataframe(dataframe)
+    (
+        unreviewed_uncategorized_count,
+        needs_rule_count,
+        top_review_groups,
+    ) = _build_review_queue_metrics_from_dataframe(
+        dataframe,
+        review_state_path=settings.review_state_path,
+    )
     total_amount_eur_abs = categorized_amount_eur_abs + uncategorized_amount_eur_abs
     reviewed_ratio = (reviewed_count / len(dataframe)) if len(dataframe) else 0.0
     categorized_amount_eur_abs_ratio = (
@@ -583,6 +665,8 @@ def persist_and_report(
         "uncategorized_amount_eur_abs_ratio": round(uncategorized_amount_eur_abs_ratio, 4),
         "reviewed_count": reviewed_count,
         "reviewed_ratio": reviewed_ratio,
+        "unreviewed_uncategorized_count": unreviewed_uncategorized_count,
+        "needs_rule_count": needs_rule_count,
         "manual_category_carry_forward_applied_count": (
             manual_category_carry_forward_applied_count
         ),
@@ -597,6 +681,7 @@ def persist_and_report(
         "top_uncategorized_descriptions": (
             classification_diagnostics.top_uncategorized_descriptions
         ),
+        "top_review_groups": top_review_groups,
         "top_rules_by_hits": classification_diagnostics.top_rules_by_hits,
         "category_rules_path": str(settings.category_rules_path),
         "project_rules_path": str(settings.project_rules_path),

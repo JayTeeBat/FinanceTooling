@@ -22,6 +22,7 @@ def test_upsert_and_load_review_state_round_trip(tmp_path: Path) -> None:
         [
             {
                 "transaction_id": "tx-1",
+                "review_status": "needs_rule",
                 "reviewed": True,
                 "review_comment": "checked",
                 "updated_at": "2026-03-07T10:00:00+00:00",
@@ -35,6 +36,7 @@ def test_upsert_and_load_review_state_round_trip(tmp_path: Path) -> None:
     assert result.rows_inserted == 1
     loaded = load_review_state(path)
     assert loaded.loc[0, "transaction_id"] == "tx-1"
+    assert loaded.loc[0, "review_status"] == "needs_rule"
     assert bool(loaded.loc[0, "reviewed"])
     assert loaded.loc[0, "review_comment"] == "checked"
 
@@ -109,11 +111,18 @@ def test_apply_review_state_preserves_source_document_id(tmp_path: Path) -> None
 def test_build_review_state_updates_skips_rows_without_transaction_id() -> None:
     updates = build_review_state_updates(
         [
-            {"transaction_id": "tx-1", "reviewed": True, "review_comment": "keep"},
+            {
+                "transaction_id": "tx-1",
+                "review_status": "needs_rule",
+                "reviewed": True,
+                "review_comment": "keep",
+            },
             {"transaction_id": None, "reviewed": True, "review_comment": "skip"},
         ],
         reviewed_column="reviewed",
         review_comment_column="review_comment",
+        review_status_column="review_status",
     )
 
     assert updates["transaction_id"].tolist() == ["tx-1"]
+    assert updates["review_status"].tolist() == ["needs_rule"]

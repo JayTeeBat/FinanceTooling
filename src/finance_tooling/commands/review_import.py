@@ -22,16 +22,32 @@ def print_review_import_result(result: ReviewImportResult, *, dry_run: bool, ver
         f"upserted {result.transaction_overrides_upserted} overrides, "
         f"skipped {result.rows_skipped} rows."
     )
+    if result.status_only_rows:
+        print(f"Status-only rows: {result.status_only_rows}")
+    if result.unchanged_rows:
+        print(f"Unchanged rows: {result.unchanged_rows}")
     if result.project_tags_applied:
         print(f"Project tags applied: {result.project_tags_applied}")
     if result.review_state_upserted:
         print(f"Review state updated: {result.review_state_upserted}")
+    if result.duplicate_transaction_id_rows:
+        print(
+            "Duplicate transaction_id rows overwritten: "
+            f"{result.duplicate_transaction_id_rows} (last row wins)"
+        )
     if result.rows_skipped_invalid:
         print(f"Invalid rows skipped: {result.rows_skipped_invalid}")
+    if result.invalid_row_messages:
+        print("Invalid row details:")
+        for message in result.invalid_row_messages:
+            print(f"- {message}")
     if verbose:
         print(f"Transaction overrides upserted: {result.transaction_overrides_upserted}")
         print(f"Transaction updated: {result.transaction_overrides_updated}")
         print(f"Transaction inserted: {result.transaction_overrides_inserted}")
+        print(f"Status-only rows: {result.status_only_rows}")
+        print(f"Unchanged rows: {result.unchanged_rows}")
+        print(f"Duplicate transaction_id rows: {result.duplicate_transaction_id_rows}")
         print(f"Project tags applied: {result.project_tags_applied}")
         print(f"Review state upserted: {result.review_state_upserted}")
         print(f"Review state updated: {result.review_state_updated}")
