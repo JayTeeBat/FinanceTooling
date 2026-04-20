@@ -44,6 +44,7 @@ from finance_tooling.reporting.completeness import build_completeness_report_fro
 from finance_tooling.reporting.dashboard import render_dashboard_html
 from finance_tooling.reporting.household_healthcheck import render_household_healthcheck_html
 from finance_tooling.workflow.enrichment import recompute_dataframe_fx
+from finance_tooling.workflow.incremental_state import compute_config_fingerprint
 from finance_tooling.workflow.types import (
     CategoryMetricByBankRow,
     HsbcBoundaryDiagnostic,
@@ -605,6 +606,7 @@ def persist_and_report(
         "project_overrides_path": str(settings.project_overrides_path),
         "transaction_overrides_path": str(settings.transaction_overrides_path),
         "review_state_path": str(settings.review_state_path),
+        "transform_config_fingerprint": compute_config_fingerprint(settings),
         "fx_rate_semantics_version": FX_RATE_SEMANTICS_VERSION,
         "cashflow_type_unknown_count": cashflow_resolution.unknown_count,
         "cashflow_type_unknown_categories": cashflow_resolution.unknown_categories,
