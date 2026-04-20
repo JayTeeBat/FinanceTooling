@@ -254,6 +254,7 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["project_overrides_path"] == str(settings.project_overrides_path)
     assert summary_payload["transaction_overrides_path"] == str(settings.transaction_overrides_path)
     assert summary_payload["review_state_path"] == str(settings.review_state_path)
+    assert summary_payload["transform_config_fingerprint"] == compute_config_fingerprint(settings)
     assert "statement_reconciliation_fail_count" not in summary_payload
     assert "parser_low_confidence_file_count" not in summary_payload
 
@@ -1231,11 +1232,12 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
         files_missing_since_last_commit=0,
         dataset_stale=False,
         stale_reasons=(),
-        config_fingerprint=compute_config_fingerprint(settings),
+        config_fingerprint="stale-staged-config-fingerprint",
         context={},
     )
     write_staged_batch_manifest(staged_batch_manifest_path(settings), manifest)
 
+    current_config_fingerprint = compute_config_fingerprint(settings)
     summary_payload = {
         "files_scanned": 1,
         "total_rows": 1,
@@ -1252,6 +1254,7 @@ def test_run_transform_skips_when_outputs_are_current(monkeypatch, tmp_path: Pat
         "uncategorized_amount_eur_abs": 0.0,
         "categorized_amount_eur_abs_ratio": 1.0,
         "uncategorized_amount_eur_abs_ratio": 0.0,
+        "transform_config_fingerprint": current_config_fingerprint,
         "fx_rate_semantics_version": 2,
     }
     pd.DataFrame(

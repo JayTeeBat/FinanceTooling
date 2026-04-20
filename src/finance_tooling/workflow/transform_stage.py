@@ -122,8 +122,7 @@ def _is_transform_output_current(
     required_outputs = _required_transform_outputs(settings)
     if any(not path.exists() for path in required_outputs):
         return False
-    if manifest_config_fingerprint != compute_config_fingerprint(settings):
-        return False
+    current_config_fingerprint = compute_config_fingerprint(settings)
 
     inputs = (
         staged_path,
@@ -144,6 +143,12 @@ def _is_transform_output_current(
         return False
     summary_payload = _load_previous_summary(settings.summary_json_path)
     if summary_payload is None:
+        return False
+    summary_config_fingerprint = summary_payload.get("transform_config_fingerprint")
+    if isinstance(summary_config_fingerprint, str) and summary_config_fingerprint:
+        if summary_config_fingerprint != current_config_fingerprint:
+            return False
+    elif manifest_config_fingerprint != current_config_fingerprint:
         return False
     if _summary_int(summary_payload, "fx_rate_semantics_version") != FX_RATE_SEMANTICS_VERSION:
         return False
