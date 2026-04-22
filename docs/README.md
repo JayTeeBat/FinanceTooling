@@ -10,6 +10,14 @@ Core docs for day-to-day workflow:
   - Commit-level trend metrics.
 - `metrics_commit_log_by_bank.csv`
   - Per-bank trend metrics.
+- `roadmap.md`
+  - Aggregated roadmap for current priorities, preserved backlog, and success
+    targets.
+- `todo.md`
+  - Lightweight backlog for repo-level follow-up ideas that are not yet scoped.
+- `transaction_model_improvement_plan.md`
+  - Target transaction semantics model and multi-PR implementation plan for KPI
+    dashboards and transaction drill-down improvements.
 - `diagrams/`
   - PlantUML sources and rendered SVGs for review workflows.
 

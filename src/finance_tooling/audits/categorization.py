@@ -122,11 +122,7 @@ def _string_series(
 
 
 def _bool_series(dataframe: pd.DataFrame, column: str) -> pd.Series:
-    return (
-        dataframe.get(column, pd.Series(False, index=dataframe.index))
-        .fillna(False)
-        .astype(bool)
-    )
+    return dataframe.get(column, pd.Series(False, index=dataframe.index)).fillna(False).astype(bool)
 
 
 def _year_series(dataframe: pd.DataFrame) -> pd.Series:
@@ -167,8 +163,8 @@ def _build_override_integrity(
         entry for entry in entries if cast(str, entry.transaction_id) not in transaction_ids
     ]
 
-    override_mask = _string_series(dataframe, "category_source").str.strip().eq(
-        "transaction_override"
+    override_mask = (
+        _string_series(dataframe, "category_source").str.strip().eq("transaction_override")
     )
     years = _year_series(dataframe)
     yearly_rows: list[AuditYearlyOverrideRow] = []
@@ -185,9 +181,7 @@ def _build_override_integrity(
     unmatched_categories: dict[str, int] = {}
     for entry in unmatched_entries:
         if entry.set_category and entry.category:
-            unmatched_categories[entry.category] = (
-                unmatched_categories.get(entry.category, 0) + 1
-            )
+            unmatched_categories[entry.category] = unmatched_categories.get(entry.category, 0) + 1
 
     return {
         "override_entries": len(entries),
@@ -247,9 +241,7 @@ def _build_taxonomy_drift(
     missing_names = {
         value
         for value in category.tolist()
-        if value
-        and value.casefold() != "uncategorized"
-        and value.casefold() not in rules.taxonomy
+        if value and value.casefold() != "uncategorized" and value.casefold() not in rules.taxonomy
     }
     for category_name in sorted(missing_names):
         mask = category.eq(category_name)
@@ -510,9 +502,7 @@ def _markdown_table(headers: list[str], rows: list[list[object]]) -> str:
         return "_None_"
     header_line = "| " + " | ".join(headers) + " |"
     divider_line = "| " + " | ".join("---" for _ in headers) + " |"
-    body = "\n".join(
-        "| " + " | ".join(str(value) for value in row) + " |" for row in rows
-    )
+    body = "\n".join("| " + " | ".join(str(value) for value in row) + " |" for row in rows)
     return "\n".join([header_line, divider_line, body])
 
 
@@ -541,14 +531,8 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
         [
             row["category"],
             row["count"],
-            ", ".join(
-                f"{key}={value}"
-                for key, value in row["source_counts"].items()
-            ),
-            ", ".join(
-                f"{key}={value}"
-                for key, value in row["subcategory_counts"].items()
-            ),
+            ", ".join(f"{key}={value}" for key, value in row["source_counts"].items()),
+            ", ".join(f"{key}={value}" for key, value in row["subcategory_counts"].items()),
         ]
         for row in audit.taxonomy_drift["missing_categories"]
     ]
@@ -556,23 +540,23 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
         [
             row["category"],
             row["total_count"],
-            ", ".join(
-                f"{key}={value}"
-                for key, value in row["source_counts"].items()
-            ),
+            ", ".join(f"{key}={value}" for key, value in row["source_counts"].items()),
         ]
         for row in audit.rule_layer_consistency["mixed_source_categories"]
     ]
 
-    safe_fixes = "\n".join(
-        f"- {item}" for item in audit.remediation_backlog["safe_data_preserving_fixes"]
-    ) or "- None"
-    state_fixes = "\n".join(
-        f"- {item}" for item in audit.remediation_backlog["state_semantics_fixes"]
-    ) or "- None"
-    inspection_items = "\n".join(
-        f"- {item}" for item in audit.remediation_backlog["manual_inspection"]
-    ) or "- None"
+    safe_fixes = (
+        "\n".join(f"- {item}" for item in audit.remediation_backlog["safe_data_preserving_fixes"])
+        or "- None"
+    )
+    state_fixes = (
+        "\n".join(f"- {item}" for item in audit.remediation_backlog["state_semantics_fixes"])
+        or "- None"
+    )
+    inspection_items = (
+        "\n".join(f"- {item}" for item in audit.remediation_backlog["manual_inspection"])
+        or "- None"
+    )
 
     return "\n".join(
         [
@@ -583,14 +567,8 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
             "",
             "## Override Integrity",
             f"- Override entries: {audit.override_integrity['override_entries']}",
-            (
-                "- Matched override entries: "
-                f"{audit.override_integrity['matched_entry_count']}"
-            ),
-            (
-                "- Unmatched override entries: "
-                f"{audit.override_integrity['unmatched_entry_count']}"
-            ),
+            (f"- Matched override entries: {audit.override_integrity['matched_entry_count']}"),
+            (f"- Unmatched override entries: {audit.override_integrity['unmatched_entry_count']}"),
             (
                 "- Canonical rows sourced from transaction overrides: "
                 f"{audit.override_integrity['override_row_count']}"
@@ -600,14 +578,8 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
             "",
             "## Review-State Integrity",
             f"- Review-state rows: {audit.review_state_integrity['review_state_rows']}",
-            (
-                "- Reviewed=True rows: "
-                f"{audit.review_state_integrity['reviewed_true_count']}"
-            ),
-            (
-                "- Reviewed=False rows: "
-                f"{audit.review_state_integrity['reviewed_false_count']}"
-            ),
+            (f"- Reviewed=True rows: {audit.review_state_integrity['reviewed_true_count']}"),
+            (f"- Reviewed=False rows: {audit.review_state_integrity['reviewed_false_count']}"),
             (
                 "- Review-state rows matching canonical transaction IDs: "
                 f"{audit.review_state_integrity['matched_transaction_count']}"
@@ -651,9 +623,7 @@ def render_categorization_audit_markdown(audit: CategorizationAudit) -> str:
 def run_categorization_audit(settings: Settings) -> Path:
     """Run the live categorization audit and write a Markdown report."""
     canonical_transactions = pd.read_parquet(settings.master_parquet_path)
-    classification_rules, rule_warnings = load_classification_rules(
-        settings.category_rules_path
-    )
+    classification_rules, rule_warnings = load_classification_rules(settings.category_rules_path)
     transaction_override_store, override_warnings = load_transaction_override_store(
         settings.transaction_overrides_path
     )

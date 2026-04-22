@@ -100,8 +100,9 @@ Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
     `transaction_overrides.yaml`.
 - `economic_role` is shown as read-only context.
   - True income comes from taxonomy semantics.
-  - Refunds remain `economic_role = expense` even when the transaction is a
-    positive inflow.
+  - Refunds remain expense-like even when the transaction is a positive inflow;
+    known-purpose refunds should usually preserve the fixed/variable expense
+    role of their purpose bucket.
 - account-boundary fields are also intentionally not part of the review workbook
   in v1.
   - Reusable internal/counterparty inference comes from `account_rules.yaml`.

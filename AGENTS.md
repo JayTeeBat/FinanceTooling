@@ -182,6 +182,32 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-04-23 - codex
+- Branch: `feature/economic-role-expense-split`
+- Completed:
+  - Added shared cashflow/economic-role semantics with `fixed_expense`,
+    `variable_expense`, and legacy-compatible `expense`.
+  - Updated classification, cashflow reporting, dashboard expense totals,
+    summary role counts, tracked taxonomy docs/config, and focused tests.
+  - Migrated the live FinanceVault category rules and regenerated local
+    processed outputs with subscription rows fixed and ordinary Amazon
+    marketplace rows variable.
+  - Updated metrics logs from the migrated summary output.
+- Checks:
+  - `uv run ruff format .`: pass
+  - `uv run ruff check .`: pass
+  - `uv run ty check src/finance_tooling tests`: pass
+  - `uv run pytest`: pass
+- Open items:
+  - Work is not committed or pushed because the worktree also contains
+    unrelated pre-existing edits and broad formatting churn that should not be
+    swept into this feature without careful staging.
+  - Live backup snapshot creation skipped unreadable legacy Cryptomator backup
+    paths; current workflow backups still completed for active files.
+- Next action:
+  - Carefully stage only the economic-role feature hunks, commit, push, and open
+    a draft PR.
+
 ### 2026-04-09 - codex
 - Branch: `fix/ty-cleanup`
 - Completed:
@@ -218,17 +244,3 @@ Success target for the 2026 validation campaign:
   - Draft PR opened: `#79`
 - Next action:
   - Attack the remaining `ty` diagnostics with typed payload cleanup, starting with reporting/status JSON payload contracts.
-
-### 2026-04-08 - codex
-- Branch: `codex/unified-backup-snapshots`
-- Completed:
-  - Replaced scattered stage/config backup behavior with one unified snapshot root under `data/backup`, including manifest-based retention of the latest 3 snapshots per retained run day and the latest 7 active run days.
-  - Reworked `update`, `transform`, `ingest`, and `review-import` so top-level mutating commands reuse a single pre-run snapshot and review-import no longer creates config-side `.bak` files.
-  - Updated drift lookup, workflow diagnostics, README docs, and focused tests to the new backup layout and retention model.
-- Checks:
-  - `uv run ruff check src/finance_tooling/backup.py src/finance_tooling/review_import.py src/finance_tooling/commands/review_import.py src/finance_tooling/workflow/ingest_stage.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/workflow/update_stage.py src/finance_tooling/workflow/incremental_state.py src/finance_tooling/workflow/reporting.py src/finance_tooling/workflow_status.py tests/test_backup.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_cli_dispatch.py README.md`: pass
-  - `uv run pytest -q tests/test_backup.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_workflow_stages.py tests/test_cli_dispatch.py`: pass
-- Open items:
-  - The broader repo still has unrelated untracked local files outside this branch, so only the backup-system work should be included in the PR.
-- Next action:
-  - Merge the unified backup snapshot PR after review, then decide whether migration helpers such as transaction-id recovery tooling should be folded onto the same backup contract.

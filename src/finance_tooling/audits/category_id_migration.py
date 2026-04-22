@@ -152,9 +152,7 @@ def _resolve_row_category_ids(
         )
 
     category_key = (
-        category.strip().casefold()
-        if isinstance(category, str) and category.strip()
-        else None
+        category.strip().casefold() if isinstance(category, str) and category.strip() else None
     )
     subcategory_key = (
         subcategory.strip().casefold()
@@ -275,11 +273,7 @@ def _override_summary(
     category_entries = 0
 
     for index, entry in enumerate(override_store.entries):
-        if not (
-            entry.set_category_id
-            or entry.set_category
-            or entry.set_subcategory
-        ):
+        if not (entry.set_category_id or entry.set_category or entry.set_subcategory):
             continue
         category_entries += 1
         resolved_category_id, reporting_category_id, resolution_source = _resolve_row_category_ids(
@@ -343,9 +337,7 @@ def _taxonomy_summary(rules: ClassificationRules) -> dict[str, object]:
         )
     )
     deprecated_ids = [
-        category_id
-        for category_id, entry in entries.items()
-        if entry.deprecated_to is not None
+        category_id for category_id, entry in entries.items() if entry.deprecated_to is not None
     ]
     return {
         "taxonomy_entry_count": len(entries),
@@ -384,9 +376,7 @@ def _markdown_table(headers: list[str], rows: list[list[object]]) -> str:
         return "_None_"
     header_line = "| " + " | ".join(headers) + " |"
     divider_line = "| " + " | ".join("---" for _ in headers) + " |"
-    body = "\n".join(
-        "| " + " | ".join(str(value) for value in row) + " |" for row in rows
-    )
+    body = "\n".join("| " + " | ".join(str(value) for value in row) + " |" for row in rows)
     return "\n".join([header_line, divider_line, body])
 
 
@@ -429,10 +419,7 @@ def render_category_id_migration_audit_markdown(audit: CategoryIdMigrationAudit)
                 "- Rows resolving through deprecated IDs: "
                 f"{audit.canonical_summary['deprecated_row_count']}"
             ),
-            (
-                "- Unresolved canonical rows: "
-                f"{audit.canonical_summary['unresolved_row_count']}"
-            ),
+            (f"- Unresolved canonical rows: {audit.canonical_summary['unresolved_row_count']}"),
             "",
             "## Override Summary",
             (
@@ -451,24 +438,15 @@ def render_category_id_migration_audit_markdown(audit: CategoryIdMigrationAudit)
                 "- Override entries resolving through deprecated IDs: "
                 f"{audit.override_summary['deprecated_entry_count']}"
             ),
-            (
-                "- Unresolved override entries: "
-                f"{audit.override_summary['unresolved_entry_count']}"
-            ),
+            (f"- Unresolved override entries: {audit.override_summary['unresolved_entry_count']}"),
             "",
             "## Taxonomy Summary",
             (
                 "- Taxonomy entries (including deprecated): "
                 f"{audit.taxonomy_summary['taxonomy_entry_count']}"
             ),
-            (
-                "- Deprecated IDs: "
-                f"{audit.taxonomy_summary['deprecated_id_count']}"
-            ),
-            (
-                "- Ambiguous label pairs: "
-                f"{audit.taxonomy_summary['ambiguous_label_pair_count']}"
-            ),
+            (f"- Deprecated IDs: {audit.taxonomy_summary['deprecated_id_count']}"),
+            (f"- Ambiguous label pairs: {audit.taxonomy_summary['ambiguous_label_pair_count']}"),
             "",
             _markdown_table(["Category", "Subcategory", "Category IDs"], ambiguous_rows),
             "",
@@ -485,9 +463,7 @@ def render_category_id_migration_audit_markdown(audit: CategoryIdMigrationAudit)
 def run_category_id_migration_audit(settings: Settings) -> Path:
     """Run the live category-id migration audit and write a Markdown report."""
     canonical_transactions = pd.read_parquet(settings.master_parquet_path)
-    classification_rules, rule_warnings = load_classification_rules(
-        settings.category_rules_path
-    )
+    classification_rules, rule_warnings = load_classification_rules(settings.category_rules_path)
     transaction_override_store, override_warnings = load_transaction_override_store(
         settings.transaction_overrides_path
     )

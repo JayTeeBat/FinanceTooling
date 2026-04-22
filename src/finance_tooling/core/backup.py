@@ -58,12 +58,28 @@ def _copy_tree_files(source_dir: Path, destination_dir: Path) -> list[BackupSnap
     if not source_dir.exists():
         return copied_files
     for source_path in sorted(source_dir.rglob("*")):
-        if source_path.is_dir():
+        try:
+            if source_path.is_dir():
+                continue
+        except OSError as exc:
+            warnings.warn(
+                f"Skipping unreadable backup source path '{source_path}': {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             continue
         relative_path = source_path.relative_to(source_dir)
         destination_path = destination_dir / relative_path
         destination_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, destination_path)
+        try:
+            shutil.copy2(source_path, destination_path)
+        except OSError as exc:
+            warnings.warn(
+                f"Skipping unreadable backup source file '{source_path}': {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
         copied_files.append(
             BackupSnapshotFile(
                 source_path=source_path,
@@ -101,9 +117,7 @@ def _iter_legacy_file_backups(target: Path) -> list[Path]:
     candidates: list[Path] = []
     for pattern in (f"{target.name}*.bak",):
         candidates.extend(
-            candidate
-            for candidate in target.parent.glob(pattern)
-            if candidate.is_file()
+            candidate for candidate in target.parent.glob(pattern) if candidate.is_file()
         )
     return sorted(set(candidates))
 
@@ -244,7 +258,16 @@ def _prune_snapshot_runs(backup_root: Path) -> tuple[str, ...]:
 
     snapshots_by_day: dict[str, list[Path]] = {}
     for child in backup_root.iterdir():
-        if not child.is_dir() or child.name == "legacy":
+        try:
+            is_dir = child.is_dir()
+        except OSError as exc:
+            warnings.warn(
+                f"Skipping unreadable backup retention path '{child}': {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
+        if not is_dir or child.name == "legacy":
             continue
         retention_day = _load_retention_day(child)
         if retention_day is None:

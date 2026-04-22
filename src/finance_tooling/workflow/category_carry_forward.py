@@ -127,15 +127,12 @@ def _pick_candidate(
         if not normalized_existing:
             continue
         shorter = (
-            normalized_existing
-            if len(normalized_existing) <= len(normalized_tx)
-            else normalized_tx
+            normalized_existing if len(normalized_existing) <= len(normalized_tx) else normalized_tx
         )
         if not _is_distinctive_prefix(shorter):
             continue
-        if (
-            normalized_existing.startswith(normalized_tx)
-            or normalized_tx.startswith(normalized_existing)
+        if normalized_existing.startswith(normalized_tx) or normalized_tx.startswith(
+            normalized_existing
         ):
             prefix.append(candidate)
     if len(prefix) == 1:

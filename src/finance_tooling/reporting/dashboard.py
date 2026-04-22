@@ -165,7 +165,9 @@ def _build_account_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
     }
     summary = ", ".join(f"{key}={value}" for key, value in sorted(source_counts.items()))
     transaction_word = "transaction" if unknown_count == 1 else "transactions"
-    return [f"Account boundary unresolved for {unknown_count} {transaction_word}; sources: {summary}"]
+    return [
+        f"Account boundary unresolved for {unknown_count} {transaction_word}; sources: {summary}"
+    ]
 
 
 def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
@@ -1093,6 +1095,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         });
       }
 
+      function isExpenseLikeRole(role) {
+        return role === "expense" || role === "fixed_expense" || role === "variable_expense";
+      }
+
       function aggregateMonthlyBalance(filtered, state) {
         const totals = new Map();
         for (const tx of filtered) {
@@ -1107,7 +1113,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           };
           if (tx.economicRole === "income") {
             existing.income += tx.amountEur;
-          } else if (tx.economicRole === "expense") {
+          } else if (isExpenseLikeRole(tx.economicRole)) {
             existing.expenses += -tx.amountEur;
           } else if (tx.cashflowType === "transfer") {
             existing.transferVolume += Math.abs(tx.amountEur);
@@ -1137,7 +1143,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       function aggregateCategorySpend(filtered) {
         const totals = new Map();
         for (const tx of filtered) {
-          if (tx.amountEur === null || tx.economicRole !== "expense") {
+          if (tx.amountEur === null || !isExpenseLikeRole(tx.economicRole)) {
             continue;
           }
           const existing = totals.get(tx.category) || 0;
@@ -1380,7 +1386,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           if (tx.economicRole === "income") {
             income += tx.amountEur;
             net += tx.amountEur;
-          } else if (tx.economicRole === "expense") {
+          } else if (isExpenseLikeRole(tx.economicRole)) {
             expense -= tx.amountEur;
             net += tx.amountEur;
           }

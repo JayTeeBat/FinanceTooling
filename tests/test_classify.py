@@ -11,6 +11,7 @@ from finance_tooling.categorization.classify import (
     load_override_store,
     normalize_description,
     resolve_taxonomy_cashflow_type,
+    resolve_taxonomy_economic_role_for_category_id,
 )
 from finance_tooling.core.models import Transaction
 
@@ -129,6 +130,50 @@ def test_load_classification_rules_supports_yaml_schema_aliases(tmp_path: Path) 
     assert rules.rules[0].match_type == "contains"
     assert rules.rules[0].patterns == ("exchanged to gbp", "exchange to gbp")
     assert resolve_taxonomy_cashflow_type("Transfers", rules=rules) == "transfer"
+
+
+def test_load_classification_rules_accepts_expanded_economic_roles(tmp_path: Path) -> None:
+    rules_path = tmp_path / "category_rules.yaml"
+    rules_path.write_text(
+        "\n".join(
+            [
+                "version: 2",
+                "taxonomy:",
+                "  housing.rent:",
+                "    labels:",
+                "      category: Housing",
+                "      subcategory: Rent",
+                "    economic_role: fixed_expense",
+                "  shopping.marketplace:",
+                "    labels:",
+                "      category: Shopping",
+                "      subcategory: Marketplace",
+                "    economic_role: variable_expense",
+                "rules:",
+                "  - id: leisure.subscription",
+                "    priority: 200",
+                "    category_id: shopping.marketplace",
+                "    economic_role: fixed_expense",
+                "    match: contains",
+                "    patterns:",
+                "      - amazon prime",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rules, warnings = load_classification_rules(rules_path)
+
+    assert warnings == []
+    assert rules.rules[0].economic_role == "fixed_expense"
+    assert (
+        resolve_taxonomy_economic_role_for_category_id("housing.rent", rules=rules)
+        == "fixed_expense"
+    )
+    assert (
+        resolve_taxonomy_economic_role_for_category_id("shopping.marketplace", rules=rules)
+        == "variable_expense"
+    )
 
 
 def test_load_classification_rules_normalizes_contains_and_exact_patterns(tmp_path: Path) -> None:

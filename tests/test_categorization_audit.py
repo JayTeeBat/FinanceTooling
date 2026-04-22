@@ -111,8 +111,7 @@ def test_build_categorization_audit_flags_review_state_and_taxonomy_drift() -> N
         for finding in audit.findings
     )
     assert any(
-        finding.classification == "likely taxonomy drift"
-        and "Legacy categories" in finding.title
+        finding.classification == "likely taxonomy drift" and "Legacy categories" in finding.title
         for finding in audit.findings
     )
 

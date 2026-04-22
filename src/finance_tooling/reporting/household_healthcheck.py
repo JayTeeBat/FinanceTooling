@@ -329,9 +329,7 @@ def _build_window_payload(
 
     interpretation: list[str] = []
     if metrics["avg_monthly_net_residual"] < 0:
-        interpretation.append(
-            "The household is spending more than it brings in over this window."
-        )
+        interpretation.append("The household is spending more than it brings in over this window.")
     elif metrics["avg_monthly_net_residual"] <= metrics["avg_monthly_inflow"] * 0.10:
         interpretation.append(
             "The household remains cash-flow positive, but the monthly buffer is thin."
@@ -346,9 +344,7 @@ def _build_window_payload(
             "Tracked savings and investing contributions are low relative to inflow."
         )
     elif metrics["tracked_savings_rate"] <= 0.15:
-        interpretation.append(
-            "Tracked savings is present, but still modest compared with income."
-        )
+        interpretation.append("Tracked savings is present, but still modest compared with income.")
     else:
         interpretation.append("Tracked savings and investing contributions are strong.")
 

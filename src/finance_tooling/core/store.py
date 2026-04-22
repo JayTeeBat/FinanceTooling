@@ -8,10 +8,17 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
 from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS, Transaction
+from finance_tooling.core.semantics import (
+    VALID_CASHFLOW_TYPES,
+    VALID_ECONOMIC_ROLES,
+    CashflowType,
+    EconomicRoleType,
+)
 
 
 @dataclass(frozen=True)
@@ -151,6 +158,28 @@ def _read_existing(path: Path) -> pd.DataFrame:
     return data[CANONICAL_TRANSACTION_COLUMNS]
 
 
+def _row_string(row: dict[str, object], column: str) -> str | None:
+    value = row.get(column)
+    if value is None or pd.isna(value):
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _cashflow_type_from_row(row: dict[str, object]) -> CashflowType | None:
+    normalized = (_row_string(row, "cashflow_type") or "").casefold()
+    if normalized in VALID_CASHFLOW_TYPES:
+        return cast(CashflowType, normalized)
+    return None
+
+
+def _economic_role_from_row(row: dict[str, object]) -> EconomicRoleType | None:
+    normalized = (_row_string(row, "economic_role") or "").casefold()
+    if normalized in VALID_ECONOMIC_ROLES:
+        return cast(EconomicRoleType, normalized)
+    return None
+
+
 def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
     """Reconstruct transaction models from canonical dataframe rows."""
     if dataframe.empty:
@@ -215,16 +244,8 @@ def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
                     and not pd.isna(row["category_rule_id"])
                     else None
                 ),
-                cashflow_type=(
-                    str(row["cashflow_type"])
-                    if row.get("cashflow_type") is not None and not pd.isna(row["cashflow_type"])
-                    else None
-                ),
-                economic_role=(
-                    str(row["economic_role"])
-                    if row.get("economic_role") is not None and not pd.isna(row["economic_role"])
-                    else None
-                ),
+                cashflow_type=_cashflow_type_from_row(row),
+                economic_role=_economic_role_from_row(row),
                 from_account_ref=(
                     str(row["from_account_ref"])
                     if row.get("from_account_ref") is not None
@@ -233,8 +254,7 @@ def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
                 ),
                 to_account_ref=(
                     str(row["to_account_ref"])
-                    if row.get("to_account_ref") is not None
-                    and not pd.isna(row["to_account_ref"])
+                    if row.get("to_account_ref") is not None and not pd.isna(row["to_account_ref"])
                     else None
                 ),
                 from_account_type=(

@@ -335,9 +335,7 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert "transactions_review.csv" not in stdio.out
 
 
-def test_review_export_reports_error_for_mixed_amount_filter_types(
-    tmp_path: Path, capsys
-) -> None:
+def test_review_export_reports_error_for_mixed_amount_filter_types(tmp_path: Path, capsys) -> None:
     normalized_path = tmp_path / "transactions_normalized.csv"
     normalized_path.write_text(
         (
@@ -451,9 +449,7 @@ def test_review_import_infers_data_adjacent_paths_from_review_path(
     )
 
 
-def test_review_import_dry_run_skips_transform(
-    monkeypatch, tmp_path: Path, capsys
-) -> None:
+def test_review_import_dry_run_skips_transform(monkeypatch, tmp_path: Path, capsys) -> None:
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
     review_path = processed_dir / "transactions_review.xlsx"
@@ -867,6 +863,7 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
     monkeypatch.setattr(
         "finance_tooling.commands.transform.load_settings_from_env", lambda: object()
     )
+
     def _run_transform(
         _settings: object,
         staged_path: Path | None = None,
@@ -938,6 +935,7 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
     monkeypatch.setattr(
         "finance_tooling.commands.transform.load_settings_from_env", lambda: object()
     )
+
     def _run_transform(
         _settings: object,
         staged_path: Path | None = None,
@@ -986,10 +984,8 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
     assert "Backup run: 20260321T101530000000Z" in stdio.out
     assert str(result_backup_run.config_backup_dir) not in stdio.out
     assert (
-        "Categorization by transaction count: "
-        "0.00% uncategorized / 100.00% categorized"
+        "Categorization by transaction count: 0.00% uncategorized / 100.00% categorized"
     ) in stdio.out
     assert (
-        "Categorization by EUR amount vs Income: "
-        "0.00% uncategorized / 100.00% categorized"
+        "Categorization by EUR amount vs Income: 0.00% uncategorized / 100.00% categorized"
     ) in stdio.out

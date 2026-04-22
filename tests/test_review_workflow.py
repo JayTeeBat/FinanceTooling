@@ -480,10 +480,7 @@ def test_export_review_rows_rejects_mixed_signed_and_absolute_amount_bounds(
 
     with pytest.raises(
         ValueError,
-        match=(
-            "min_amount/max_amount cannot be combined with "
-            "min_abs_amount/max_abs_amount"
-        ),
+        match=("min_amount/max_amount cannot be combined with min_abs_amount/max_abs_amount"),
     ):
         export_review_rows(
             normalized_path,

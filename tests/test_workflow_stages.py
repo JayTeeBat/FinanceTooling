@@ -241,6 +241,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert summary_payload["exclude_categories"] == []
     assert summary_payload["economic_role_counts"] == {
         "income": 1,
+        "fixed_expense": 0,
+        "variable_expense": 0,
         "expense": 0,
         "transfer": 0,
         "exclude": 0,
@@ -262,12 +264,12 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
     assert pipeline_payload["transform_diagnostics"]["completeness_status"] == "fail"
     assert pipeline_payload["transform_diagnostics"]["missing_source_file_count"] == 1
     assert (
-        pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["checkable_file_count"]
+        pipeline_payload["transform_diagnostics"]["statement_reconciliation"][
+            "checkable_file_count"
+        ]
         == 0
     )
-    assert (
-        pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["fail_count"] == 0
-    )
+    assert pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["fail_count"] == 0
     assert (
         pipeline_payload["transform_diagnostics"]["statement_reconciliation"][
             "uncheckable_file_count"
@@ -469,6 +471,8 @@ def test_run_workflow_reports_exclude_metrics(monkeypatch, tmp_path: Path) -> No
     assert summary_payload["exclude_categories"] == ["Non Personal Transactions"]
     assert summary_payload["economic_role_counts"] == {
         "income": 0,
+        "fixed_expense": 0,
+        "variable_expense": 0,
         "expense": 0,
         "transfer": 0,
         "exclude": 1,
@@ -839,13 +843,13 @@ def test_load_cached_transform_result_invalidates_when_master_parquet_lacks_cash
                 "amount_native": 100.0,
                 "currency": "EUR",
                 "fx_rate_to_eur": 1.0,
-                    "fx_rate_date": "2024-05-06",
-                    "fx_source": "BASE",
-                    "amount_eur": 100.0,
-                    "category_id": "income.salary",
-                    "reporting_category_id": "income.salary",
-                    "category": "Income",
-                    "subcategory": "Salary",
+                "fx_rate_date": "2024-05-06",
+                "fx_source": "BASE",
+                "amount_eur": 100.0,
+                "category_id": "income.salary",
+                "reporting_category_id": "income.salary",
+                "category": "Income",
+                "subcategory": "Salary",
                 "category_confidence": 1.0,
                 "category_source": "rule",
                 "category_rule_id": "income.salary",
@@ -1007,9 +1011,7 @@ def test_run_workflow_uses_hsbc_pdf_balances_for_validation(monkeypatch, tmp_pat
     metrics = pipeline_payload["transform_diagnostics"]["hsbc_merge_metrics"]
     assert metrics["hsbc_pdf_balance_validated_count"] == 1
     assert metrics["hsbc_pdf_balance_validation_fail_count"] == 1
-    assert (
-        pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["fail_count"] == 1
-    )
+    assert pipeline_payload["transform_diagnostics"]["statement_reconciliation"]["fail_count"] == 1
     assert metrics["hsbc_adaptive_source_switch_count"] == 0
     assert metrics["hsbc_selected_csv_month_count"] == 0
     assert metrics["hsbc_selected_pdf_month_count"] == 1

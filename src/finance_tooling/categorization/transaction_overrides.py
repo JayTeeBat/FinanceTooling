@@ -587,11 +587,11 @@ def apply_transaction_overrides(
             if category_override_applied:
                 if category_id is None:
                     category_id = resolve_category_id_from_labels(
-                    category,
-                    subcategory,
-                    rules=active_rules,
-                    prefer_active=True,
-                )
+                        category,
+                        subcategory,
+                        rules=active_rules,
+                        prefer_active=True,
+                    )
                 reporting_category_id = resolve_reporting_category_id(
                     category_id,
                     rules=active_rules,

@@ -306,7 +306,16 @@ def _last_full_refresh_rule_fingerprint_from_backup(
     candidate_dirs: list[tuple[datetime, Path]] = []
     if backup_root.exists():
         for child in backup_root.iterdir():
-            if not child.is_dir() or child.name == "legacy":
+            try:
+                is_dir = child.is_dir()
+            except OSError as exc:
+                warnings.warn(
+                    f"Skipping unreadable backup drift path '{child}': {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                continue
+            if not is_dir or child.name == "legacy":
                 continue
             manifest_path = child / "manifest.json"
             created_at: datetime | None = None

@@ -386,8 +386,7 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
     summary_exists = settings.summary_json_path.exists()
     if staged_exists and (
         not summary_exists
-        or staged_transactions_path.stat().st_mtime
-        > settings.summary_json_path.stat().st_mtime
+        or staged_transactions_path.stat().st_mtime > settings.summary_json_path.stat().st_mtime
     ):
         findings.append(
             {
@@ -470,9 +469,7 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
             "last_full_refresh_at": (
                 registry.last_full_refresh_at if registry is not None else None
             ),
-            "config_drift_since_last_full_refresh": (
-                has_config_drift
-            ),
+            "config_drift_since_last_full_refresh": (has_config_drift),
         },
         "drift_state": {
             "dataset_stale": selection_plan.dataset_stale,
@@ -513,15 +510,11 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
                 manifest_context.get("ingest_text_cache_enabled", False)
             ),
             "ingest_text_cache_hits": _context_int(manifest_context, "ingest_text_cache_hits"),
-            "ingest_text_cache_misses": _context_int(
-                manifest_context, "ingest_text_cache_misses"
-            ),
+            "ingest_text_cache_misses": _context_int(manifest_context, "ingest_text_cache_misses"),
             "ingest_text_cache_write_count": _context_int(
                 manifest_context, "ingest_text_cache_write_count"
             ),
-            "effective_ingest_workers": _context_int(
-                manifest_context, "effective_ingest_workers"
-            ),
+            "effective_ingest_workers": _context_int(manifest_context, "effective_ingest_workers"),
         },
         "transform_diagnostics": {
             "completeness_status": (

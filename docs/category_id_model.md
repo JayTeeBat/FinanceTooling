@@ -35,9 +35,13 @@ Semantic split:
   - otherwise sign-based: positive => `in`, negative => `out`
 - `economic_role` describes economic meaning
   - `income` for true income categories
-  - `expense` for ordinary spend and expense-side inflows such as refunds or
-    reimbursements
+  - `fixed_expense` for recurring structural commitments
+  - `variable_expense` for ordinary discretionary, usage-based, or ambiguous
+    outgoing expenses
+  - `expense` for legacy/unknown expense-side rows and unresolved positive
+    refunds/reimbursements
   - `transfer` / `exclude` follow final `cashflow_type`
+  - all three expense-like values count as expenses in reporting
 
 ## Config Model
 
@@ -49,7 +53,7 @@ taxonomy:
     labels:
       category: Shopping
       subcategory: Marketplace
-    economic_role: expense
+    economic_role: variable_expense
     status: active
 
   dining.restaurants:

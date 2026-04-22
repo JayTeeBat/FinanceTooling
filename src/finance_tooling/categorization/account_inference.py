@@ -347,15 +347,12 @@ def infer_accounts_for_transactions(
                 from_account_type = matching_rule.from_account_type
             if matching_rule.to_account_type is not None and to_account_type is None:
                 to_account_type = matching_rule.to_account_type
-            if (
-                account_inference_source != "transaction_override"
-                and any(
-                    (
-                        matching_rule.from_account_ref is not None,
-                        matching_rule.to_account_ref is not None,
-                        matching_rule.from_account_type is not None,
-                        matching_rule.to_account_type is not None,
-                    )
+            if account_inference_source != "transaction_override" and any(
+                (
+                    matching_rule.from_account_ref is not None,
+                    matching_rule.to_account_ref is not None,
+                    matching_rule.from_account_type is not None,
+                    matching_rule.to_account_type is not None,
                 )
             ):
                 account_inference_source = "account_rule"
@@ -385,6 +382,5 @@ def transaction_matches_identified_employer(
 ) -> bool:
     """Return True when a transaction matches an employer-marked counterparty rule."""
     return any(
-        rule.is_employer and _rule_matches(transaction, rule)
-        for rule in config.counterparty_rules
+        rule.is_employer and _rule_matches(transaction, rule) for rule in config.counterparty_rules
     )

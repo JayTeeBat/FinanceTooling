@@ -212,6 +212,17 @@ def _build_category_metrics_from_dataframe(
         economic_role_series.eq(""),
         pd.Series("expense", index=dataframe.index, dtype="string"),
     )
+    cashflow_type_series = (
+        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
+    economic_role_series = economic_role_series.mask(
+        economic_role_series.eq("expense") & cashflow_type_series.eq("out"),
+        "variable_expense",
+    )
     economic_role_series = economic_role_series.mask(
         category_series.str.casefold().eq("income")
         | subcategory_series.str.casefold().isin({"salary", "interest"}),
@@ -397,7 +408,14 @@ def _build_account_inference_metrics_from_dataframe(
 
 def _build_economic_role_metrics_from_dataframe(dataframe: DataFrame) -> dict[str, int]:
     if dataframe.empty:
-        return {"income": 0, "expense": 0, "transfer": 0, "exclude": 0}
+        return {
+            "income": 0,
+            "fixed_expense": 0,
+            "variable_expense": 0,
+            "expense": 0,
+            "transfer": 0,
+            "exclude": 0,
+        }
 
     role_series = (
         dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
@@ -408,7 +426,14 @@ def _build_economic_role_metrics_from_dataframe(dataframe: DataFrame) -> dict[st
     )
     return {
         role: int(role_series.eq(role).sum())
-        for role in ("income", "expense", "transfer", "exclude")
+        for role in (
+            "income",
+            "fixed_expense",
+            "variable_expense",
+            "expense",
+            "transfer",
+            "exclude",
+        )
     }
 
 

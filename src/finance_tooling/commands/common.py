@@ -206,17 +206,11 @@ def _print_reconciliation_summary(
         1 for validation in statement_validations if validation.status == "uncheckable"
     )
 
-    print(
-        "Reconciliation: "
-        f"{pass_count} pass, {fail_count} fail, {uncheckable_count} uncheckable"
-    )
+    print(f"Reconciliation: {pass_count} pass, {fail_count} fail, {uncheckable_count} uncheckable")
     if not fail_validations:
         return
 
-    reasons = [
-        validation.reason or "unknown"
-        for validation in fail_validations
-    ]
+    reasons = [validation.reason or "unknown" for validation in fail_validations]
     differences = [
         abs(validation.difference)
         for validation in fail_validations

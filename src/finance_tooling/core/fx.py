@@ -270,9 +270,7 @@ def build_fx_lookup_index(cache: pd.DataFrame) -> FxLookupIndex:
     for currency, subset in cache.groupby("currency", sort=False):
         ordered = subset.sort_values(by="rate_date")
         dates = [
-            cast_date
-            for cast_date in ordered["rate_date"].tolist()
-            if isinstance(cast_date, date)
+            cast_date for cast_date in ordered["rate_date"].tolist() if isinstance(cast_date, date)
         ]
         resolutions = [
             FxResolution(

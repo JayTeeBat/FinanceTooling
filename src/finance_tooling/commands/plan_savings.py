@@ -83,8 +83,7 @@ def handle(args: argparse.Namespace) -> int:
             f"{result.years_to_goal:.1f} years)"
         )
     print(
-        "Total required monthly savings: "
-        f"{summary.total_required_monthly_saving_eur:.2f} EUR/month"
+        f"Total required monthly savings: {summary.total_required_monthly_saving_eur:.2f} EUR/month"
     )
     return 0
 

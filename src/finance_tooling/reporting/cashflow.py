@@ -13,8 +13,10 @@ from finance_tooling.categorization.account_inference import (
     transaction_matches_identified_employer,
 )
 from finance_tooling.categorization.classify import (
+    CategoryRule,
     ClassificationRules,
     resolve_category_id_from_labels,
+    resolve_matching_rule_economic_role,
     resolve_taxonomy_cashflow_type_for_category_id,
     resolve_taxonomy_economic_role_for_category_id,
 )
@@ -23,6 +25,11 @@ from finance_tooling.categorization.transaction_overrides import (
     iter_matching_override_entries,
 )
 from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS
+from finance_tooling.core.semantics import (
+    EXPENSE_LIKE_ECONOMIC_ROLES,
+    VALID_CASHFLOW_TYPES,
+    VALID_ECONOMIC_ROLES,
+)
 from finance_tooling.core.store import transactions_from_dataframe
 from finance_tooling.workflow.types import (
     CashflowCurrentYtd,
@@ -32,8 +39,6 @@ from finance_tooling.workflow.types import (
     CashflowYtdDelta,
 )
 
-_VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
-_VALID_ECONOMIC_ROLES = frozenset({"income", "expense", "transfer", "exclude"})
 _TRACKED_SAVINGS_CATEGORIES = frozenset({"Retirement", "House"})
 _TRACKED_SAVINGS_TRANSFER_SUBCATEGORIES = frozenset(
     {
@@ -81,17 +86,18 @@ def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: 
 def _normalize_cashflow_type_series(dataframe: pd.DataFrame) -> pd.Series:
     values = dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
     normalized = values.astype("string").fillna("").str.strip().str.casefold()
-    return normalized.where(normalized.isin(_VALID_CASHFLOW_TYPES), "unknown")
+    return normalized.where(normalized.isin(VALID_CASHFLOW_TYPES), "unknown")
 
 
 def _normalize_economic_role_series(dataframe: pd.DataFrame) -> pd.Series:
     values = dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
     normalized = values.astype("string").fillna("").str.strip().str.casefold()
-    valid = normalized.where(normalized.isin(_VALID_ECONOMIC_ROLES))
+    valid = normalized.where(normalized.isin(VALID_ECONOMIC_ROLES))
     cashflow_type = _normalize_cashflow_type_series(dataframe)
     category = _normalized_string_series(dataframe, "category", default="").str.casefold()
     subcategory = _normalized_string_series(dataframe, "subcategory", default="").str.casefold()
     fallback = pd.Series("expense", index=dataframe.index, dtype="string")
+    fallback = fallback.mask(cashflow_type.eq("out"), "variable_expense")
     fallback = fallback.mask(cashflow_type.eq("transfer"), "transfer")
     fallback = fallback.mask(cashflow_type.eq("exclude"), "exclude")
     fallback = fallback.mask(category.eq("transfers"), "transfer")
@@ -164,11 +170,15 @@ def resolve_cashflow_types_for_dataframe(
             if entry.set_cashflow_type and entry.cashflow_type is not None:
                 override_cashflow_type = entry.cashflow_type
 
-        category_id = tx.reporting_category_id or tx.category_id or resolve_category_id_from_labels(
-            tx.category,
-            tx.subcategory,
-            rules=active_rules,
-            prefer_active=False,
+        category_id = (
+            tx.reporting_category_id
+            or tx.category_id
+            or resolve_category_id_from_labels(
+                tx.category,
+                tx.subcategory,
+                rules=active_rules,
+                prefer_active=False,
+            )
         )
         taxonomy_type = resolve_taxonomy_cashflow_type_for_category_id(
             category_id,
@@ -232,7 +242,14 @@ def resolve_economic_roles_for_dataframe(
         resolved["economic_role"] = pd.Series(dtype="object")
         return EconomicRoleResolutionResult(
             dataframe=resolved,
-            role_counts={"income": 0, "expense": 0, "transfer": 0, "exclude": 0},
+            role_counts={
+                "income": 0,
+                "fixed_expense": 0,
+                "variable_expense": 0,
+                "expense": 0,
+                "transfer": 0,
+                "exclude": 0,
+            },
         )
 
     normalized_frame = dataframe.copy()
@@ -242,27 +259,42 @@ def resolve_economic_roles_for_dataframe(
             normalized_frame[column] = None
 
     transactions = transactions_from_dataframe(normalized_frame[CANONICAL_TRANSACTION_COLUMNS])
+    rules_by_id: dict[str, CategoryRule] = {
+        rule.rule_id: rule for rule in active_rules.rules if rule.economic_role is not None
+    }
     resolved_roles: list[str] = []
     for tx in transactions:
         cashflow_type = (tx.cashflow_type or "").strip().casefold()
-        category_id = tx.reporting_category_id or tx.category_id or resolve_category_id_from_labels(
-            tx.category,
-            tx.subcategory,
-            rules=active_rules,
-            prefer_active=False,
+        category_id = (
+            tx.reporting_category_id
+            or tx.category_id
+            or resolve_category_id_from_labels(
+                tx.category,
+                tx.subcategory,
+                rules=active_rules,
+                prefer_active=False,
+            )
         )
         if cashflow_type == "transfer":
             resolved_role = "transfer"
         elif cashflow_type == "exclude":
             resolved_role = "exclude"
         else:
+            rule_role = None
+            if tx.category_rule_id:
+                rule = rules_by_id.get(tx.category_rule_id)
+                rule_role = rule.economic_role if rule is not None else None
+            if rule_role is None:
+                rule_role = resolve_matching_rule_economic_role(tx, rules=active_rules)
             taxonomy_role = resolve_taxonomy_economic_role_for_category_id(
                 category_id,
                 rules=active_rules,
             )
             category = (tx.category or "").strip().casefold()
             subcategory = (tx.subcategory or "").strip().casefold()
-            if taxonomy_role in {"income", "transfer", "exclude"}:
+            if rule_role is not None:
+                resolved_role = rule_role
+            elif taxonomy_role is not None:
                 resolved_role = taxonomy_role
             elif subcategory == "salary":
                 resolved_role = "income"
@@ -274,6 +306,8 @@ def resolve_economic_roles_for_dataframe(
                 tx.description
             ):
                 resolved_role = "income"
+            elif cashflow_type == "out":
+                resolved_role = "variable_expense"
             else:
                 resolved_role = "expense"
         resolved_roles.append(resolved_role)
@@ -284,7 +318,14 @@ def resolve_economic_roles_for_dataframe(
     resolved["economic_role"] = normalized.astype(object)
     role_counts = {
         role: int((normalized == role).sum())
-        for role in ("income", "expense", "transfer", "exclude")
+        for role in (
+            "income",
+            "fixed_expense",
+            "variable_expense",
+            "expense",
+            "transfer",
+            "exclude",
+        )
     }
     return EconomicRoleResolutionResult(dataframe=resolved, role_counts=role_counts)
 
@@ -395,7 +436,9 @@ def _period_metrics(rows: pd.DataFrame) -> CashflowPeriodMetrics:
     cashflow_type = _normalize_cashflow_type_series(rows)
     category = _normalized_string_series(rows, "category", default="Uncategorized").str.casefold()
     income_total = float(rows.loc[economic_role.eq("income"), "amount_eur"].sum())
-    expense_total = float((-rows.loc[economic_role.eq("expense"), "amount_eur"]).sum())
+    expense_total = float(
+        (-rows.loc[economic_role.isin(EXPENSE_LIKE_ECONOMIC_ROLES), "amount_eur"]).sum()
+    )
     transfer_total = float(rows.loc[cashflow_type.eq("transfer"), "amount_eur"].abs().sum())
     uncategorized_total = float(rows.loc[category.eq("uncategorized"), "amount_eur"].abs().sum())
     net_cashflow = income_total - expense_total
@@ -520,14 +563,14 @@ def build_cashflow_yoy_summary(
     }
     payload["current_ytd"] = CashflowCurrentYtd(
         {
-        "label": f"{effective_as_of.year} YTD vs {effective_as_of.year - 1} YTD",
-        "current_period_start": f"{effective_as_of.year}-01-01",
-        "current_period_end": current_period_end.isoformat(),
-        "prior_period_start": f"{effective_as_of.year - 1}-01-01",
-        "prior_period_end": prior_period_end.isoformat(),
-        "current": current_metrics,
-        "prior": previous_metrics,
-        "delta": ytd_delta,
-    }
+            "label": f"{effective_as_of.year} YTD vs {effective_as_of.year - 1} YTD",
+            "current_period_start": f"{effective_as_of.year}-01-01",
+            "current_period_end": current_period_end.isoformat(),
+            "prior_period_start": f"{effective_as_of.year - 1}-01-01",
+            "prior_period_end": prior_period_end.isoformat(),
+            "current": current_metrics,
+            "prior": previous_metrics,
+            "delta": ytd_delta,
+        }
     )
     return payload
