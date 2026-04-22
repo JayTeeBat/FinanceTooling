@@ -46,15 +46,24 @@ checklist, see
 `economic_role` describes economic meaning:
 
 - `income` for true income categories
-- `expense` for ordinary spend and refunds
+- `fixed_expense` for recurring structural commitments such as rent, utilities,
+  telecom, insurance, recurring taxes, and subscription-style bills
+- `variable_expense` for groceries, dining, shopping, usage-based transport,
+  leisure, travel, healthcare purchases, cash withdrawals, and ambiguous
+  outgoing rows
+- `expense` for legacy/unknown expense-side rows and unresolved positive
+  refunds/reimbursements
 - `transfer` / `exclude` when final `cashflow_type` is `transfer` / `exclude`
+
+All three expense-like values, `fixed_expense`, `variable_expense`, and
+`expense`, count as expenses in cashflow reporting.
 
 Important example:
 
 - a health insurance reimbursement for direct care should normally stay in a
   `health.*` bucket
   - `cashflow_type = in`
-  - `economic_role = expense`
+  - `economic_role = variable_expense` when the health bucket is variable
 
 ## Boundary Rules
 

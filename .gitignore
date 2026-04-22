@@ -178,5 +178,6 @@ config/*.bak
 
 # Local workspace tooling and scratch roots
 /.codex
+/.tmp/
 /backups/
 /worktrees/

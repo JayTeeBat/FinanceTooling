@@ -55,8 +55,8 @@ Those can be classification evidence, but they are not category meaning.
 ### Cash semantics
 
 - `cashflow_type` answers what happened to household cash.
-- `economic_role` answers whether the flow is true income, expense, transfer,
-  or excluded.
+- `economic_role` answers whether the flow is true income, fixed expense,
+  variable expense, legacy expense, transfer, or excluded.
 
 Current intended model:
 
@@ -69,7 +69,13 @@ Current intended model:
 - `economic_role = transfer` when `cashflow_type = transfer`
 - `economic_role = exclude` when `cashflow_type = exclude`
 - `economic_role = income` only for true income categories
-- otherwise `economic_role = expense`
+- `economic_role = fixed_expense` for recurring structural commitments such as
+  rent, utilities, telecom, insurance, recurring taxes, and subscription-style
+  bills
+- `economic_role = variable_expense` for ordinary discretionary, usage-based,
+  or ambiguous expenses
+- `economic_role = expense` remains valid as a legacy/unknown expense-side
+  compatibility value
 
 This distinction is important because some positive inflows are not true
 income.
@@ -297,22 +303,22 @@ Known purpose:
 - grocery refund
   - category bucket: `groceries.*`
   - `cashflow_type = in`
-  - `economic_role = expense`
+  - `economic_role = variable_expense`
 
 - health insurance reimbursement for a medical expense
   - category bucket: `health.*` when the reimbursed purpose is direct care
   - `cashflow_type = in`
-  - `economic_role = expense`
+  - `economic_role = variable_expense`
 
 - merchant return refund for clothing
   - category bucket: `shopping.apparel`
   - `cashflow_type = in`
-  - `economic_role = expense`
+  - `economic_role = variable_expense`
 
 - chargeback for a known travel booking
   - category bucket: `travel.*`
   - `cashflow_type = in`
-  - `economic_role = expense`
+  - `economic_role = variable_expense`
 
 Unknown purpose:
 
@@ -325,7 +331,8 @@ This is also why refunds should not usually become their own primary family:
 
 - the purpose bucket remains stable
 - `cashflow_type` changes with sign
-- `economic_role` remains expense-side
+- `economic_role` remains expense-side, preferably preserving fixed/variable
+  behavior from the purpose bucket when known
 - category-level netting remains meaningful
 
 ## Carefully Chosen Edge Cases
@@ -346,6 +353,11 @@ Live-taxonomy preference:
 
 - avoid vague buckets like `leisure.personal_digital_services`
 - categorize subscriptions by their real purpose instead
+- use a rule-level `economic_role: fixed_expense` override for recurring
+  subscriptions such as Spotify, Audible, Disney/Netflix-style media, Amazon
+  Prime/digital media, or Google One-style cloud services
+- keep ordinary Amazon marketplace purchases in a shopping/marketplace purpose
+  bucket with `economic_role: variable_expense`
 - if a digital-service bucket is ever kept, it should have very narrow scope
 
 ### Pension contribution vs owned investment funding

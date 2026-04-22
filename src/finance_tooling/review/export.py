@@ -273,8 +273,7 @@ def export_review_rows(
         min_abs_amount is not None or max_abs_amount is not None
     ):
         raise ValueError(
-            "min_amount/max_amount cannot be combined with "
-            "min_abs_amount/max_abs_amount"
+            "min_amount/max_amount cannot be combined with min_abs_amount/max_abs_amount"
         )
 
     filtered_rows = dataframe.copy()

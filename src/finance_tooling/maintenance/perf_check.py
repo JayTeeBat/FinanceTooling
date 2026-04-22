@@ -251,9 +251,7 @@ def run_perf_check(settings: Settings) -> PerfCheckResult:
         "ingest_text_cache_write_count": ingest.text_cache_write_count,
         "effective_ingest_workers": ingest.effective_ingest_workers,
     }
-    performance_summary_path = (
-        state_root_path(settings) / WORKFLOW_PERFORMANCE_SUMMARY_FILENAME
-    )
+    performance_summary_path = state_root_path(settings) / WORKFLOW_PERFORMANCE_SUMMARY_FILENAME
     _write_json(performance_summary_path, payload)
 
     return PerfCheckResult(

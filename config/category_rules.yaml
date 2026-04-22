@@ -81,76 +81,76 @@ taxonomy:
     labels:
       category: Housing
       subcategory: Rent
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
   housing.home_improvements:
     labels:
       category: Housing
       subcategory: Home Improvements
-    economic_role: expense
+    economic_role: variable_expense
     status: active
   housing.home_services:
     labels:
       category: Housing
       subcategory: Home Services
-    economic_role: expense
+    economic_role: variable_expense
     status: active
 
   utilities.energy_water:
     labels:
       category: Utilities
       subcategory: Energy & Water
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
   utilities.telecom_internet:
     labels:
       category: Utilities
       subcategory: Telecom & Internet
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
   utilities.other_utilities:
     labels:
       category: Utilities
       subcategory: Other Utilities
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
 
   groceries.food_at_home:
     labels:
       category: Groceries
       subcategory: Food at Home
-    economic_role: expense
+    economic_role: variable_expense
     status: active
   dining.dining_out:
     labels:
       category: Dining
       subcategory: Dining Out
-    economic_role: expense
+    economic_role: variable_expense
     status: active
 
   shopping.clothing:
     labels:
       category: Shopping
       subcategory: Clothing
-    economic_role: expense
+    economic_role: variable_expense
     status: active
   shopping.marketplace:
     labels:
       category: Shopping
       subcategory: Marketplace
-    economic_role: expense
+    economic_role: variable_expense
     status: active
   shopping.general_goods:
     labels:
       category: Shopping
       subcategory: General Goods
-    economic_role: expense
+    economic_role: variable_expense
     status: active
   shopping.apparel:
     labels:
       category: Shopping
       subcategory: Apparel
-    economic_role: expense
+    economic_role: variable_expense
     deprecated_to: shopping.clothing
     status: deprecated
 
@@ -158,59 +158,59 @@ taxonomy:
     labels:
       category: Transport
       subcategory: Public Transport
-    economic_role: expense
+    economic_role: variable_expense
     status: active
   transport.car:
     labels:
       category: Transport
       subcategory: Car
-    economic_role: expense
+    economic_role: variable_expense
     status: active
   transport.other_transport:
     labels:
       category: Transport
       subcategory: Other Transport
-    economic_role: expense
+    economic_role: variable_expense
     status: active
 
   family.education:
     labels:
       category: Family
       subcategory: Education
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
   family.childcare:
     labels:
       category: Family
       subcategory: Childcare
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
 
   taxes.local_tax:
     labels:
       category: Taxes
       subcategory: Local Tax
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
   taxes.other_taxes:
     labels:
       category: Taxes
       subcategory: Other Taxes
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
 
   insurance.property_vehicle:
     labels:
       category: Insurance
       subcategory: Property & Vehicle
-    economic_role: expense
+    economic_role: fixed_expense
     status: active
 
   leisure.entertainment:
     labels:
       category: Leisure
       subcategory: Entertainment
-    economic_role: expense
+    economic_role: variable_expense
     status: active
 
 rules:
@@ -397,3 +397,18 @@ rules:
     patterns:
       - streaming service
       - movie tickets
+
+  - id: leisure.entertainment.subscription.example
+    priority: 101
+    category_id: leisure.entertainment
+    economic_role: fixed_expense
+    match: contains
+    expense_only: true
+    patterns:
+      - spotify
+      - audible
+      - netflix
+      - disney plus
+      - amazon prime
+      - amazon digital
+      - google one

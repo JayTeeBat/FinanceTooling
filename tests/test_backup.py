@@ -65,6 +65,35 @@ def test_create_stage_backup_run_copies_full_state_and_prunes_by_run_day(tmp_pat
     assert result.pruned_run_ids == ("20260310-010000-000000",)
 
 
+def test_create_stage_backup_run_skips_unreadable_processed_paths(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    processed_dir = data_dir / "processed"
+    config_dir = data_dir / "config"
+    processed_dir.mkdir(parents=True)
+    config_dir.mkdir(parents=True)
+
+    readable = processed_dir / "outputs" / "transform_transactions.parquet"
+    unreadable = processed_dir / "archive" / "missing-target"
+    category_rules = config_dir / "category_rules.yaml"
+    readable.parent.mkdir(parents=True, exist_ok=True)
+    unreadable.parent.mkdir(parents=True, exist_ok=True)
+    readable.write_text("master", encoding="utf-8")
+    unreadable.symlink_to(processed_dir / "does-not-exist")
+    category_rules.write_text("version: 1\nrules: []\n", encoding="utf-8")
+
+    with pytest.warns(RuntimeWarning, match="Skipping unreadable backup source file"):
+        result = create_stage_backup_run(
+            stage="transform",
+            command="update",
+            processed_dir=processed_dir,
+            config_targets=(category_rules,),
+        )
+
+    assert result.processed_backup_dir is not None
+    assert (result.processed_backup_dir / "outputs" / readable.name).exists()
+    assert not (result.processed_backup_dir / "archive" / unreadable.name).exists()
+
+
 def test_create_stage_backup_run_migrates_legacy_backups_and_records_missing_files(
     tmp_path: Path,
 ) -> None:

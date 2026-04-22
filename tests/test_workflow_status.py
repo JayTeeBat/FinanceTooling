@@ -190,8 +190,7 @@ def test_transaction_override_changes_do_not_report_config_drift(tmp_path: Path)
     assert payload["drift_state"]["dataset_stale"] is False
     assert payload["committed_state"]["config_drift_since_last_full_refresh"] is False
     assert not any(
-        item["code"] == "config_changed_since_last_full_refresh"
-        for item in payload["findings"]
+        item["code"] == "config_changed_since_last_full_refresh" for item in payload["findings"]
     )
 
 
@@ -218,9 +217,8 @@ def test_rule_changes_report_config_drift(tmp_path: Path) -> None:
     )
     write_source_registry(source_registry_path(settings), registry)
 
-    assert (
-        registry.last_full_refresh_config_fingerprint
-        == compute_rule_config_fingerprint(settings)
+    assert registry.last_full_refresh_config_fingerprint == compute_rule_config_fingerprint(
+        settings
     )
 
     settings.category_rules_path.write_text(
@@ -233,8 +231,7 @@ def test_rule_changes_report_config_drift(tmp_path: Path) -> None:
     assert payload["drift_state"]["dataset_stale"] is True
     assert payload["committed_state"]["config_drift_since_last_full_refresh"] is True
     assert any(
-        item["code"] == "config_changed_since_last_full_refresh"
-        for item in payload["findings"]
+        item["code"] == "config_changed_since_last_full_refresh" for item in payload["findings"]
     )
 
 
@@ -307,6 +304,5 @@ def test_legacy_full_refresh_fingerprint_ignores_override_only_drift(tmp_path: P
     assert payload["drift_state"]["dataset_stale"] is False
     assert payload["committed_state"]["config_drift_since_last_full_refresh"] is False
     assert not any(
-        item["code"] == "config_changed_since_last_full_refresh"
-        for item in payload["findings"]
+        item["code"] == "config_changed_since_last_full_refresh" for item in payload["findings"]
     )

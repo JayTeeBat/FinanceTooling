@@ -13,12 +13,14 @@ from typing import Literal, TypedDict, cast
 import yaml
 
 from finance_tooling.core.models import Transaction
+from finance_tooling.core.semantics import (
+    VALID_CASHFLOW_TYPES,
+    VALID_ECONOMIC_ROLES,
+    CashflowType,
+    EconomicRoleType,
+)
 
 MatchType = Literal["contains", "exact", "regex"]
-CashflowType = Literal["in", "out", "transfer", "exclude"]
-EconomicRoleType = Literal["income", "expense", "transfer", "exclude"]
-_VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
-_VALID_ECONOMIC_ROLES = frozenset({"income", "expense", "transfer", "exclude"})
 
 
 def _legacy_cashflow_type_for_category(category: str) -> CashflowType | None:
@@ -73,7 +75,7 @@ def _normalize_economic_role(value: object) -> EconomicRoleType | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().casefold()
-    if normalized in _VALID_ECONOMIC_ROLES:
+    if normalized in VALID_ECONOMIC_ROLES:
         return cast(EconomicRoleType, normalized)
     return None
 
@@ -264,6 +266,7 @@ class CategoryRule:
     patterns: tuple[str, ...] = ()
     expense_only: bool = False
     income_only: bool = False
+    economic_role: EconomicRoleType | None = None
     banks: tuple[str, ...] = ()
     account_labels: tuple[str, ...] = ()
 
@@ -408,6 +411,7 @@ def _default_rules() -> ClassificationRules:
                 patterns=patterns,
                 expense_only=False,
                 income_only=False,
+                economic_role=None,
                 banks=(),
                 account_labels=(),
             )
@@ -417,7 +421,7 @@ def _default_rules() -> ClassificationRules:
             name="Groceries",
             subcategories=(),
             cashflow_type="out",
-            economic_role="expense",
+            economic_role="variable_expense",
             category_label="Groceries",
             subcategory_label="General",
         ),
@@ -425,7 +429,7 @@ def _default_rules() -> ClassificationRules:
             name="Dining",
             subcategories=(),
             cashflow_type="out",
-            economic_role="expense",
+            economic_role="variable_expense",
             category_label="Dining",
             subcategory_label="Restaurants",
         ),
@@ -433,7 +437,7 @@ def _default_rules() -> ClassificationRules:
             name="Transport",
             subcategories=(),
             cashflow_type="out",
-            economic_role="expense",
+            economic_role="variable_expense",
             category_label="Transport",
             subcategory_label="Mobility",
         ),
@@ -441,7 +445,7 @@ def _default_rules() -> ClassificationRules:
             name="Housing",
             subcategories=(),
             cashflow_type="out",
-            economic_role="expense",
+            economic_role="fixed_expense",
             category_label="Housing",
             subcategory_label="Housing Costs",
         ),
@@ -449,7 +453,7 @@ def _default_rules() -> ClassificationRules:
             name="Shopping",
             subcategories=(),
             cashflow_type="out",
-            economic_role="expense",
+            economic_role="variable_expense",
             category_label="Shopping",
             subcategory_label="General",
         ),
@@ -473,7 +477,7 @@ def _default_rules() -> ClassificationRules:
             name="Fees",
             subcategories=(),
             cashflow_type="out",
-            economic_role="expense",
+            economic_role="variable_expense",
             category_label="Fees",
             subcategory_label="Bank Fees",
         ),
@@ -599,6 +603,7 @@ def _parse_rules_payload(payload: object) -> ClassificationRules:
                 patterns=patterns,
                 expense_only=bool(raw_rule.get("expense_only")),
                 income_only=bool(raw_rule.get("income_only")),
+                economic_role=_normalize_economic_role(raw_rule.get("economic_role")),
                 banks=tuple(
                     str(item).strip().upper()
                     for item in (banks_raw if isinstance(banks_raw, list) else [])
@@ -619,7 +624,7 @@ def _normalize_cashflow_type(value: object) -> CashflowType | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().casefold()
-    if normalized in _VALID_CASHFLOW_TYPES:
+    if normalized in VALID_CASHFLOW_TYPES:
         return cast(CashflowType, normalized)
     return None
 
@@ -921,6 +926,19 @@ def _rule_confidence(rule: CategoryRule) -> float:
     return 0.75
 
 
+def resolve_matching_rule_economic_role(
+    tx: Transaction,
+    *,
+    rules: ClassificationRules,
+) -> EconomicRoleType | None:
+    """Resolve a rule-level economic role override by matching the transaction."""
+    normalized = normalize_description(tx.description)
+    for rule in rules.rules:
+        if rule.economic_role is not None and _rule_matches(rule, tx, normalized):
+            return rule.economic_role
+    return None
+
+
 def build_classification_diagnostics(transactions: list[Transaction]) -> ClassificationDiagnostics:
     """Build summary diagnostics from already-classified transactions."""
     category_source_counts = Counter[str]()
@@ -1015,13 +1033,12 @@ def classify_transactions_with_diagnostics(
                 reporting_category_id=reporting_category_id,
                 category=category_label or matched_rule.category,
                 subcategory=(
-                    subcategory_label
-                    if category_label is not None
-                    else matched_rule.subcategory
+                    subcategory_label if category_label is not None else matched_rule.subcategory
                 ),
                 category_confidence=_rule_confidence(matched_rule),
                 category_source="rule",
                 category_rule_id=matched_rule.rule_id,
+                economic_role=matched_rule.economic_role or tx.economic_role,
             )
         )
     diagnostics = build_classification_diagnostics(classified)

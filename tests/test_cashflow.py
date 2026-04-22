@@ -8,7 +8,11 @@ from finance_tooling.categorization.account_inference import (
     AccountInferenceConfig,
     CounterpartyRule,
 )
-from finance_tooling.categorization.classify import ClassificationRules, TaxonomyCategory
+from finance_tooling.categorization.classify import (
+    CategoryRule,
+    ClassificationRules,
+    TaxonomyCategory,
+)
 from finance_tooling.categorization.transaction_overrides import load_transaction_override_store
 from finance_tooling.core.models import Transaction
 from finance_tooling.core.store import _frame_from_transactions
@@ -397,7 +401,14 @@ def test_resolve_economic_roles_marks_employer_as_income() -> None:
     )
 
     assert result.dataframe.loc[0, "economic_role"] == "income"
-    assert result.role_counts == {"income": 1, "expense": 0, "transfer": 0, "exclude": 0}
+    assert result.role_counts == {
+        "income": 1,
+        "fixed_expense": 0,
+        "variable_expense": 0,
+        "expense": 0,
+        "transfer": 0,
+        "exclude": 0,
+    }
 
 
 def test_resolve_economic_roles_marks_interest_as_income() -> None:
@@ -446,8 +457,7 @@ def test_resolve_economic_roles_marks_salary_subcategory_as_income() -> None:
     assert result.dataframe.loc[0, "economic_role"] == "income"
 
 
-def test_resolve_economic_roles_marks_legacy_interest_bucket_as_income_when_description_matches(
-) -> None:
+def test_resolve_economic_roles_marks_legacy_interest_bucket_income_by_description() -> None:
     tx = Transaction(
         booking_date=date(2026, 1, 3),
         description="*INTER.BRUTS31/12/24",
@@ -517,6 +527,126 @@ def test_resolve_economic_roles_keeps_positive_health_refund_as_expense() -> Non
     assert result.dataframe.loc[0, "economic_role"] == "expense"
 
 
+def test_resolve_economic_roles_uses_rule_level_fixed_expense_override() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Spotify monthly subscription",
+        amount_native=Decimal("-11.99"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Leisure",
+        subcategory="Entertainment",
+        category_rule_id="leisure.subscription",
+        cashflow_type="out",
+        amount_eur=Decimal("-11.99"),
+    )
+    rules = ClassificationRules(
+        rules=(
+            CategoryRule(
+                rule_id="leisure.subscription",
+                priority=100,
+                category="Leisure",
+                subcategory="Entertainment",
+                match_type="contains",
+                patterns=("spotify",),
+                economic_role="fixed_expense",
+            ),
+        ),
+        taxonomy={
+            "leisure.entertainment": TaxonomyCategory(
+                name="Leisure",
+                subcategories=(),
+                cashflow_type="out",
+                economic_role="variable_expense",
+                category_label="Leisure",
+                subcategory_label="Entertainment",
+            )
+        },
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+        classification_rules=rules,
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "fixed_expense"
+
+
+def test_resolve_economic_roles_matches_rule_override_without_category_rule_id() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Card 06/01/26 Audible FR",
+        amount_native=Decimal("-11.99"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Leisure",
+        subcategory="Other Leisure",
+        cashflow_type="out",
+        amount_eur=Decimal("-11.99"),
+    )
+    rules = ClassificationRules(
+        rules=(
+            CategoryRule(
+                rule_id="leisure.subscription",
+                priority=100,
+                category_id="leisure.entertainment",
+                category="Leisure",
+                subcategory="Entertainment",
+                match_type="contains",
+                patterns=("audible",),
+                economic_role="fixed_expense",
+                expense_only=True,
+            ),
+        ),
+        taxonomy={
+            "leisure.other_leisure": TaxonomyCategory(
+                name="Leisure",
+                subcategories=(),
+                cashflow_type="out",
+                economic_role="variable_expense",
+                category_label="Leisure",
+                subcategory_label="Other Leisure",
+            )
+        },
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+        classification_rules=rules,
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "fixed_expense"
+
+
+def test_resolve_economic_roles_defaults_unmapped_outgoing_rows_to_variable_expense() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 1, 3),
+        description="Unknown merchant",
+        amount_native=Decimal("-25.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Uncategorized",
+        cashflow_type="out",
+        amount_eur=Decimal("-25.00"),
+    )
+
+    result = resolve_economic_roles_for_dataframe(
+        _dataframe_for(tx),
+        account_inference_config=_account_config(),
+        classification_rules=ClassificationRules(rules=(), taxonomy={}),
+    )
+
+    assert result.dataframe.loc[0, "economic_role"] == "variable_expense"
+
+
 def test_resolve_economic_roles_marks_transfer_and_exclude_before_income() -> None:
     transactions = [
         Transaction(
@@ -575,3 +705,68 @@ def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_
     )
 
     assert result.dataframe.loc[0, "economic_role"] == "expense"
+
+
+def test_cashflow_summary_treats_all_expense_roles_as_expenses() -> None:
+    transactions = [
+        Transaction(
+            booking_date=date(2025, 1, 3),
+            description="Salary",
+            amount_native=Decimal("1000.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Income",
+            cashflow_type="in",
+            economic_role="income",
+            amount_eur=Decimal("1000.00"),
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 4),
+            description="Rent",
+            amount_native=Decimal("-400.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Housing",
+            cashflow_type="out",
+            economic_role="fixed_expense",
+            amount_eur=Decimal("-400.00"),
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 5),
+            description="Groceries",
+            amount_native=Decimal("-150.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Groceries",
+            cashflow_type="out",
+            economic_role="variable_expense",
+            amount_eur=Decimal("-150.00"),
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 6),
+            description="Legacy refund bucket",
+            amount_native=Decimal("-25.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Refunds",
+            cashflow_type="out",
+            economic_role="expense",
+            amount_eur=Decimal("-25.00"),
+        ),
+    ]
+
+    summary = build_cashflow_yoy_summary(
+        _frame_from_transactions(transactions),
+        as_of_date=date(2026, 1, 1),
+    )
+
+    assert summary["years"][0]["expenses"] == 575.0
+    assert summary["years"][0]["net_cashflow"] == 425.0

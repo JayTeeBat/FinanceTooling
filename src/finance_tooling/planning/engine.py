@@ -419,9 +419,7 @@ def build_planning_doe_rows(
         retirement["target_retirement_age_adult_1"] = retirement_age
         retirement["target_retirement_age_adult_2"] = retirement_age
         retirement["expected_annual_state_pension_eur"] = pension_before_tax_eur
-        retirement["target_annual_spending_in_retirement_eur"] = (
-            retirement_spending_before_tax_eur
-        )
+        retirement["target_annual_spending_in_retirement_eur"] = retirement_spending_before_tax_eur
         retirement["expected_nominal_return_pct"] = expected_return_pct
         for child_number in (1, 2, 3):
             education[f"child_{child_number}_target_fund_eur"] = kids_target_fund_eur

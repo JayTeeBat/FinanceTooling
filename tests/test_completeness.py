@@ -91,10 +91,7 @@ def test_build_completeness_report_from_dataframe_matches_transaction_variant() 
         _tx(source_files[1], "Revolut"),
     ]
     dataframe = pd.DataFrame(
-        [
-            {"source_file": str(tx.source_file), "bank": tx.bank}
-            for tx in parsed
-        ]
+        [{"source_file": str(tx.source_file), "bank": tx.bank} for tx in parsed]
     )
 
     report = build_completeness_report(source_files, parsed)

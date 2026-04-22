@@ -145,16 +145,10 @@ def test_labanquepostale_parser_keeps_beneficiary_lines_for_consecutive_transfer
     result = parser.parse(Path("releve_CCP1126215Y027_20250124.pdf"), text)
 
     assert len(result.transactions) == 4
-    assert result.transactions[1].description.startswith(
-        "VIREMENT POUR MME THOMAZO COLOMBE COMPTE"
-    )
+    assert result.transactions[1].description.startswith("VIREMENT POUR MME THOMAZO COLOMBE COMPTE")
     assert "REFERENCE : 0329023515430303" in result.transactions[1].description
-    assert result.transactions[2].description.startswith(
-        "VIREMENT POUR M THOMAZO HENRY COMPTE"
-    )
-    assert result.transactions[3].description.startswith(
-        "VIREMENT POUR MME THOMAZO ISAURE COMPTE"
-    )
+    assert result.transactions[2].description.startswith("VIREMENT POUR M THOMAZO HENRY COMPTE")
+    assert result.transactions[3].description.startswith("VIREMENT POUR MME THOMAZO ISAURE COMPTE")
 
 
 def test_registry_selects_lbp_parser() -> None:

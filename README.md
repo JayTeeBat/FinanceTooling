@@ -134,6 +134,8 @@ Detailed guides:
   containing the current `processed/` tree plus active config files. Retention keeps
   the latest `3` snapshots for each retained run day and the latest `7` run days that
   actually had pipeline activity.
+- For local disaster recovery beyond these workflow snapshots, use the decrypted-vault
+  restic backup helper described in `docs/decrypted_vault_backup.md`.
 - Writes canonical outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
   `household_healthcheck.html`, `transform_transactions.parquet`,
   `transform_transactions.csv`, `transform_run_summary.json`, and
@@ -185,8 +187,8 @@ Practical policy:
 - excluded categories become `cashflow_type = exclude`
 - otherwise positive rows are `cashflow_type = in` and negative rows are
   `cashflow_type = out`
-- positive expense-side inflows such as refunds are not income; they therefore
-  remain `economic_role = expense`
+- positive expense-side inflows such as refunds are not income; they stay in an
+  expense-like `economic_role`
 - if a transaction-level exception is needed, set `cashflow_type` directly in
   `transaction_overrides.yaml`
 
@@ -194,10 +196,22 @@ Canonical outputs also include `economic_role`, which the primary dashboard now
 uses for displayed income/expenses balance metrics:
 - `economic_role = income`: true income categories such as salary, interest,
   benefits, or business income
-- `economic_role = expense`: everything not identified as income/transfer/exclude,
-  including refunds
+- `economic_role = fixed_expense`: recurring structural commitments such as
+  rent, utilities, telecom, insurance, recurring taxes, and subscription-style
+  bills
+- `economic_role = variable_expense`: ordinary discretionary or usage-based
+  spend such as groceries, dining, shopping, transport usage, leisure, travel,
+  healthcare purchases, cash withdrawals, and ambiguous outgoing rows
+- `economic_role = expense`: legacy-compatible expense-side rows, including
+  unresolved positive refunds/reimbursements where no fixed/variable category
+  applies
 - `economic_role = transfer`: excluded from the income/expenses balance
 - `economic_role = exclude`: ignored in the income/expenses balance
+
+Dashboard expense totals treat `fixed_expense`, `variable_expense`, and legacy
+`expense` as expense-like. Category taxonomy should prefer the fixed/variable
+split for new outgoing classifications; rule-level `economic_role` overrides
+can mark recurring subscriptions as fixed without changing their purpose bucket.
 
 Account-boundary inference is configured separately in `account_rules.yaml`:
 - `internal_accounts` defines personal/internal statement accounts

@@ -147,10 +147,7 @@ def test_build_categorization_consolidation_delta_groups_changes() -> None:
     assert len(delta) == 2
     assert set(delta["proposed_action"]) == {"merge_to_current_target"}
     rows = delta.itertuples(index=False, name=None)
-    assert {
-        (row[0], row[1], row[2], row[3])
-        for row in rows
-    } == {
+    assert {(row[0], row[1], row[2], row[3]) for row in rows} == {
         ("Dining", "Restaurants", "Leisure", "Dining out"),
         ("Transfers", "Bank Transfers", "Transfers", "Bank Transfer"),
     }

@@ -263,9 +263,9 @@ def build_completeness_report_from_dataframe(
         )
         parsed_transactions_by_bank = Counter(
             str(value)
-            for value in parsed_transactions.get(
-                "bank", pd.Series(dtype="object")
-            ).dropna().tolist()
+            for value in parsed_transactions.get("bank", pd.Series(dtype="object"))
+            .dropna()
+            .tolist()
             if str(value).strip()
         )
 

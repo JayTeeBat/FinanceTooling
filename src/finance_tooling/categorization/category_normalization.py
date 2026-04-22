@@ -274,10 +274,14 @@ def build_categorization_consolidation_delta(
     if changed.empty:
         return pd.DataFrame()
 
-    changed["abs_amount_eur_after"] = pd.to_numeric(
-        changed.get("amount_eur_after"),
-        errors="coerce",
-    ).abs().fillna(0.0)
+    changed["abs_amount_eur_after"] = (
+        pd.to_numeric(
+            changed.get("amount_eur_after"),
+            errors="coerce",
+        )
+        .abs()
+        .fillna(0.0)
+    )
     grouped = (
         changed.groupby(
             [
@@ -336,9 +340,16 @@ def write_categorization_consolidation_delta(
     """Write the grouped consolidation delta when the reference snapshot exists."""
     data_root = settings.processed_path.parent
     reference_path = data_root / _DEFAULT_REFERENCE_RELATIVE_PATH
-    if not reference_path.exists():
+    try:
+        reference_exists = reference_path.exists()
+    except OSError:
         return None
-    reference_dataframe = pd.read_parquet(reference_path)
+    if not reference_exists:
+        return None
+    try:
+        reference_dataframe = pd.read_parquet(reference_path)
+    except OSError:
+        return None
     delta = build_categorization_consolidation_delta(
         current_dataframe,
         reference_dataframe=reference_dataframe,
