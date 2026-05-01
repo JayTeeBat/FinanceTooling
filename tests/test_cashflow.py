@@ -19,6 +19,7 @@ from finance_tooling.core.store import _frame_from_transactions
 from finance_tooling.reporting.cashflow import (
     build_cashflow_yoy_summary,
     resolve_cashflow_types_for_dataframe,
+    resolve_decision_roles_for_dataframe,
     resolve_economic_roles_for_dataframe,
 )
 from finance_tooling.workflow.types import CashflowYearRow
@@ -683,6 +684,54 @@ def test_resolve_economic_roles_marks_transfer_and_exclude_before_income() -> No
     )
 
     assert list(result.dataframe["economic_role"]) == ["transfer", "exclude"]
+
+
+def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
+    transactions = [
+        Transaction(
+            booking_date=date(2025, 1, 3),
+            description="Groceries",
+            amount_native=Decimal("-100.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Groceries",
+            cashflow_type="out",
+            economic_role="variable_expense",
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 4),
+            description="Savings transfer",
+            amount_native=Decimal("-200.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Transfers",
+            subcategory="Savings Transfer",
+            cashflow_type="transfer",
+            economic_role="transfer",
+        ),
+    ]
+
+    dataframe = _frame_from_transactions(transactions)
+    rules = ClassificationRules(
+        rules=(),
+        taxonomy={
+            "transfers.savings_transfer": TaxonomyCategory(
+                name="Transfers",
+                subcategories=(),
+                cashflow_type="transfer",
+                decision_role="savings",
+                category_label="Transfers",
+                subcategory_label="Savings Transfer",
+            )
+        },
+    )
+    result = resolve_decision_roles_for_dataframe(dataframe, classification_rules=rules)
+
+    assert list(result.dataframe["decision_role"]) == ["essential", "savings"]
 
 
 def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_inflow() -> None:

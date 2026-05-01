@@ -82,18 +82,21 @@ taxonomy:
       category: Housing
       subcategory: Rent
     economic_role: fixed_expense
+    decision_role: essential
     status: active
   housing.home_improvements:
     labels:
       category: Housing
       subcategory: Home Improvements
     economic_role: variable_expense
+    decision_role: discretionary
     status: active
   housing.home_services:
     labels:
       category: Housing
       subcategory: Home Services
     economic_role: variable_expense
+    decision_role: essential
     status: active
 
   utilities.energy_water:
@@ -101,18 +104,21 @@ taxonomy:
       category: Utilities
       subcategory: Energy & Water
     economic_role: fixed_expense
+    decision_role: essential
     status: active
   utilities.telecom_internet:
     labels:
       category: Utilities
       subcategory: Telecom & Internet
     economic_role: fixed_expense
+    decision_role: essential
     status: active
   utilities.other_utilities:
     labels:
       category: Utilities
       subcategory: Other Utilities
     economic_role: fixed_expense
+    decision_role: essential
     status: active
 
   groceries.food_at_home:
@@ -120,12 +126,14 @@ taxonomy:
       category: Groceries
       subcategory: Food at Home
     economic_role: variable_expense
+    decision_role: essential
     status: active
   dining.dining_out:
     labels:
       category: Dining
       subcategory: Dining Out
     economic_role: variable_expense
+    decision_role: discretionary
     status: active
 
   shopping.clothing:
@@ -133,18 +141,21 @@ taxonomy:
       category: Shopping
       subcategory: Clothing
     economic_role: variable_expense
+    decision_role: discretionary
     status: active
   shopping.marketplace:
     labels:
       category: Shopping
       subcategory: Marketplace
     economic_role: variable_expense
+    decision_role: discretionary
     status: active
   shopping.general_goods:
     labels:
       category: Shopping
       subcategory: General Goods
     economic_role: variable_expense
+    decision_role: discretionary
     status: active
   shopping.apparel:
     labels:
@@ -159,18 +170,21 @@ taxonomy:
       category: Transport
       subcategory: Public Transport
     economic_role: variable_expense
+    decision_role: essential
     status: active
   transport.car:
     labels:
       category: Transport
       subcategory: Car
     economic_role: variable_expense
+    decision_role: essential
     status: active
   transport.other_transport:
     labels:
       category: Transport
       subcategory: Other Transport
     economic_role: variable_expense
+    decision_role: essential
     status: active
 
   family.education:
@@ -178,12 +192,14 @@ taxonomy:
       category: Family
       subcategory: Education
     economic_role: fixed_expense
+    decision_role: essential
     status: active
   family.childcare:
     labels:
       category: Family
       subcategory: Childcare
     economic_role: fixed_expense
+    decision_role: essential
     status: active
 
   taxes.local_tax:
@@ -191,12 +207,14 @@ taxonomy:
       category: Taxes
       subcategory: Local Tax
     economic_role: fixed_expense
+    decision_role: tax
     status: active
   taxes.other_taxes:
     labels:
       category: Taxes
       subcategory: Other Taxes
     economic_role: fixed_expense
+    decision_role: tax
     status: active
 
   insurance.property_vehicle:
@@ -204,6 +222,7 @@ taxonomy:
       category: Insurance
       subcategory: Property & Vehicle
     economic_role: fixed_expense
+    decision_role: essential
     status: active
 
   leisure.entertainment:
@@ -211,6 +230,7 @@ taxonomy:
       category: Leisure
       subcategory: Entertainment
     economic_role: variable_expense
+    decision_role: discretionary
     status: active
 
 rules:

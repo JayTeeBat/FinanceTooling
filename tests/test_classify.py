@@ -11,6 +11,7 @@ from finance_tooling.categorization.classify import (
     load_override_store,
     normalize_description,
     resolve_taxonomy_cashflow_type,
+    resolve_taxonomy_decision_role_for_category_id,
     resolve_taxonomy_economic_role_for_category_id,
 )
 from finance_tooling.core.models import Transaction
@@ -144,6 +145,7 @@ def test_load_classification_rules_accepts_expanded_economic_roles(tmp_path: Pat
                 "      category: Housing",
                 "      subcategory: Rent",
                 "    economic_role: fixed_expense",
+                "    decision_role: essential",
                 "  shopping.marketplace:",
                 "    labels:",
                 "      category: Shopping",
@@ -173,6 +175,9 @@ def test_load_classification_rules_accepts_expanded_economic_roles(tmp_path: Pat
     assert (
         resolve_taxonomy_economic_role_for_category_id("shopping.marketplace", rules=rules)
         == "variable_expense"
+    )
+    assert (
+        resolve_taxonomy_decision_role_for_category_id("housing.rent", rules=rules) == "essential"
     )
 
 

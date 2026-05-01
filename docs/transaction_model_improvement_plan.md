@@ -56,6 +56,22 @@ directly in `economic_role`. This plan accepts that as the new starting point.
 The next step is to make the expanded role contract explicit and consistent
 across taxonomy, transform, summaries, and dashboards.
 
+Known current inconsistency: some rows can have `economic_role = transfer` while
+their `cashflow_type` remains `in` or `out`. This happens when taxonomy or
+classification identifies a row as transfer-like, but account-boundary
+resolution cannot prove both sides are internal household accounts. In that
+case, current cashflow resolution falls back to the transaction sign, while
+economic-role resolution can still inherit transfer semantics from taxonomy.
+For example, a February 2026 row categorized as `Transfers / Account Transfer`
+with only `from_account_type = internal` and an unknown destination may become
+`cashflow_type = out` and `economic_role = transfer`.
+
+This mismatch is confusing for dashboards. A metric named "transfer volume"
+must state whether it counts all transfer-role/category rows or only neutral
+internal transfers. Going forward, taxonomy-declared `cashflow_type` should be
+enforced unless an explicit override or stronger account-boundary rule says
+otherwise.
+
 Target `economic_role` values:
 
 - `income`
@@ -139,6 +155,7 @@ The semantic order should be deterministic and explainable.
    rules.
 5. Resolve `cashflow_type`:
    - explicit transaction override wins
+   - taxonomy-declared `cashflow_type` is enforced by default
    - internal-to-internal account movement becomes `transfer`
    - excluded taxonomy/reporting policy becomes `exclude`
    - otherwise sign determines `in` or `out`

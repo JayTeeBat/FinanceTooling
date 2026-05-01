@@ -16,8 +16,10 @@ from finance_tooling.categorization.classify import (
     CategoryRule,
     ClassificationRules,
     resolve_category_id_from_labels,
+    resolve_matching_rule_decision_role,
     resolve_matching_rule_economic_role,
     resolve_taxonomy_cashflow_type_for_category_id,
+    resolve_taxonomy_decision_role_for_category_id,
     resolve_taxonomy_economic_role_for_category_id,
 )
 from finance_tooling.categorization.transaction_overrides import (
@@ -28,6 +30,7 @@ from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS
 from finance_tooling.core.semantics import (
     EXPENSE_LIKE_ECONOMIC_ROLES,
     VALID_CASHFLOW_TYPES,
+    VALID_DECISION_ROLES,
     VALID_ECONOMIC_ROLES,
 )
 from finance_tooling.core.store import transactions_from_dataframe
@@ -78,6 +81,14 @@ class EconomicRoleResolutionResult:
     role_counts: dict[str, int]
 
 
+@dataclass(frozen=True)
+class DecisionRoleResolutionResult:
+    """Resolved decision roles for a dataframe."""
+
+    dataframe: pd.DataFrame
+    role_counts: dict[str, int]
+
+
 def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: str) -> pd.Series:
     values = dataframe.get(column, pd.Series("", index=dataframe.index, dtype="object"))
     return values.astype("string").fillna("").str.strip().replace("", default)
@@ -107,6 +118,46 @@ def _normalize_economic_role_series(dataframe: pd.DataFrame) -> pd.Series:
     )
     fallback = fallback.mask(category.eq("income"), "income")
     fallback = fallback.mask(subcategory.isin({"salary", "interest"}), "income")
+    return valid.fillna(fallback)
+
+
+def _normalize_decision_role_series(dataframe: pd.DataFrame) -> pd.Series:
+    values = dataframe.get("decision_role", pd.Series("", index=dataframe.index, dtype="object"))
+    normalized = values.astype("string").fillna("").str.strip().str.casefold()
+    valid = normalized.where(normalized.isin(VALID_DECISION_ROLES))
+    if dataframe.empty:
+        return valid
+    economic_role = _normalize_economic_role_series(dataframe)
+    cashflow_type = _normalize_cashflow_type_series(dataframe)
+    category = _normalized_string_series(dataframe, "category", default="").str.casefold()
+    subcategory = _normalized_string_series(dataframe, "subcategory", default="").str.casefold()
+
+    fallback = pd.Series("unknown", index=dataframe.index, dtype="string")
+    fallback = fallback.mask(economic_role.eq("exclude") | cashflow_type.eq("exclude"), "excluded")
+    fallback = fallback.mask(
+        category.isin({"groceries", "housing", "utilities", "family", "insurance", "transport"}),
+        "essential",
+    )
+    fallback = fallback.mask(category.eq("taxes"), "tax")
+    fallback = fallback.mask(category.isin({"dining", "shopping", "leisure"}), "discretionary")
+    fallback = fallback.mask(
+        category.eq("transfers")
+        & subcategory.str.contains("savings|retirement|house|emergency", regex=True, na=False),
+        "savings",
+    )
+    fallback = fallback.mask(
+        category.eq("transfers") & subcategory.str.contains("investment", regex=True, na=False),
+        "investment",
+    )
+    fallback = fallback.mask(
+        category.eq("transfers")
+        & subcategory.str.contains("loan|debt|mortgage", regex=True, na=False),
+        "debt_service",
+    )
+    fallback = fallback.mask(
+        category.eq("transfers") & subcategory.str.contains("tax", regex=True, na=False),
+        "tax",
+    )
     return valid.fillna(fallback)
 
 
@@ -330,6 +381,121 @@ def resolve_economic_roles_for_dataframe(
     return EconomicRoleResolutionResult(dataframe=resolved, role_counts=role_counts)
 
 
+def resolve_decision_roles_for_dataframe(
+    dataframe: pd.DataFrame,
+    *,
+    classification_rules: ClassificationRules | None = None,
+) -> DecisionRoleResolutionResult:
+    """Resolve planning decision roles from taxonomy, rules, and semantic defaults."""
+    if dataframe.empty:
+        resolved = dataframe.copy()
+        resolved["decision_role"] = pd.Series(dtype="object")
+        return DecisionRoleResolutionResult(
+            dataframe=resolved,
+            role_counts={
+                "essential": 0,
+                "discretionary": 0,
+                "savings": 0,
+                "investment": 0,
+                "debt_service": 0,
+                "tax": 0,
+                "excluded": 0,
+                "unknown": 0,
+            },
+        )
+
+    normalized_frame = dataframe.copy()
+    active_rules = classification_rules or ClassificationRules(rules=(), taxonomy={})
+    for column in CANONICAL_TRANSACTION_COLUMNS:
+        if column not in normalized_frame.columns:
+            normalized_frame[column] = None
+
+    transactions = transactions_from_dataframe(normalized_frame[CANONICAL_TRANSACTION_COLUMNS])
+    rules_by_id: dict[str, CategoryRule] = {
+        rule.rule_id: rule for rule in active_rules.rules if rule.decision_role is not None
+    }
+    resolved_roles: list[str] = []
+    for tx in transactions:
+        cashflow_type = (tx.cashflow_type or "").strip().casefold()
+        economic_role = (tx.economic_role or "").strip().casefold()
+        category_id = (
+            tx.reporting_category_id
+            or tx.category_id
+            or resolve_category_id_from_labels(
+                tx.category,
+                tx.subcategory,
+                rules=active_rules,
+                prefer_active=False,
+            )
+        )
+        if cashflow_type == "exclude" or economic_role == "exclude":
+            resolved_role = "excluded"
+        else:
+            rule_role = None
+            if tx.category_rule_id:
+                rule = rules_by_id.get(tx.category_rule_id)
+                rule_role = rule.decision_role if rule is not None else None
+            if rule_role is None:
+                rule_role = resolve_matching_rule_decision_role(tx, rules=active_rules)
+            taxonomy_role = resolve_taxonomy_decision_role_for_category_id(
+                category_id,
+                rules=active_rules,
+            )
+            category = (tx.category or "").strip().casefold()
+            subcategory = (tx.subcategory or "").strip().casefold()
+            if rule_role is not None:
+                resolved_role = rule_role
+            elif taxonomy_role is not None:
+                resolved_role = taxonomy_role
+            elif category in {
+                "groceries",
+                "housing",
+                "utilities",
+                "family",
+                "insurance",
+                "transport",
+            }:
+                resolved_role = "essential"
+            elif category == "taxes":
+                resolved_role = "tax"
+            elif category in {"dining", "shopping", "leisure"}:
+                resolved_role = "discretionary"
+            elif category == "transfers" and any(
+                marker in subcategory for marker in ("savings", "retirement", "house", "emergency")
+            ):
+                resolved_role = "savings"
+            elif category == "transfers" and "investment" in subcategory:
+                resolved_role = "investment"
+            elif category == "transfers" and any(
+                marker in subcategory for marker in ("loan", "debt", "mortgage")
+            ):
+                resolved_role = "debt_service"
+            elif category == "transfers" and "tax" in subcategory:
+                resolved_role = "tax"
+            else:
+                resolved_role = "unknown"
+        resolved_roles.append(resolved_role)
+
+    resolved = normalized_frame.copy()
+    resolved["decision_role"] = resolved_roles
+    normalized = _normalize_decision_role_series(resolved)
+    resolved["decision_role"] = normalized.astype(object)
+    role_counts = {
+        role: int((normalized == role).sum())
+        for role in (
+            "essential",
+            "discretionary",
+            "savings",
+            "investment",
+            "debt_service",
+            "tax",
+            "excluded",
+            "unknown",
+        )
+    }
+    return DecisionRoleResolutionResult(dataframe=resolved, role_counts=role_counts)
+
+
 def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Normalize canonical transaction rows for cashflow reporting."""
     if dataframe.empty:
@@ -346,6 +512,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "subcategory",
                 "cashflow_type",
                 "economic_role",
+                "decision_role",
                 "tracked_savings",
                 "neutral_transfer",
             ]
@@ -370,6 +537,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
                 "subcategory",
                 "cashflow_type",
                 "economic_role",
+                "decision_role",
                 "tracked_savings",
                 "neutral_transfer",
             ]
@@ -383,6 +551,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
     working["description"] = _normalized_string_series(working, "description", default="unknown")
     working["cashflow_type"] = _normalize_cashflow_type_series(working)
     working["economic_role"] = _normalize_economic_role_series(working)
+    working["decision_role"] = _normalize_decision_role_series(working)
     working["amount_eur"] = pd.to_numeric(working.get("amount_eur"), errors="coerce").fillna(0.0)
     project_tags = _project_tags_series(working)
     category_casefold = working["category"].str.casefold()
@@ -415,6 +584,7 @@ def build_cashflow_rows_frame(dataframe: pd.DataFrame) -> pd.DataFrame:
             "subcategory",
             "cashflow_type",
             "economic_role",
+            "decision_role",
             "tracked_savings",
             "neutral_transfer",
         ]

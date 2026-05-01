@@ -17,7 +17,8 @@ Core docs for day-to-day workflow:
   - Lightweight backlog for repo-level follow-up ideas that are not yet scoped.
 - `transaction_model_improvement_plan.md`
   - Target transaction semantics model and multi-PR implementation plan for KPI
-    dashboards and transaction drill-down improvements.
+    dashboards and transaction drill-down improvements, including the current
+    `economic_role` versus `cashflow_type` transfer semantics note.
 - `diagrams/`
   - PlantUML sources and rendered SVGs for review workflows.
 
