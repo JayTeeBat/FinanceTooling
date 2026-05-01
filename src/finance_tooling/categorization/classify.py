@@ -15,8 +15,10 @@ import yaml
 from finance_tooling.core.models import Transaction
 from finance_tooling.core.semantics import (
     VALID_CASHFLOW_TYPES,
+    VALID_DECISION_ROLES,
     VALID_ECONOMIC_ROLES,
     CashflowType,
+    DecisionRoleType,
     EconomicRoleType,
 )
 
@@ -50,6 +52,45 @@ def _legacy_economic_role_for_category(
     return "expense"
 
 
+def _legacy_decision_role_for_category(
+    category: str,
+    subcategory: str | None,
+    *,
+    cashflow_type: CashflowType | None,
+    economic_role: EconomicRoleType | None,
+) -> DecisionRoleType:
+    normalized_category = category.strip().casefold()
+    normalized_subcategory = (subcategory or "").strip().casefold()
+    if cashflow_type == "exclude" or economic_role == "exclude":
+        return "excluded"
+    if normalized_category == "transfers":
+        if any(marker in normalized_subcategory for marker in ("savings", "retirement", "house")):
+            return "savings"
+        if "investment" in normalized_subcategory:
+            return "investment"
+        if any(marker in normalized_subcategory for marker in ("loan", "debt", "mortgage")):
+            return "debt_service"
+        if "tax" in normalized_subcategory:
+            return "tax"
+        return "unknown"
+    if normalized_category in {
+        "housing",
+        "utilities",
+        "groceries",
+        "family",
+        "insurance",
+        "transport",
+    }:
+        return "essential"
+    if normalized_category == "taxes":
+        return "tax"
+    if normalized_category in {"dining", "shopping", "leisure"}:
+        return "discretionary"
+    if normalized_category == "income":
+        return "unknown"
+    return "unknown"
+
+
 def _normalize_category_id(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -80,6 +121,15 @@ def _normalize_economic_role(value: object) -> EconomicRoleType | None:
     return None
 
 
+def _normalize_decision_role(value: object) -> DecisionRoleType | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().casefold()
+    if normalized in VALID_DECISION_ROLES:
+        return cast(DecisionRoleType, normalized)
+    return None
+
+
 def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCategory]:
     entries: dict[str, TaxonomyCategory] = {}
     for raw_key, raw_entry in rules.taxonomy.items():
@@ -104,6 +154,13 @@ def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCat
                     category_label,
                     cashflow_type=raw_entry.cashflow_type,
                 ),
+                decision_role=raw_entry.decision_role
+                or _legacy_decision_role_for_category(
+                    category_label,
+                    raw_entry.subcategory_label,
+                    cashflow_type=raw_entry.cashflow_type,
+                    economic_role=raw_entry.economic_role,
+                ),
                 category_label=category_label,
                 subcategory_label=raw_entry.subcategory_label,
                 deprecated_to=_normalize_category_id(raw_entry.deprecated_to),
@@ -123,6 +180,13 @@ def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCat
                         raw_entry.name,
                         cashflow_type=raw_entry.cashflow_type,
                     ),
+                    decision_role=raw_entry.decision_role
+                    or _legacy_decision_role_for_category(
+                        raw_entry.name,
+                        subcategory,
+                        cashflow_type=raw_entry.cashflow_type,
+                        economic_role=raw_entry.economic_role,
+                    ),
                     category_label=raw_entry.name,
                     subcategory_label=subcategory,
                 )
@@ -135,6 +199,13 @@ def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCat
                 or _legacy_economic_role_for_category(
                     raw_entry.name,
                     cashflow_type=raw_entry.cashflow_type,
+                ),
+                decision_role=raw_entry.decision_role
+                or _legacy_decision_role_for_category(
+                    raw_entry.name,
+                    None,
+                    cashflow_type=raw_entry.cashflow_type,
+                    economic_role=raw_entry.economic_role,
                 ),
                 category_label=raw_entry.name,
                 subcategory_label=None,
@@ -253,6 +324,20 @@ def resolve_taxonomy_economic_role_for_category_id(
     return entry.economic_role
 
 
+def resolve_taxonomy_decision_role_for_category_id(
+    category_id: str | None,
+    *,
+    rules: ClassificationRules,
+) -> DecisionRoleType | None:
+    reporting_id = resolve_reporting_category_id(category_id, rules=rules)
+    if reporting_id is None:
+        return None
+    entry = _taxonomy_entries_by_id(rules).get(reporting_id)
+    if entry is None:
+        return None
+    return entry.decision_role
+
+
 @dataclass(frozen=True)
 class CategoryRule:
     """A single deterministic categorization rule."""
@@ -267,6 +352,7 @@ class CategoryRule:
     expense_only: bool = False
     income_only: bool = False
     economic_role: EconomicRoleType | None = None
+    decision_role: DecisionRoleType | None = None
     banks: tuple[str, ...] = ()
     account_labels: tuple[str, ...] = ()
 
@@ -287,6 +373,7 @@ class TaxonomyCategory:
     subcategories: tuple[str, ...]
     cashflow_type: CashflowType | None
     economic_role: EconomicRoleType | None = None
+    decision_role: DecisionRoleType | None = None
     category_label: str | None = None
     subcategory_label: str | None = None
     deprecated_to: str | None = None
@@ -422,6 +509,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="out",
             economic_role="variable_expense",
+            decision_role="essential",
             category_label="Groceries",
             subcategory_label="General",
         ),
@@ -430,6 +518,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="out",
             economic_role="variable_expense",
+            decision_role="discretionary",
             category_label="Dining",
             subcategory_label="Restaurants",
         ),
@@ -438,6 +527,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="out",
             economic_role="variable_expense",
+            decision_role="essential",
             category_label="Transport",
             subcategory_label="Mobility",
         ),
@@ -446,6 +536,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="out",
             economic_role="fixed_expense",
+            decision_role="essential",
             category_label="Housing",
             subcategory_label="Housing Costs",
         ),
@@ -454,6 +545,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="out",
             economic_role="variable_expense",
+            decision_role="discretionary",
             category_label="Shopping",
             subcategory_label="General",
         ),
@@ -478,6 +570,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="out",
             economic_role="variable_expense",
+            decision_role="essential",
             category_label="Fees",
             subcategory_label="Bank Fees",
         ),
@@ -494,6 +587,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="exclude",
             economic_role="exclude",
+            decision_role="excluded",
             category_label="Non Personal Transactions",
             subcategory_label=None,
         ),
@@ -502,6 +596,7 @@ def _default_rules() -> ClassificationRules:
             subcategories=(),
             cashflow_type="exclude",
             economic_role="exclude",
+            decision_role="excluded",
             category_label="Pass-through",
             subcategory_label=None,
         ),
@@ -604,6 +699,7 @@ def _parse_rules_payload(payload: object) -> ClassificationRules:
                 expense_only=bool(raw_rule.get("expense_only")),
                 income_only=bool(raw_rule.get("income_only")),
                 economic_role=_normalize_economic_role(raw_rule.get("economic_role")),
+                decision_role=_normalize_decision_role(raw_rule.get("decision_role")),
                 banks=tuple(
                     str(item).strip().upper()
                     for item in (banks_raw if isinstance(banks_raw, list) else [])
@@ -651,6 +747,15 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
                     category_label,
                     cashflow_type=cashflow_type,
                 ),
+                decision_role=_legacy_decision_role_for_category(
+                    category_label,
+                    None,
+                    cashflow_type=cashflow_type,
+                    economic_role=_legacy_economic_role_for_category(
+                        category_label,
+                        cashflow_type=cashflow_type,
+                    ),
+                ),
             )
             continue
         if not isinstance(raw_value, dict):
@@ -692,6 +797,7 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
             )
             cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
             economic_role = _normalize_economic_role(typed_value.get("economic_role"))
+            decision_role = _normalize_decision_role(typed_value.get("decision_role"))
             taxonomy[_normalize_category_id(raw_key) or raw_key.casefold()] = TaxonomyCategory(
                 name=category_label,
                 subcategories=(),
@@ -700,6 +806,13 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
                 or _legacy_economic_role_for_category(
                     category_label,
                     cashflow_type=cashflow_type,
+                ),
+                decision_role=decision_role
+                or _legacy_decision_role_for_category(
+                    category_label,
+                    subcategory_label,
+                    cashflow_type=cashflow_type,
+                    economic_role=economic_role,
                 ),
                 category_label=category_label,
                 subcategory_label=subcategory_label,
@@ -720,12 +833,20 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
             else ()
         )
         cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
+        economic_role = _normalize_economic_role(typed_value.get("economic_role"))
         taxonomy[raw_key.casefold()] = TaxonomyCategory(
             name=raw_key,
             subcategories=subcategories,
             cashflow_type=cashflow_type,
-            economic_role=_normalize_economic_role(typed_value.get("economic_role"))
+            economic_role=economic_role
             or _legacy_economic_role_for_category(raw_key, cashflow_type=cashflow_type),
+            decision_role=_normalize_decision_role(typed_value.get("decision_role"))
+            or _legacy_decision_role_for_category(
+                raw_key,
+                None,
+                cashflow_type=cashflow_type,
+                economic_role=economic_role,
+            ),
         )
     return taxonomy
 
@@ -939,6 +1060,19 @@ def resolve_matching_rule_economic_role(
     return None
 
 
+def resolve_matching_rule_decision_role(
+    tx: Transaction,
+    *,
+    rules: ClassificationRules,
+) -> DecisionRoleType | None:
+    """Resolve a rule-level decision role override by matching the transaction."""
+    normalized = normalize_description(tx.description)
+    for rule in rules.rules:
+        if rule.decision_role is not None and _rule_matches(rule, tx, normalized):
+            return rule.decision_role
+    return None
+
+
 def build_classification_diagnostics(transactions: list[Transaction]) -> ClassificationDiagnostics:
     """Build summary diagnostics from already-classified transactions."""
     category_source_counts = Counter[str]()
@@ -1039,6 +1173,7 @@ def classify_transactions_with_diagnostics(
                 category_source="rule",
                 category_rule_id=matched_rule.rule_id,
                 economic_role=matched_rule.economic_role or tx.economic_role,
+                decision_role=matched_rule.decision_role or tx.decision_role,
             )
         )
     diagnostics = build_classification_diagnostics(classified)

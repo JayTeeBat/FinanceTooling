@@ -182,6 +182,19 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-05-01 - codex
+- Branch: `codex/decision-role-planning`
+- Completed:
+  - Added `decision_role` end-to-end for canonical transactions, taxonomy defaults, reporting, and planning buckets.
+  - Updated starter category rules and tests, then reconciled the live FinanceVault config and processed caches for the renamed February 2026 La Banque Postale statement.
+  - Regenerated the live transform successfully after the filename reconciliation.
+- Checks:
+  - `rtk uv run transform`: pass
+- Open items:
+  - Repo changes still need to be committed, pushed, and published as a PR.
+- Next action:
+  - Stage the full repo diff, commit it on the feature branch, push, and open a draft PR.
+
 ### 2026-04-23 - codex
 - Branch: `feature/economic-role-expense-split`
 - Completed:
@@ -223,24 +236,4 @@ Success target for the 2026 validation campaign:
 - Next action:
   - Commit the `fix/ty-cleanup` branch and open a focused PR for the type-cleanup slice.
 
-### 2026-04-09 - codex
-- Branch: `codex/package-layout-cleanup`
-- Completed:
-  - Fixed `review-import` backup/path resolution so explicit review and override paths no longer get redirected through ambient env-backed processed paths.
-  - Hard-moved core infrastructure into `src/finance_tooling/core/`, categorization modules into `src/finance_tooling/categorization/`, review helpers into `src/finance_tooling/review/`, reporting modules into `src/finance_tooling/reporting/`, planning modules into `src/finance_tooling/planning/`, and audit/maintenance tools into `src/finance_tooling/audits/` and `src/finance_tooling/maintenance/`.
-  - Added `pytest-cov`, a GitHub Actions quality workflow, repo-root ignore rules for local scratch paths, and README package-layout docs matching the new subpackage structure.
-- Checks:
-  - `.venv/bin/ruff check .`: pass
-  - `env PYTHONPATH=src sh -c "git ls-files 'tests/test_*.py' | xargs .venv/bin/pytest -q"`: pass
-  - `.venv/bin/pytest -q tests/test_review_workflow.py tests/test_command_entrypoints.py tests/test_config.py tests/test_store.py tests/test_workflow_status.py`: pass
-  - `.venv/bin/pytest -q tests/test_migrate_transaction_ids.py tests/test_perf_check.py tests/test_category_id_migrate_live.py tests/test_category_id_migration_audit.py tests/test_categorization_audit.py`: pass
-  - `.venv/bin/pytest -q tests/test_dashboard.py tests/test_cashflow.py tests/test_completeness.py tests/test_metrics.py tests/test_metrics_log.py tests/test_household_healthcheck.py tests/test_workflow_status.py tests/test_workflow_stages.py`: pass
-  - `.venv/bin/pytest -q tests/test_planning.py tests/test_planning_doe.py tests/test_planning_dashboard.py tests/test_budgeting.py`: pass
-  - `.venv/bin/pytest -q tests/test_account_inference.py tests/test_classify.py tests/test_category_normalization.py tests/test_projecting.py tests/test_transaction_overrides.py tests/test_review_workflow.py tests/test_category_id_migrate_live.py tests/test_category_id_migration_audit.py tests/test_categorization_audit.py tests/test_cashflow.py tests/test_enrichment.py`: pass
-  - `.venv/bin/pytest -q tests/test_fx.py tests/test_enrichment.py tests/test_workflow_stages.py tests/test_perf_check.py`: pass
-  - `.venv/bin/ty check src/finance_tooling tests`: fail (pre-existing typing debt remains)
-- Open items:
-  - The tracked package root is now effectively reduced to package entrypoints; the main remaining cleanup work is typed payload/type-check debt rather than package layout.
-  - Draft PR opened: `#79`
-- Next action:
-  - Attack the remaining `ty` diagnostics with typed payload cleanup, starting with reporting/status JSON payload contracts.
+@RTK.md

@@ -38,6 +38,7 @@ from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.reporting.cashflow import (
     build_cashflow_yoy_summary,
     resolve_cashflow_types_for_dataframe,
+    resolve_decision_roles_for_dataframe,
     resolve_economic_roles_for_dataframe,
 )
 from finance_tooling.reporting.completeness import build_completeness_report_from_dataframe
@@ -510,7 +511,11 @@ def persist_and_report(
         account_inference_config=account_inference_config,
         classification_rules=classification_rules,
     )
-    dataframe = economic_role_resolution.dataframe
+    decision_role_resolution = resolve_decision_roles_for_dataframe(
+        economic_role_resolution.dataframe,
+        classification_rules=classification_rules,
+    )
+    dataframe = decision_role_resolution.dataframe
     write_canonical_dataframe(settings.master_parquet_path, dataframe)
     write_categorization_consolidation_delta(
         settings=settings,

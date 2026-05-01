@@ -15,8 +15,10 @@ import pandas as pd
 from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS, Transaction
 from finance_tooling.core.semantics import (
     VALID_CASHFLOW_TYPES,
+    VALID_DECISION_ROLES,
     VALID_ECONOMIC_ROLES,
     CashflowType,
+    DecisionRoleType,
     EconomicRoleType,
 )
 
@@ -120,6 +122,7 @@ def _frame_from_transactions(transactions: list[Transaction]) -> pd.DataFrame:
             "category_rule_id": tx.category_rule_id,
             "cashflow_type": tx.cashflow_type,
             "economic_role": tx.economic_role,
+            "decision_role": tx.decision_role,
             "from_account_ref": tx.from_account_ref,
             "to_account_ref": tx.to_account_ref,
             "from_account_type": tx.from_account_type,
@@ -177,6 +180,13 @@ def _economic_role_from_row(row: dict[str, object]) -> EconomicRoleType | None:
     normalized = (_row_string(row, "economic_role") or "").casefold()
     if normalized in VALID_ECONOMIC_ROLES:
         return cast(EconomicRoleType, normalized)
+    return None
+
+
+def _decision_role_from_row(row: dict[str, object]) -> DecisionRoleType | None:
+    normalized = (_row_string(row, "decision_role") or "").casefold()
+    if normalized in VALID_DECISION_ROLES:
+        return cast(DecisionRoleType, normalized)
     return None
 
 
@@ -246,6 +256,7 @@ def transactions_from_dataframe(dataframe: pd.DataFrame) -> list[Transaction]:
                 ),
                 cashflow_type=_cashflow_type_from_row(row),
                 economic_role=_economic_role_from_row(row),
+                decision_role=_decision_role_from_row(row),
                 from_account_ref=(
                     str(row["from_account_ref"])
                     if row.get("from_account_ref") is not None

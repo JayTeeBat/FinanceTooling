@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from finance_tooling.core.backup import BackupRunResult
-from finance_tooling.core.semantics import CashflowType, EconomicRoleType
+from finance_tooling.core.semantics import CashflowType, DecisionRoleType, EconomicRoleType
 
 CANONICAL_TRANSACTION_COLUMNS = [
     "transaction_id",
@@ -30,6 +30,7 @@ CANONICAL_TRANSACTION_COLUMNS = [
     "category_rule_id",
     "cashflow_type",
     "economic_role",
+    "decision_role",
     "from_account_ref",
     "to_account_ref",
     "from_account_type",
@@ -69,6 +70,7 @@ class Transaction:
     category_rule_id: str | None = None
     cashflow_type: CashflowType | None = None
     economic_role: EconomicRoleType | None = None
+    decision_role: DecisionRoleType | None = None
     from_account_ref: str | None = None
     to_account_ref: str | None = None
     from_account_type: str | None = None
