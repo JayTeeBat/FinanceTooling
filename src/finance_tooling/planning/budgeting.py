@@ -20,7 +20,7 @@ from finance_tooling.categorization.classify import (
     resolve_taxonomy_decision_role_for_category_id,
     resolve_taxonomy_economic_role_for_category_id,
 )
-from finance_tooling.core.semantics import EXPENSE_LIKE_ECONOMIC_ROLES
+from finance_tooling.core.semantic_resolution import resolve_planning_bucket
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 _BUDGET_STATUS_COLUMNS = (
@@ -218,7 +218,7 @@ def _normalize_month_from_booking_date(value: object) -> str | None:
     if isinstance(value, str) and len(value) >= 7:
         return value[:7]
     if isinstance(value, pd.Timestamp):
-        return cast(str, value.strftime("%Y-%m"))
+        return value.strftime("%Y-%m")
     return None
 
 
@@ -344,25 +344,12 @@ def build_monthly_planning_ledger(
                     )
                     or decision_role
                 )
-        if economic_role in EXPENSE_LIKE_ECONOMIC_ROLES:
-            planning_bucket = "expense"
-            planning_amount = -amount if amount < 0 else 0.0
-        elif economic_role == "income":
-            planning_bucket = "income"
-            planning_amount = amount if amount > 0 else 0.0
-        elif cashflow_type == "transfer":
-            planning_bucket = (
-                decision_role
-                if decision_role in {"savings", "investment", "debt_service", "tax"}
-                else "transfer"
-            )
-            planning_amount = abs(amount)
-        elif cashflow_type == "exclude" or economic_role == "exclude":
-            planning_bucket = "excluded"
-            planning_amount = 0.0
-        else:
-            planning_bucket = "unknown"
-            planning_amount = 0.0
+        planning_bucket, planning_amount = resolve_planning_bucket(
+            cashflow_type,
+            economic_role,
+            decision_role,
+            amount,
+        )
         rows.append(
             {
                 "transaction_id": row.get("transaction_id"),

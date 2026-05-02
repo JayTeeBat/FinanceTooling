@@ -12,7 +12,7 @@ from typing import Literal
 
 BackupRootKind = Literal["processed", "config", "legacy"]
 RETENTION_DAY_KEEP_COUNT = 7
-RETENTION_SNAPSHOTS_PER_DAY = 3
+RETENTION_SNAPSHOTS_PER_DAY = 7
 
 
 @dataclass(frozen=True)

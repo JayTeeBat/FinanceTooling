@@ -13,6 +13,11 @@ from typing import Literal, TypedDict, cast
 import yaml
 
 from finance_tooling.core.models import Transaction
+from finance_tooling.core.semantic_resolution import (
+    default_cashflow_type_for_category,
+    default_decision_role_for_category,
+    default_economic_role_for_category,
+)
 from finance_tooling.core.semantics import (
     VALID_CASHFLOW_TYPES,
     VALID_DECISION_ROLES,
@@ -26,16 +31,7 @@ MatchType = Literal["contains", "exact", "regex"]
 
 
 def _legacy_cashflow_type_for_category(category: str) -> CashflowType | None:
-    normalized = category.strip().casefold()
-    if normalized == "income":
-        return "in"
-    if normalized == "transfers":
-        return "transfer"
-    if normalized == "non personal transactions":
-        return "exclude"
-    if normalized:
-        return "out"
-    return None
+    return default_cashflow_type_for_category(category)
 
 
 def _legacy_economic_role_for_category(
@@ -43,13 +39,7 @@ def _legacy_economic_role_for_category(
     *,
     cashflow_type: CashflowType | None,
 ) -> EconomicRoleType:
-    if cashflow_type == "transfer":
-        return "transfer"
-    if cashflow_type == "exclude":
-        return "exclude"
-    if category.strip().casefold() == "income":
-        return "income"
-    return "expense"
+    return default_economic_role_for_category(category, cashflow_type=cashflow_type)
 
 
 def _legacy_decision_role_for_category(
@@ -59,36 +49,12 @@ def _legacy_decision_role_for_category(
     cashflow_type: CashflowType | None,
     economic_role: EconomicRoleType | None,
 ) -> DecisionRoleType:
-    normalized_category = category.strip().casefold()
-    normalized_subcategory = (subcategory or "").strip().casefold()
-    if cashflow_type == "exclude" or economic_role == "exclude":
-        return "excluded"
-    if normalized_category == "transfers":
-        if any(marker in normalized_subcategory for marker in ("savings", "retirement", "house")):
-            return "savings"
-        if "investment" in normalized_subcategory:
-            return "investment"
-        if any(marker in normalized_subcategory for marker in ("loan", "debt", "mortgage")):
-            return "debt_service"
-        if "tax" in normalized_subcategory:
-            return "tax"
-        return "unknown"
-    if normalized_category in {
-        "housing",
-        "utilities",
-        "groceries",
-        "family",
-        "insurance",
-        "transport",
-    }:
-        return "essential"
-    if normalized_category == "taxes":
-        return "tax"
-    if normalized_category in {"dining", "shopping", "leisure"}:
-        return "discretionary"
-    if normalized_category == "income":
-        return "unknown"
-    return "unknown"
+    return default_decision_role_for_category(
+        category,
+        subcategory,
+        cashflow_type=cashflow_type,
+        economic_role=economic_role,
+    )
 
 
 def _normalize_category_id(value: object) -> str | None:
