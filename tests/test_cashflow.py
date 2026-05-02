@@ -701,6 +701,18 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
             economic_role="variable_expense",
         ),
         Transaction(
+            booking_date=date(2025, 1, 3),
+            description="Salary",
+            amount_native=Decimal("1250.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Income",
+            cashflow_type="in",
+            economic_role="income",
+        ),
+        Transaction(
             booking_date=date(2025, 1, 4),
             description="Savings transfer",
             amount_native=Decimal("-200.00"),
@@ -731,10 +743,10 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
     )
     result = resolve_decision_roles_for_dataframe(dataframe, classification_rules=rules)
 
-    assert list(result.dataframe["decision_role"]) == ["essential", "savings"]
+    assert list(result.dataframe["decision_role"]) == ["essential", "non_spend", "non_spend"]
 
 
-def test_resolve_decision_roles_marks_excluded_rows_as_excluded() -> None:
+def test_resolve_decision_roles_marks_excluded_rows_as_non_spend() -> None:
     tx = Transaction(
         booking_date=date(2025, 1, 7),
         description="Pass-through adjustment",
@@ -751,10 +763,10 @@ def test_resolve_decision_roles_marks_excluded_rows_as_excluded() -> None:
 
     result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
 
-    assert result.dataframe.loc[0, "decision_role"] == "excluded"
+    assert result.dataframe.loc[0, "decision_role"] == "non_spend"
 
 
-def test_resolve_decision_roles_uses_debt_service_transfer_defaults() -> None:
+def test_resolve_decision_roles_marks_transfer_rows_as_non_spend() -> None:
     tx = Transaction(
         booking_date=date(2025, 1, 8),
         description="Mortgage transfer",
@@ -772,7 +784,7 @@ def test_resolve_decision_roles_uses_debt_service_transfer_defaults() -> None:
 
     result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
 
-    assert result.dataframe.loc[0, "decision_role"] == "debt_service"
+    assert result.dataframe.loc[0, "decision_role"] == "non_spend"
 
 
 def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_inflow() -> None:

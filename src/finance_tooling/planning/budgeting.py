@@ -20,7 +20,10 @@ from finance_tooling.categorization.classify import (
     resolve_taxonomy_decision_role_for_category_id,
     resolve_taxonomy_economic_role_for_category_id,
 )
-from finance_tooling.core.semantic_resolution import resolve_planning_bucket
+from finance_tooling.core.semantic_resolution import (
+    normalize_decision_role_for_row,
+    resolve_planning_bucket,
+)
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 _BUDGET_STATUS_COLUMNS = (
@@ -354,11 +357,21 @@ def build_monthly_planning_ledger(
                     )
                     or decision_role
                 )
+        decision_role = normalize_decision_role_for_row(
+            decision_role,
+            cashflow_type=cashflow_type,
+            economic_role=economic_role,
+            category=row.get("category"),
+            subcategory=row.get("subcategory"),
+        )
         planning_bucket, planning_amount = resolve_planning_bucket(
             cashflow_type,
             economic_role,
             decision_role,
             amount,
+            category_id=category_id,
+            category=row.get("category"),
+            subcategory=row.get("subcategory"),
         )
         rows.append(
             {

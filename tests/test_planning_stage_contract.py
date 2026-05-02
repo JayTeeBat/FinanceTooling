@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -47,6 +48,23 @@ def _settings_stub(tmp_path: Path) -> SimpleNamespace:
         project_overrides_path=config_dir / "project_overrides.yaml",
         transaction_overrides_path=config_dir / "transaction_overrides.yaml",
     )
+
+
+def _selected_option_value(html: str, select_id: str) -> str:
+    match = re.search(
+        rf'<select id="{re.escape(select_id)}">(.*?)</select>',
+        html,
+        flags=re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError(f"Select not found: {select_id}")
+    selected_match = re.search(r'<option value="([^"]+)" selected>', match.group(1))
+    if selected_match is not None:
+        return selected_match.group(1)
+    fallback_match = re.search(r'<option value="([^"]+)"', match.group(1))
+    if fallback_match is not None:
+        return fallback_match.group(1)
+    raise AssertionError(f"No option values found for {select_id}")
 
 
 def test_stage_root_helpers_default_to_processed_layout_and_legacy_fallbacks(
@@ -247,6 +265,23 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
                 "account_label": "Main",
             },
             {
+                "transaction_id": "tx-income-feb",
+                "booking_date": "2026-02-05",
+                "description": "Salary",
+                "source_document_id": "doc-income-feb",
+                "category_id": "income.salary",
+                "reporting_category_id": "income.salary",
+                "category": "Income",
+                "subcategory": "Salary",
+                "project": None,
+                "cashflow_type": "inflow",
+                "economic_role": "income",
+                "decision_role": "income",
+                "amount_eur": 500.0,
+                "bank": "DummyBank",
+                "account_label": "Main",
+            },
+            {
                 "transaction_id": "tx-fixed",
                 "booking_date": "2026-01-06",
                 "description": "Rent",
@@ -285,14 +320,14 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
                 "booking_date": "2026-01-08",
                 "description": "Savings transfer",
                 "source_document_id": "doc-savings",
-                "category_id": "transfer.savings",
-                "reporting_category_id": "transfer.savings",
+                "category_id": "transfers.savings_transfer",
+                "reporting_category_id": "transfers.savings_transfer",
                 "category": "Transfers",
-                "subcategory": "Savings",
+                "subcategory": "Savings Transfer",
                 "project": None,
                 "cashflow_type": "transfer",
                 "economic_role": "transfer",
-                "decision_role": "savings",
+                "decision_role": "non_spend",
                 "amount_eur": -100.0,
                 "bank": "DummyBank",
                 "account_label": "Main",
@@ -339,7 +374,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     dashboard_html = dashboard_path.read_text(encoding="utf-8")
 
     assert set(ledger_parquet["transaction_id"]) == set(ledger_csv["transaction_id"])
-    assert len(ledger_parquet) == 4
+    assert len(ledger_parquet) == 5
     assert "description" in ledger_parquet.columns
     assert "account_holder" in ledger_parquet.columns
     assert (
@@ -391,12 +426,32 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert ytd_totals["income"] == pytest.approx(income_total)
     assert ytd_totals["expense"] == pytest.approx(expense_total)
     assert ytd_totals["savings"] == pytest.approx(savings_total)
+    assert summary_payload["available_months"] == ["2026-01", "2026-02"]
+    assert summary_payload["available_years"] == ["2026"]
+    assert summary_payload["default_window"] == {
+        "start_month": "2026-01",
+        "end_month": "2026-02",
+        "month": "2026-02",
+        "year": "2026",
+    }
     assert summary_payload["economic_role_counts"]["fixed_expense"] == 1
     assert summary_payload["economic_role_counts"]["variable_expense"] == 1
     assert "surface_breakdowns" in summary_payload
     assert summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"][
         "fixed_expense"
     ] == pytest.approx(300.0)
+    assert summary_payload["surface_breakdowns"]["economic_role"]["monthly_totals_by_month"][
+        "2026-02"
+    ]["income"] == pytest.approx(500.0)
+    assert summary_payload["surface_breakdowns"]["decision_role"]["bucket_totals"][
+        "non_spend"
+    ] == pytest.approx(1600.0)
+    assert "" not in summary_payload["surface_breakdowns"]["economic_role"][
+        "bucket_totals"
+    ]
+    assert "" not in summary_payload["surface_breakdowns"]["economic_role"][
+        "monthly_totals_by_month"
+    ]["2026-02"]
     assert fixed_expense_total == pytest.approx(300.0)
     assert variable_expense_total == pytest.approx(200.0)
 
@@ -408,16 +463,49 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert "Monthly Surface Explorer" in dashboard_html
     assert "From month" in dashboard_html
     assert "To month" in dashboard_html
-    assert 'value="2026-01"' in dashboard_html
-    assert "surface-summary-economic_role" in dashboard_html
-    assert "surface-summary-cashflow_type" in dashboard_html
-    assert "surface-summary-decision_role" in dashboard_html
+    assert 'id="month-start"' in dashboard_html
+    assert 'id="month-end"' in dashboard_html
+    assert 'id="quick-month"' in dashboard_html
+    assert 'id="quick-year"' in dashboard_html
+    assert 'id="apply-month"' in dashboard_html
+    assert 'id="apply-year"' in dashboard_html
+    assert 'id="chart-economic_role"' in dashboard_html
+    assert 'id="chart-cashflow_type"' in dashboard_html
+    assert 'id="chart-decision_role"' in dashboard_html
+    assert 'id="chart-tooltip"' in dashboard_html
+    assert "index === buckets.length - 1" not in dashboard_html
+    assert "const endAngle = startAngle + ((Math.PI * 2) * share);" in dashboard_html
+    assert "Non spend" in dashboard_html
+    assert _selected_option_value(dashboard_html, "month-start") == "2026-01"
+    assert _selected_option_value(dashboard_html, "month-end") == "2026-02"
+    assert _selected_option_value(dashboard_html, "quick-month") == "2026-02"
+    assert _selected_option_value(dashboard_html, "quick-year") == "2026"
     assert "Economic Role" in dashboard_html
     assert "Cashflow Type" in dashboard_html
     assert "Decision Role" in dashboard_html
     assert "Budget Status" in dashboard_html
     assert "Planning Ledger" not in dashboard_html
     assert "Transaction" not in dashboard_html
+
+
+def test_planning_surface_breakdowns_normalize_blank_labels_to_unknown() -> None:
+    planning_stage = _import_or_xfail("finance_tooling.workflow.planning_stage")
+    surface_breakdown = _attr_or_xfail(
+        planning_stage,
+        "_surface_monthly_breakdown_by_month",
+    )
+
+    frame = pd.DataFrame(
+        [
+            {"month": "2026-01", "planning_amount_eur": 10.0, "economic_role": ""},
+            {"month": "2026-01", "planning_amount_eur": 5.0, "economic_role": None},
+            {"month": "2026-01", "planning_amount_eur": 7.0, "economic_role": "unknown"},
+        ]
+    )
+
+    monthly = surface_breakdown(frame, "economic_role")
+
+    assert monthly == {"2026-01": {"unknown": 22.0}}
 
 
 def test_run_planning_builds_the_ledger_once(tmp_path: Path, monkeypatch) -> None:

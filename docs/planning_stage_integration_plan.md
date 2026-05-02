@@ -126,6 +126,19 @@ Core V1 KPI families:
 The stage should prefer semantic fields over display labels and sign-only
 heuristics.
 
+Near-future transform contract note:
+
+- `cashflow_type` should be resolved first to isolate transfer and excluded
+  flows from household income/expense pattern analysis.
+- `economic_role` should then remove non-personal flows such as associations,
+  work expenses, and other explicit out-of-scope rows.
+- `decision_role` should be applied last, only to the remaining spend-side
+  rows, and should use `non_spend` as the explicit bucket for rows outside that
+  spend domain.
+
+This layering keeps the planning dashboard self-contained without making the
+decision-role chart depend on hidden buckets from the other two surfaces.
+
 ## Technical Recommendations
 
 Reuse existing planning helpers first:
@@ -176,8 +189,8 @@ Add tests for:
 - missing budget target warning
 - planning ledger generation from a small canonical fixture
 - KPI summary correctness for income, expense, fixed, variable, essential,
-  discretionary, savings, investment, debt-service, tax, excluded, and unknown
-  rows
+  discretionary, savings, investment, debt-service, tax, non_spend, and
+  unknown rows
 - budget status generation when targets are configured
 - HTML renderer writes a self-contained document with valid embedded JSON
 
@@ -187,6 +200,7 @@ Acceptance criteria:
 - all KPI totals reconcile to `planning_ledger`
 - excluded rows do not affect household cashflow KPIs
 - transfer rows affect only the planning buckets implied by canonical semantics
+  and do not rely on `decision_role` for their transfer subtype
 - the HTML output is separate from the existing transform dashboard
 
 ## Follow-Up Integration

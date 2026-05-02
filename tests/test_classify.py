@@ -253,6 +253,18 @@ def test_default_rules_include_exclude_categories() -> None:
     assert warnings == []
     assert resolve_taxonomy_cashflow_type("Non Personal Transactions", rules=rules) == "exclude"
     assert resolve_taxonomy_cashflow_type("Pass-through", rules=rules) == "exclude"
+    assert resolve_taxonomy_decision_role_for_category_id(
+        "income.salary",
+        rules=rules,
+    ) == "non_spend"
+    assert resolve_taxonomy_decision_role_for_category_id(
+        "transfers.internal",
+        rules=rules,
+    ) == "non_spend"
+    assert resolve_taxonomy_decision_role_for_category_id(
+        "non_personal_transactions",
+        rules=rules,
+    ) == "non_spend"
 
 
 def test_load_classification_rules_infers_cashflow_type_from_legacy_taxonomy_lists(

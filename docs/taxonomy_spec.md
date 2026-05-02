@@ -76,6 +76,9 @@ Current intended model:
   or ambiguous expenses
 - `economic_role = expense` remains valid as a legacy/unknown expense-side
   compatibility value
+- `decision_role = non_spend` is the explicit display bucket for income,
+  transfer, and excluded flows after cashflow and economic-role filtering has
+  already removed them from the spend-side analysis
 
 This distinction is important because some positive inflows are not true
 income.

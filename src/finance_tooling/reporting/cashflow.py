@@ -394,7 +394,7 @@ def resolve_decision_roles_for_dataframe(
                 "investment": 0,
                 "debt_service": 0,
                 "tax": 0,
-                "excluded": 0,
+                "non_spend": 0,
                 "unknown": 0,
             },
         )
@@ -423,8 +423,8 @@ def resolve_decision_roles_for_dataframe(
                 prefer_active=False,
             )
         )
-        if cashflow_type == "exclude" or economic_role == "exclude":
-            resolved_role = "excluded"
+        if cashflow_type in {"exclude", "transfer"} or economic_role in {"exclude", "transfer"}:
+            resolved_role = "non_spend"
         else:
             rule_role = None
             if tx.category_rule_id:
@@ -437,8 +437,9 @@ def resolve_decision_roles_for_dataframe(
                 rules=active_rules,
             )
             category = (tx.category or "").strip().casefold()
-            subcategory = (tx.subcategory or "").strip().casefold()
-            if rule_role is not None:
+            if category in {"income", "transfers"}:
+                resolved_role = "non_spend"
+            elif rule_role is not None:
                 resolved_role = rule_role
             elif taxonomy_role is not None:
                 resolved_role = taxonomy_role
@@ -455,18 +456,6 @@ def resolve_decision_roles_for_dataframe(
                 resolved_role = "tax"
             elif category in {"dining", "shopping", "leisure"}:
                 resolved_role = "discretionary"
-            elif category == "transfers" and any(
-                marker in subcategory for marker in ("savings", "retirement", "house", "emergency")
-            ):
-                resolved_role = "savings"
-            elif category == "transfers" and "investment" in subcategory:
-                resolved_role = "investment"
-            elif category == "transfers" and any(
-                marker in subcategory for marker in ("loan", "debt", "mortgage")
-            ):
-                resolved_role = "debt_service"
-            elif category == "transfers" and "tax" in subcategory:
-                resolved_role = "tax"
             else:
                 resolved_role = "unknown"
         resolved_roles.append(resolved_role)
@@ -484,7 +473,7 @@ def resolve_decision_roles_for_dataframe(
             "investment",
             "debt_service",
             "tax",
-            "excluded",
+            "non_spend",
             "unknown",
         )
     }

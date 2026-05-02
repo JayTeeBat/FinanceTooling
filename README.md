@@ -229,6 +229,13 @@ Dashboard expense totals treat `fixed_expense`, `variable_expense`, and legacy
 split for new outgoing classifications; rule-level `economic_role` overrides
 can mark recurring subscriptions as fixed without changing their purpose bucket.
 
+`decision_role` is the spend-side planning dimension:
+- `non_spend` is the explicit bucket for income, transfers, and excluded rows
+- spend rows are then categorized into `essential`, `discretionary`,
+  `savings`, `investment`, `debt_service`, or `tax`
+- the planning dashboard uses that split as a separate surface from
+  `economic_role` and `cashflow_type`
+
 Account-boundary inference is configured separately in `account_rules.yaml`:
 - `internal_accounts` defines personal/internal statement accounts
 - `counterparty_rules` infers the emitting or receiving counterparty side

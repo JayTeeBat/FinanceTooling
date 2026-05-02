@@ -187,19 +187,19 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-05-02 - codex
-- Branch: `main`
+- Branch: `codex/stage-aligned-planning`
 - Completed:
-  - Implemented stage-owned processed directories with canonical `processed/ingest/`, `processed/transform/`, and `processed/planning/` defaults plus legacy read fallbacks.
-  - Added a first-class `planning` workflow command and integrated planning into `update` with `--skip-planning`.
-  - Updated workflow, perf-check, and test coverage to match the new path contract and planning stage behavior.
+  - Documented the transform layering contract so `cashflow_type`, `economic_role`, and `decision_role` are resolved sequentially.
+  - Implemented `non_spend` as the canonical decision-role exclusion bucket across transform, planning, taxonomy defaults, and planning dashboard rendering.
+  - Added transfer-subtype planning bucket inference that no longer depends on `decision_role`, plus regression coverage for planning and dashboard output.
 - Checks:
-  - `rtk uv run pytest -q`: pass
-  - `rtk uv run ty check src/finance_tooling tests`: pass
-  - `rtk uv run ruff check .`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/core/semantics.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/planning/budgeting.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/planning_stage.py src/finance_tooling/categorization/classify.py tests/test_cashflow.py tests/test_budgeting.py tests/test_classify.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ty check src/finance_tooling tests`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_cashflow.py tests/test_budgeting.py tests/test_classify.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py`: pass
 - Open items:
   - None.
 - Next action:
-  - Keep any remaining doc or CLI references aligned if more path-owned artifacts move stages later.
+  - Open the PR for review and keep the metrics log aligned if a follow-up commit changes pipeline behavior again.
 
 ### 2026-05-02 - codex
 - Branch: `codex/docs-canonical-layout`

@@ -19,6 +19,9 @@ _ESSENTIAL_CATEGORY_NAMES = frozenset(
     {"groceries", "housing", "utilities", "family", "insurance", "transport"}
 )
 _DISCRETIONARY_CATEGORY_NAMES = frozenset({"dining", "shopping", "leisure"})
+_NON_SPEND_CATEGORY_NAMES = frozenset(
+    {"income", "transfers", "non personal transactions", "pass-through", "excluded"}
+)
 _TRANSFER_DECISION_ROLE_MARKERS: tuple[tuple[str, DecisionRoleType], ...] = (
     ("savings", "savings"),
     ("retirement", "savings"),
@@ -34,6 +37,32 @@ _TRANSFER_DECISION_ROLE_MARKERS: tuple[tuple[str, DecisionRoleType], ...] = (
 
 def _normalized_text(value: object) -> str:
     return str(value).strip().casefold() if value is not None else ""
+
+
+def _transfer_planning_bucket_for_row(
+    *,
+    category_id: object = None,
+    category: object = None,
+    subcategory: object = None,
+) -> str | None:
+    """Return a transfer planning bucket from transfer semantic labels."""
+    normalized_category_id = _normalized_text(category_id)
+    normalized_category = _normalized_text(category)
+    normalized_subcategory = _normalized_text(subcategory)
+    normalized_text = " ".join(
+        value
+        for value in (normalized_category_id, normalized_category, normalized_subcategory)
+        if value
+    )
+    if any(marker in normalized_text for marker in ("savings", "retirement", "house", "emergency")):
+        return "savings"
+    if "investment" in normalized_text:
+        return "investment"
+    if any(marker in normalized_text for marker in ("loan", "debt", "mortgage")):
+        return "debt_service"
+    if "tax" in normalized_text:
+        return "tax"
+    return None
 
 
 def normalize_cashflow_type_value(value: object) -> CashflowType | None:
@@ -98,6 +127,8 @@ def normalize_decision_role_value(value: object) -> DecisionRoleType | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().casefold()
+    if normalized == "excluded":
+        return cast(DecisionRoleType, "non_spend")
     if normalized in VALID_DECISION_ROLES:
         return cast(DecisionRoleType, normalized)
     return None
@@ -120,9 +151,14 @@ def normalize_decision_role_for_row(
     normalized_category = _normalized_text(category)
     normalized_subcategory = _normalized_text(subcategory)
 
-    fallback: DecisionRoleType = "unknown"
     if normalized_cashflow_type == "exclude" or normalized_economic_role == "exclude":
-        return "excluded"
+        return "non_spend"
+    if normalized_cashflow_type == "transfer" or normalized_economic_role == "transfer":
+        return "non_spend"
+    if normalized_category in _NON_SPEND_CATEGORY_NAMES:
+        return "non_spend"
+
+    fallback: DecisionRoleType = "unknown"
     if normalized_category in _ESSENTIAL_CATEGORY_NAMES:
         fallback = "essential"
     elif normalized_category == "taxes":
@@ -187,22 +223,18 @@ def default_decision_role_for_category(
 ) -> DecisionRoleType:
     """Return the legacy planning default for a category label."""
     normalized_category = _normalized_text(category)
-    normalized_subcategory = _normalized_text(subcategory)
     if cashflow_type == "exclude" or economic_role == "exclude":
-        return "excluded"
-    if normalized_category == "transfers":
-        for marker, role in _TRANSFER_DECISION_ROLE_MARKERS:
-            if marker in normalized_subcategory:
-                return role
-        return "unknown"
+        return "non_spend"
+    if cashflow_type == "transfer" or economic_role == "transfer":
+        return "non_spend"
+    if normalized_category in _NON_SPEND_CATEGORY_NAMES:
+        return "non_spend"
     if normalized_category in _ESSENTIAL_CATEGORY_NAMES:
         return "essential"
     if normalized_category == "taxes":
         return "tax"
     if normalized_category in _DISCRETIONARY_CATEGORY_NAMES:
         return "discretionary"
-    if normalized_category == "income":
-        return "unknown"
     return "unknown"
 
 
@@ -211,11 +243,15 @@ def resolve_planning_bucket(
     economic_role: object,
     decision_role: object,
     amount_eur: object,
+    *,
+    category_id: object = None,
+    category: object = None,
+    subcategory: object = None,
 ) -> tuple[str, float]:
     """Resolve the planning bucket and planned amount from semantic fields."""
     normalized_cashflow_type = normalize_cashflow_type_value(cashflow_type)
     normalized_economic_role = normalize_economic_role_value(economic_role)
-    normalized_decision_role = normalize_decision_role_value(decision_role)
+    _ = normalize_decision_role_value(decision_role)
     amount = 0.0
     if isinstance(amount_eur, bool):
         amount = float(int(amount_eur))
@@ -229,12 +265,15 @@ def resolve_planning_bucket(
     if normalized_economic_role == "income":
         return "income", (amount if amount > 0 else 0.0)
     if normalized_cashflow_type == "transfer":
+        transfer_bucket = _transfer_planning_bucket_for_row(
+            category_id=category_id,
+            category=category,
+            subcategory=subcategory,
+        )
+        if transfer_bucket is not None:
+            return transfer_bucket, abs(amount)
         return (
-            (
-                normalized_decision_role
-                if normalized_decision_role in {"savings", "investment", "debt_service", "tax"}
-                else "transfer"
-            ),
+            "transfer",
             abs(amount),
         )
     if normalized_cashflow_type == "exclude" or normalized_economic_role == "exclude":
