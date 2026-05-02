@@ -611,6 +611,7 @@ def run_planning(
     budget_status = build_budget_status(
         transactions,
         budget_config,
+        ledger=ledger,
         classification_rules=classification_rules,
     )
     kpi_summary = build_planning_kpi_summary(

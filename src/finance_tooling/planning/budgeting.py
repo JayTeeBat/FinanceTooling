@@ -399,16 +399,22 @@ def build_budget_status(
     dataframe: pd.DataFrame,
     config: BudgetConfig,
     *,
+    ledger: pd.DataFrame | None = None,
     classification_rules: ClassificationRules | None = None,
 ) -> pd.DataFrame:
-    """Compute budget-vs-actual rows from transactions and budget targets."""
+    """Compute budget-vs-actual rows from transactions and budget targets.
+
+    When a precomputed planning ledger is available, pass it via ``ledger`` to
+    avoid rebuilding the same semantic row model twice.
+    """
     if not config.targets:
         return pd.DataFrame(columns=list(_BUDGET_STATUS_COLUMNS))
 
-    ledger = build_monthly_planning_ledger(
-        dataframe,
-        classification_rules=classification_rules,
-    )
+    if ledger is None:
+        ledger = build_monthly_planning_ledger(
+            dataframe,
+            classification_rules=classification_rules,
+        )
     if ledger.empty:
         return pd.DataFrame(columns=list(_BUDGET_STATUS_COLUMNS))
 

@@ -414,6 +414,62 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert "Transaction" not in dashboard_html
 
 
+def test_run_planning_builds_the_ledger_once(tmp_path: Path, monkeypatch) -> None:
+    planning_stage = _import_or_xfail("finance_tooling.workflow.planning_stage")
+    run_planning = _attr_or_xfail(planning_stage, "run_planning")
+
+    settings = _settings_stub(tmp_path)
+    settings.category_rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+    settings.budget_targets_path.write_text(
+        "\n".join(
+            [
+                "currency: EUR",
+                "targets:",
+                "  - month: 2026-01",
+                "    category_id: expense.food.groceries",
+                "    amount: 250",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    frame = pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx-income",
+                "booking_date": "2026-01-05",
+                "amount_eur": 1000.0,
+                "cashflow_type": "inflow",
+                "economic_role": "income",
+                "decision_role": "income",
+            },
+            {
+                "transaction_id": "tx-groceries",
+                "booking_date": "2026-01-06",
+                "amount_eur": -200.0,
+                "category_id": "expense.food.groceries",
+                "cashflow_type": "outflow",
+                "economic_role": "variable_expense",
+                "decision_role": "discretionary",
+            },
+        ]
+    )
+    frame.to_parquet(settings.master_parquet_path, index=False)
+
+    original_build_ledger = planning_stage.build_monthly_planning_ledger
+    call_count = {"value": 0}
+
+    def _build_ledger(*args: Any, **kwargs: Any) -> pd.DataFrame:
+        call_count["value"] += 1
+        return original_build_ledger(*args, **kwargs)
+
+    monkeypatch.setattr(planning_stage, "build_monthly_planning_ledger", _build_ledger)
+
+    run_planning(settings)
+
+    assert call_count["value"] == 1
+
+
 def test_run_update_supports_skip_planning_and_stage_only_modes(
     monkeypatch, tmp_path: Path
 ) -> None:
