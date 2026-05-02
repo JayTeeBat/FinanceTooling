@@ -128,63 +128,20 @@ Use this template:
   - <single highest priority next step>
 ```
 
-## Next Agent Recommendations
-
-Prioritized recommendations for the next worker:
-
-1. Current public workflow surface
-- Operator-facing CLI remains:
-  `ingest`, `transform`, `update`, `review-export`, `review-import`,
-  `workflow-status`.
-- Canonical outputs live under `processed/ingest/`, `processed/transform/`,
-  and `processed/planning/` with the current workflow artifacts.
-- Legacy read fallbacks for `processed/state/` and `processed/outputs/` remain
-  supported temporarily but should be treated as compatibility paths only.
-- Canonical transform outputs live under `processed/transform/` with current names:
-  `transform_transactions.csv`, `transform_transactions.parquet`,
-  `transform_run_summary.json`, and `transform_dashboard.html`.
-- Staged ingest state lives under `processed/ingest/`, especially
-  `ingest_staged_transactions.parquet` and
-  `ingest_staged_batch_manifest.json`.
-
-2. Next focus: validate the 2026 categorization workflow end-to-end
-- Run monthly or quarterly review cycles for Jan-Dec 2026 using:
-  `review-export` -> manual review -> `review-import` -> `transform`.
-- Track before/after month-scoped `uncategorized_count` and
-  `uncategorized_ratio` from `outputs/transform_transactions.csv` and
-  `outputs/transform_run_summary.json`.
-- Keep reusable categorization logic centralized in `config/category_rules.yaml`
-  and use `transaction_overrides.yaml` only for true transaction-level manual
-  corrections.
-- Capture high-frequency residual fingerprints discovered during 2026 review
-  and feed them into rule updates.
-
-3. Improve transform iteration speed for targeted review/config changes
-- True no-op fast paths already exist for unchanged runs.
-- Remaining gap: small review-state or config edits still require a full
-  transform when any transform work is needed.
-- Prefer targeted transform scopes or similarly minimal recomputation before
-  introducing more workflow surface area.
-
-4. Expand the planning/reporting surface only when it serves the core pipeline
-- The repo now also includes planning/budgeting/reporting modules and a
-  `planning/household_finance_360/` workspace.
-- Keep additions to that surface intentional and secondary to the ingestion +
-  categorization workflow unless the task explicitly targets planning features.
-
-5. Keep quality gates mandatory
-- Continue enforcing:
-  - `uv run ruff check .`
-  - `uv run ruff format .`
-  - `uv run ty check src/finance_tooling tests`
-  - `uv run pytest`
-
-Success target for the 2026 validation campaign:
-- Process all 2026 months through the review workflow at least once and reduce
-  month-scoped uncategorized ratios without worsening reconciliation metrics.
-
-
 ## Hand-Off Log
+
+### 2026-05-02 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
+  - Removed redundant `decision_role` stanzas from transfer taxonomy entries so transfer buckets are now cashflow-only in both the repo and live taxonomy files.
+  - Kept the parser-derived `not_applicable` fallback for transfer rows intact, so the schema stays lean without changing runtime behavior.
+  - Added a regression assertion that the repo transfer entry still resolves to `not_applicable`.
+- Checks:
+  - `rtk uv run pytest -q tests/test_classify.py tests/test_budgeting.py tests/test_cashflow.py`: pass
+- Open items:
+  - None.
+- Next action:
+  - Keep the PR body aligned if reviewers want the transfer taxonomy simplification called out explicitly.
 
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
@@ -212,21 +169,5 @@ Success target for the 2026 validation campaign:
   - None.
 - Next action:
   - Keep the PR body and taxonomy docs aligned if any further semantic refinements land.
-
-### 2026-05-02 - codex
-- Branch: `codex/stage-aligned-planning`
-- Completed:
-  - Migrated the public cashflow semantic to `cashflow_role`, kept `economic_role` transfer-free, and preserved spend-side `decision_role` classification for refund-like reversals.
-  - Updated the live taxonomy corpus under `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/config/` to match the new sequential semantic model.
-  - Fixed dashboard warning logic so cashflow and internal-transfer diagnostics follow the new role model while still surfacing useful exclusions.
-  - Updated the PR body to call out the `cashflow_type -> cashflow_role` rename and the live taxonomy migration explicitly.
-- Checks:
-  - `rtk uv run ruff check src/finance_tooling/reporting/dashboard.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/categorization/classify.py src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/reporting.py tests/test_dashboard.py tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py tests/test_workflow_stages.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_category_normalization.py`: pass
-  - `rtk uv run ruff format src/finance_tooling/categorization/classify.py src/finance_tooling/core/models.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/core/semantics.py src/finance_tooling/core/store.py src/finance_tooling/planning/budgeting.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/reporting/dashboard.py src/finance_tooling/workflow/planning_stage.py src/finance_tooling/workflow/reporting.py tests/test_budgeting.py tests/test_cashflow.py tests/test_category_normalization.py tests/test_classify.py tests/test_dashboard.py tests/test_planning_stage_contract.py tests/test_workflow_stages.py`: pass
-  - `rtk uv run pytest -q tests/test_dashboard.py tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py tests/test_workflow_stages.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_category_normalization.py`: pass
-- Open items:
-  - None.
-- Next action:
-  - Keep the PR focused on the semantic migration and merge once review is complete.
 
 @RTK.md

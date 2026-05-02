@@ -76,7 +76,8 @@ Current intended model:
   compatibility value
 - `decision_role = not_applicable` is the explicit display bucket for income,
   transfer, and excluded flows after cashflow and economic-role filtering has
-  already removed them from the spend-side analysis
+  already removed them from the spend-side analysis. Transfer taxonomy entries
+  do not need to spell this out explicitly.
 
 This distinction is important because some positive inflows are not true
 income.
@@ -462,8 +463,10 @@ definitions.
 
 Target philosophy:
 
-- taxonomy may encode category semantics such as `transfer`, `exclude`, and
-  true-income meaning
+- taxonomy may encode category semantics such as `transfer` and true-income
+  meaning
+- transfer buckets should only carry the transfer cashflow marker; their
+  `decision_role` remains implied by the resolver
 - ordinary `in` / `out` should not be modeled as durable bucket properties for
   purpose categories
 - normal positive/negative direction should instead come from transaction sign

@@ -42,28 +42,24 @@ taxonomy:
       category: Transfers
       subcategory: Account Transfer
     cashflow_role: transfer
-    decision_role: not_applicable
     status: active
   transfers.investment_transfer:
     labels:
       category: Transfers
       subcategory: Investment Transfer
     cashflow_role: transfer
-    decision_role: not_applicable
     status: active
   transfers.savings_transfer:
     labels:
       category: Transfers
       subcategory: Savings Transfer
     cashflow_role: transfer
-    decision_role: not_applicable
     status: active
   transfers.fx_exchange:
     labels:
       category: Transfers
       subcategory: FX Exchange
     cashflow_role: transfer
-    decision_role: not_applicable
     status: active
 
   excluded.non_personal:
