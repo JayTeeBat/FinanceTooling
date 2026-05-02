@@ -475,7 +475,20 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert 'id="chart-tooltip"' in dashboard_html
     assert "index === buckets.length - 1" not in dashboard_html
     assert "const endAngle = startAngle + ((Math.PI * 2) * share);" in dashboard_html
-    assert "Not applicable" in dashboard_html
+    assert "balance (in - out)" in dashboard_html
+    assert "balance (income - expenses)" in dashboard_html
+    assert 'id="chart-controls-cashflow_type"' in dashboard_html
+    assert 'id="chart-controls-economic_role"' in dashboard_html
+    assert 'id="chart-controls-decision_role"' in dashboard_html
+    assert dashboard_html.index('data-surface="cashflow_type"') < dashboard_html.index(
+        'data-surface="economic_role"'
+    ) < dashboard_html.index('data-surface="decision_role"')
+    assert 'hiddenBuckets: ["transfer"]' in dashboard_html
+    assert 'hiddenBuckets: ["transfer", "exclude", "not_applicable"]' in dashboard_html
+    assert 'hiddenBuckets: ["not_applicable"]' in dashboard_html
+    assert 'displayBucketLabel(bucketKey)' in dashboard_html
+    assert 'return normalized.replaceAll("_", " ");' in dashboard_html
+    assert "Not applicable" not in dashboard_html
     assert _selected_option_value(dashboard_html, "month-start") == "2026-01"
     assert _selected_option_value(dashboard_html, "month-end") == "2026-02"
     assert _selected_option_value(dashboard_html, "quick-month") == "2026-02"

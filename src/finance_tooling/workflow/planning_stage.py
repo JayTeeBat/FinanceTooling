@@ -968,15 +968,42 @@ def render_planning_stage_dashboard_html(
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
+      align-items: stretch;
     }
     .chart-card {
       padding: 16px;
-      display: grid;
+      display: flex;
+      flex-direction: column;
       gap: 10px;
       position: relative;
       overflow: hidden;
+      height: 100%;
+    }
+    .chart-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chart-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .chart-toggle input {
+      margin: 0;
+      accent-color: var(--accent);
     }
     .chart-card svg {
+      flex: 1 1 auto;
       width: 100%;
       height: 270px;
       border-radius: 16px;
@@ -1130,27 +1157,30 @@ def render_planning_stage_dashboard_html(
       </div>
       <div id="window-summary" class="window-summary"></div>
       <div class="charts-grid">
-        <article class="chart-card" data-surface="economic_role">
-          <div class="panel-header">
-            <h3>Economic Role</h3>
-            <div class="chart-note" id="chart-note-economic_role"></div>
-          </div>
-          <svg id="chart-economic_role" viewBox="0 0 320 270" preserveAspectRatio="xMidYMid meet"></svg>
-          <div class="legend" id="legend-economic_role"></div>
-        </article>
         <article class="chart-card" data-surface="cashflow_type">
           <div class="panel-header">
             <h3>Cashflow Type</h3>
             <div class="chart-note" id="chart-note-cashflow_type"></div>
           </div>
+          <div class="chart-controls" id="chart-controls-cashflow_type"></div>
           <svg id="chart-cashflow_type" viewBox="0 0 320 270" preserveAspectRatio="xMidYMid meet"></svg>
           <div class="legend" id="legend-cashflow_type"></div>
+        </article>
+        <article class="chart-card" data-surface="economic_role">
+          <div class="panel-header">
+            <h3>Economic Role</h3>
+            <div class="chart-note" id="chart-note-economic_role"></div>
+          </div>
+          <div class="chart-controls" id="chart-controls-economic_role"></div>
+          <svg id="chart-economic_role" viewBox="0 0 320 270" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="legend" id="legend-economic_role"></div>
         </article>
         <article class="chart-card" data-surface="decision_role">
           <div class="panel-header">
             <h3>Decision Role</h3>
             <div class="chart-note" id="chart-note-decision_role"></div>
           </div>
+          <div class="chart-controls" id="chart-controls-decision_role"></div>
           <svg id="chart-decision_role" viewBox="0 0 320 270" preserveAspectRatio="xMidYMid meet"></svg>
           <div class="legend" id="legend-decision_role"></div>
         </article>
@@ -1188,11 +1218,56 @@ def render_planning_stage_dashboard_html(
     const applyYearButton = document.getElementById("apply-year");
     const windowSummary = document.getElementById("window-summary");
     const chartTooltip = document.getElementById("chart-tooltip");
-    const surfaceKeys = ["economic_role", "cashflow_type", "decision_role"];
+    const surfaceKeys = ["cashflow_type", "economic_role", "decision_role"];
     const surfaceLabels = {
-      economic_role: "Economic Role",
       cashflow_type: "Cashflow Type",
+      economic_role: "Economic Role",
       decision_role: "Decision Role",
+    };
+    const surfaceConfigs = {
+      cashflow_type: {
+        hiddenBuckets: ["transfer"],
+        bucketOrder: ["in", "out", "transfer", "exclude", "unknown"],
+        balanceLabel: "balance (in - out)",
+        balanceFn: (totals) => (
+          Number(totals.get("in") || 0) - Number(totals.get("out") || 0)
+        ),
+      },
+      economic_role: {
+        hiddenBuckets: ["transfer", "exclude", "not_applicable"],
+        bucketOrder: [
+          "income",
+          "fixed_expense",
+          "variable_expense",
+          "expense",
+          "transfer",
+          "exclude",
+          "not_applicable",
+          "unknown",
+        ],
+        balanceLabel: "balance (income - expenses)",
+        balanceFn: (totals) => (
+          Number(totals.get("income") || 0)
+          - Number(totals.get("fixed_expense") || 0)
+          - Number(totals.get("variable_expense") || 0)
+          - Number(totals.get("expense") || 0)
+        ),
+      },
+      decision_role: {
+        hiddenBuckets: ["not_applicable"],
+        bucketOrder: [
+          "essential",
+          "discretionary",
+          "savings",
+          "investment",
+          "debt_service",
+          "tax",
+          "not_applicable",
+          "unknown",
+        ],
+        balanceLabel: null,
+        balanceFn: null,
+      },
     };
     const palette = ["#9a6b4c", "#4f7358", "#6f86b8", "#c36a5c", "#7c8f43", "#a0739f", "#d08b47", "#567f8c"];
     const fixedBucketColors = {
@@ -1244,16 +1319,10 @@ def render_planning_stage_dashboard_html(
 
     function displayBucketLabel(bucket) {
       const normalized = normalizedBucketKey(bucket);
-      if (normalized === "not_applicable") {
-        return "Not applicable";
+      if (!normalized) {
+        return "unknown";
       }
-      if (normalized === "unknown" || normalized === "") {
-        return "Unknown";
-      }
-      if (normalized === "excluded") {
-        return "Not applicable";
-      }
-      return bucket;
+      return normalized.replaceAll("_", " ");
     }
 
     function normalizedBucketKey(bucket) {
@@ -1313,24 +1382,47 @@ def render_planning_stage_dashboard_html(
       return `Selected window: ${windowMonths[0]} to ${windowMonths[windowMonths.length - 1]} (${windowMonths.length} months)`;
     }
 
+    function surfaceConfig(surfaceKey) {
+      return surfaceConfigs[surfaceKey] || {
+        hiddenBuckets: [],
+        bucketOrder: [],
+        balanceLabel: null,
+        balanceFn: null,
+      };
+    }
+
+    function bucketOrderIndex(surfaceKey, bucketKey) {
+      const order = surfaceConfig(surfaceKey).bucketOrder || [];
+      const index = order.indexOf(bucketKey);
+      return index >= 0 ? index : order.length;
+    }
+
     function aggregateSurface(surfaceKey, windowMonths) {
       const monthly = ((surfaces[surfaceKey] || {}).monthly_totals_by_month) || {};
-      const totals = {};
+      const totals = new Map();
       windowMonths.forEach((month) => {
         const monthData = monthly[month] || {};
         Object.entries(monthData).forEach(([bucket, amount]) => {
-          const normalizedBucket = displayBucketLabel(normalizedBucketKey(bucket));
-          totals[normalizedBucket] = (totals[normalizedBucket] || 0) + Number(amount || 0);
+          const normalizedBucket = normalizedBucketKey(bucket);
+          totals.set(normalizedBucket, (totals.get(normalizedBucket) || 0) + Number(amount || 0));
         });
       });
-      return Object.entries(totals)
+      const entries = Array.from(totals.entries())
         .filter(([, amount]) => Math.abs(Number(amount || 0)) > 1e-9)
+        .map(([bucket, amount]) => ({
+          key: bucket,
+          label: displayBucketLabel(bucket),
+          amount: Number(amount || 0),
+        }))
         .sort((left, right) => {
-          const amountDelta = Number(right[1] || 0) - Number(left[1] || 0);
-          return Math.abs(amountDelta) > 1e-9
-            ? amountDelta
-            : String(left[0]).localeCompare(String(right[0]));
+          const leftRank = bucketOrderIndex(surfaceKey, left.key);
+          const rightRank = bucketOrderIndex(surfaceKey, right.key);
+          if (leftRank !== rightRank) {
+            return leftRank - rightRank;
+          }
+          return left.label.localeCompare(right.label);
         });
+      return { totals, entries };
     }
 
     function createSvgElement(tag) {
@@ -1366,18 +1458,56 @@ def render_planning_stage_dashboard_html(
       chartTooltip.classList.add("visible");
     }
 
+    function renderVisibilityControls() {
+      surfaceKeys.forEach((surfaceKey) => {
+        const container = document.getElementById(`chart-controls-${surfaceKey}`);
+        const hiddenBuckets = surfaceConfig(surfaceKey).hiddenBuckets || [];
+        if (!container) {
+          return;
+        }
+        container.innerHTML = hiddenBuckets.map((bucketKey) => `
+          <label class="chart-toggle">
+            <input
+              type="checkbox"
+              data-surface="${surfaceKey}"
+              data-bucket="${bucketKey}"
+            />
+            <span>include ${displayBucketLabel(bucketKey)}</span>
+          </label>
+        `).join("");
+      });
+    }
+
+    function bucketVisible(surfaceKey, bucketKey) {
+      const input = document.querySelector(
+        `input[data-surface="${surfaceKey}"][data-bucket="${bucketKey}"]`
+      );
+      return !input || input.checked;
+    }
+
+    function balanceFor(surfaceKey, totals) {
+      const config = surfaceConfig(surfaceKey);
+      return typeof config.balanceFn === "function" ? config.balanceFn(totals) : null;
+    }
+
     function renderSurface(surfaceKey, windowMonths) {
       const svg = document.getElementById(`chart-${surfaceKey}`);
       const legend = document.getElementById(`legend-${surfaceKey}`);
       const note = document.getElementById(`chart-note-${surfaceKey}`);
-      const buckets = aggregateSurface(surfaceKey, windowMonths);
-      const total = buckets.reduce((sum, [, amount]) => sum + Number(amount || 0), 0);
+      const aggregation = aggregateSurface(surfaceKey, windowMonths);
+      const buckets = aggregation.entries.filter((entry) => bucketVisible(surfaceKey, entry.key));
+      const total = buckets.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+      const balance = balanceFor(surfaceKey, aggregation.totals);
       const context = windowLabel(windowMonths);
       svg.innerHTML = "";
       legend.innerHTML = "";
-      note.textContent = total > 0
-        ? `Total ${currency(total)} across ${buckets.length} buckets.`
-        : "No data for the selected window.";
+      if (balance === null) {
+        note.textContent = buckets.length > 0
+          ? `${buckets.length} visible buckets.`
+          : "No visible buckets for the selected window.";
+      } else {
+        note.textContent = `${surfaceConfig(surfaceKey).balanceLabel}: ${currency(balance)} · ${buckets.length} visible buckets`;
+      }
 
       if (!buckets.length || total <= 0) {
         const empty = createSvgElement("text");
@@ -1386,7 +1516,7 @@ def render_planning_stage_dashboard_html(
         empty.setAttribute("text-anchor", "middle");
         empty.setAttribute("fill", "#7b7168");
         empty.setAttribute("font-size", "14");
-        empty.textContent = "No planning data";
+        empty.textContent = "No visible planning data";
         svg.appendChild(empty);
         return;
       }
@@ -1395,11 +1525,11 @@ def render_planning_stage_dashboard_html(
       const cy = 118;
       const radius = 84;
       let startAngle = -Math.PI / 2;
-      buckets.forEach(([label, amount], index) => {
-        const value = Number(amount || 0);
+      buckets.forEach((entry) => {
+        const value = Number(entry.amount || 0);
         const share = value / total;
         const endAngle = startAngle + ((Math.PI * 2) * share);
-        const color = bucketColor(label);
+        const color = bucketColor(entry.key);
         const path = createSvgElement("path");
         path.setAttribute("fill", color);
         path.setAttribute("stroke", "rgba(255,250,244,0.92)");
@@ -1411,12 +1541,12 @@ def render_planning_stage_dashboard_html(
         path.setAttribute("tabindex", "0");
         path.setAttribute(
           "aria-label",
-          `${surfaceLabels[surfaceKey]} slice ${displayBucketLabel(label)} representing ${percent(share)}`
+          `${surfaceLabels[surfaceKey]} slice ${entry.label} representing ${percent(share)}`
         );
         const tooltipHtml = [
           `<div class="title">${surfaceLabels[surfaceKey]}</div>`,
           `<div class="context">${context}</div>`,
-          `<div class="row"><span class="label">Slice</span><span class="value">${displayBucketLabel(label)}</span></div>`,
+          `<div class="row"><span class="label">Slice</span><span class="value">${entry.label}</span></div>`,
           `<div class="row"><span class="label">Amount</span><span class="value">${currency(value)}</span></div>`,
           `<div class="row"><span class="label">Share</span><span class="value">${percent(share)}</span></div>`
         ].join("");
@@ -1431,7 +1561,7 @@ def render_planning_stage_dashboard_html(
         legendItem.className = "legend-item";
         legendItem.innerHTML =
           `<span class="legend-swatch" style="background:${color}"></span>` +
-          `<span>${displayBucketLabel(label)}</span>` +
+          `<span>${entry.label}</span>` +
           `<span class="legend-amount">${currency(value)}</span>`;
         legend.appendChild(legendItem);
       });
@@ -1494,6 +1624,17 @@ def render_planning_stage_dashboard_html(
     applyYearButton.addEventListener("click", applyYearPreset);
     chartTooltip.addEventListener("mouseleave", hideTooltip);
 
+    renderVisibilityControls();
+    surfaceKeys.forEach((surfaceKey) => {
+      const container = document.getElementById(`chart-controls-${surfaceKey}`);
+      if (!container) {
+        return;
+      }
+      container.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.checked = false;
+        input.addEventListener("change", renderWindow);
+      });
+    });
     renderWindow();
     hideTooltip();
   </script>
