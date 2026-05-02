@@ -336,8 +336,8 @@ def _expand_ocr_lines(*, file_path: Path, full_text: str) -> tuple[list[str], li
         logical_lines.extend(segments)
         if line_warning:
             warnings.append(
-                f"{file_path.name}: OCR line {line_number + 1} contains multiple transaction starts; "
-                "rows may be merged"
+                f"{file_path.name}: OCR line {line_number + 1} contains multiple "
+                "transaction starts; rows may be merged"
             )
         line_number += 1
     return logical_lines, warnings
