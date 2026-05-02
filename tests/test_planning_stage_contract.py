@@ -405,10 +405,16 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert budget_status.loc[0, "actual_amount"] == pytest.approx(200.0)
     assert budget_status.loc[0, "variance"] == pytest.approx(50.0)
     assert "Planning Dashboard" in dashboard_html
-    assert "Surface Explorer" in dashboard_html
-    assert "economic_role" in dashboard_html
-    assert "cashflow_type" in dashboard_html
-    assert "decision_role" in dashboard_html
+    assert "Monthly Surface Explorer" in dashboard_html
+    assert "From month" in dashboard_html
+    assert "To month" in dashboard_html
+    assert 'value="2026-01"' in dashboard_html
+    assert "surface-summary-economic_role" in dashboard_html
+    assert "surface-summary-cashflow_type" in dashboard_html
+    assert "surface-summary-decision_role" in dashboard_html
+    assert "Economic Role" in dashboard_html
+    assert "Cashflow Type" in dashboard_html
+    assert "Decision Role" in dashboard_html
     assert "Budget Status" in dashboard_html
     assert "Planning Ledger" not in dashboard_html
     assert "Transaction" not in dashboard_html

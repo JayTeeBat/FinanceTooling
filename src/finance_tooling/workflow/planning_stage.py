@@ -109,6 +109,11 @@ def _summary_card(label: str, value: object, *, detail: str | None = None) -> st
     """
 
 
+def _month_option_html(month: str, *, selected: bool) -> str:
+    selected_attr = " selected" if selected else ""
+    return f'<option value="{month}"{selected_attr}>{month}</option>'
+
+
 def _payload_mapping(payload: dict[str, object], key: str) -> dict[str, object]:
     value = payload.get(key)
     return cast(dict[str, object], value) if isinstance(value, dict) else {}
@@ -251,6 +256,19 @@ def render_planning_stage_dashboard_html(
             str(row.get("month")) for row in monthly_totals if row.get("month") is not None
         )
     )
+    month_start_options_html = (
+        "\n".join(
+            _month_option_html(month, selected=index == 0) for index, month in enumerate(months)
+        )
+        or '<option value="">No months available</option>'
+    )
+    month_end_options_html = (
+        "\n".join(
+            _month_option_html(month, selected=index == len(months) - 1)
+            for index, month in enumerate(months)
+        )
+        or '<option value="">No months available</option>'
+    )
     cards = [
         _summary_card("Income", f"{_payload_float(totals_by_bucket, 'income'):.2f}"),
         _summary_card("Expense", f"{_payload_float(totals_by_bucket, 'expense'):.2f}"),
@@ -368,33 +386,54 @@ def render_planning_stage_dashboard_html(
     </section>
     <section class="panel">
       <div>
-        <h2>Surface Explorer</h2>
+        <h2>Monthly Surface Explorer</h2>
         <div class="detail">
-          Compare monthly splits across economic role, cashflow type, and decision role.
+          Compare month-by-month splits across economic role, cashflow type, and decision role.
         </div>
       </div>
       <div class="controls">
         <label>
-          Surface
-          <select id="surface-select">
-            <option value="economic_role">Economic role</option>
-            <option value="cashflow_type">Cashflow type</option>
-            <option value="decision_role">Decision role</option>
-          </select>
-        </label>
-        <label>
           From month
-          <select id="month-start"></select>
+          <select id="month-start">{month_start_options_html}</select>
         </label>
         <label>
           To month
-          <select id="month-end"></select>
+          <select id="month-end">{month_end_options_html}</select>
         </label>
       </div>
       <div class="surface-summary" id="surface-summary"></div>
+    </section>
+    <section class="panel">
+      <div>
+        <h2>Economic Role</h2>
+        <div class="detail">Monthly operating structure by economic role.</div>
+      </div>
+      <div class="surface-summary" id="surface-summary-economic_role"></div>
       <table class="bar-table">
-        <thead id="surface-table-head"></thead>
-        <tbody id="surface-table-body"></tbody>
+        <thead id="surface-table-head-economic_role"></thead>
+        <tbody id="surface-table-body-economic_role"></tbody>
+      </table>
+    </section>
+    <section class="panel">
+      <div>
+        <h2>Cashflow Type</h2>
+        <div class="detail">Monthly cashflow distribution by cashflow type.</div>
+      </div>
+      <div class="surface-summary" id="surface-summary-cashflow_type"></div>
+      <table class="bar-table">
+        <thead id="surface-table-head-cashflow_type"></thead>
+        <tbody id="surface-table-body-cashflow_type"></tbody>
+      </table>
+    </section>
+    <section class="panel">
+      <div>
+        <h2>Decision Role</h2>
+        <div class="detail">Monthly decision split by decision role.</div>
+      </div>
+      <div class="surface-summary" id="surface-summary-decision_role"></div>
+      <table class="bar-table">
+        <thead id="surface-table-head-decision_role"></thead>
+        <tbody id="surface-table-body-decision_role"></tbody>
       </table>
     </section>
     <section class="panel">
@@ -417,12 +456,15 @@ def render_planning_stage_dashboard_html(
     const payload = JSON.parse(document.getElementById("planning-stage-data").textContent);
     const months = [...new Set(payload.available_months || [])];
     const surfaces = payload.surface_breakdowns || {{}};
-    const surfaceSelect = document.getElementById("surface-select");
     const startSelect = document.getElementById("month-start");
     const endSelect = document.getElementById("month-end");
-    const summary = document.getElementById("surface-summary");
-    const tableHead = document.getElementById("surface-table-head");
-    const tableBody = document.getElementById("surface-table-body");
+    const surfaceSummary = document.getElementById("surface-summary");
+    const surfaceKeys = ["economic_role", "cashflow_type", "decision_role"];
+    const surfaceLabels = {{
+      economic_role: "Economic Role",
+      cashflow_type: "Cashflow Type",
+      decision_role: "Decision Role",
+    }};
 
     function monthIndex(month) {{
       return months.indexOf(month);
@@ -443,18 +485,18 @@ def render_planning_stage_dashboard_html(
     }}
 
     function populateMonths() {{
-      const options = months
-        .map((month) => `<option value="${{month}}">${{month}}</option>`)
-        .join("");
-      startSelect.innerHTML = options;
-      endSelect.innerHTML = options;
       if (months.length > 0) {{
         startSelect.value = months[0];
         endSelect.value = months[months.length - 1];
       }}
     }}
 
-    function renderSurface() {{
+    function renderSurface(surfaceKey) {{
+      const surface = surfaces[surfaceKey] || {{}};
+      const summary = document.getElementById(`surface-summary-${{surfaceKey}}`);
+      const tableHead = document.getElementById(`surface-table-head-${{surfaceKey}}`);
+      const tableBody = document.getElementById(`surface-table-body-${{surfaceKey}}`);
+
       if (months.length === 0) {{
         summary.innerHTML = (
           '<div class="card"><div class="label">No data</div>'
@@ -465,8 +507,6 @@ def render_planning_stage_dashboard_html(
         return;
       }}
 
-      const surfaceKey = surfaceSelect.value;
-      const surface = surfaces[surfaceKey] || {{}};
       const rows = (surface.monthly_totals || []).filter((row) =>
         monthInRange(row.month, startSelect.value, endSelect.value)
       );
@@ -493,7 +533,7 @@ def render_planning_stage_dashboard_html(
         String(left[0]).localeCompare(String(right[0]))
       );
       summary.innerHTML = [
-        ['Surface', surfaceKey.replaceAll('_', ' ')],
+        ['Surface', surfaceLabels[surfaceKey] || surfaceKey.replaceAll('_', ' ')],
         [
           'Months',
           `${{selectedMonths[0] || 'n/a'}} to `
@@ -545,20 +585,22 @@ def render_planning_stage_dashboard_html(
     }}
 
     populateMonths();
-    surfaceSelect.addEventListener("change", renderSurface);
     startSelect.addEventListener("change", () => {{
       if (monthIndex(startSelect.value) > monthIndex(endSelect.value)) {{
         endSelect.value = startSelect.value;
       }}
-      renderSurface();
+      renderAllSurfaces();
     }});
     endSelect.addEventListener("change", () => {{
       if (monthIndex(startSelect.value) > monthIndex(endSelect.value)) {{
         startSelect.value = endSelect.value;
       }}
-      renderSurface();
+      renderAllSurfaces();
     }});
-    renderSurface();
+    function renderAllSurfaces() {{
+      surfaceKeys.forEach((surfaceKey) => renderSurface(surfaceKey));
+    }}
+    renderAllSurfaces();
   </script>
 </body>
 </html>
