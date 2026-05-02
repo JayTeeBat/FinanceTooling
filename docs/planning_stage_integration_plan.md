@@ -60,7 +60,7 @@ uv run planning --verbose
 Default paths should come from the existing settings object where possible:
 
 - input transactions: `settings.master_parquet_path`
-- budget targets: `settings.budget_targets_path`
+- budget targets: `settings.budget_targets_path` (YAML or JSON)
 - output directory: `settings.output_path.parent`
 
 The command should fail clearly if the canonical transform output is missing.
@@ -79,6 +79,10 @@ The stage should write:
 `planning_ledger` is the audit base. All dashboard and summary totals should be
 traceable back to ledger rows by `transaction_id`.
 
+The ledger row model should intentionally keep source-traceability fields such
+as `description` and `account_holder` so the planning outputs remain auditable
+without re-reading the source transactions.
+
 ## KPI Model
 
 V1 KPIs should be grounded in canonical fields:
@@ -92,6 +96,11 @@ V1 KPIs should be grounded in canonical fields:
 - `decision_role`
 - `amount_eur`
 - `project`
+- `planning_bucket`
+
+`planning_bucket` is the semantic rollup dimension for planning analysis. It is
+derived from the canonical transaction semantics and used to group ledger rows
+into the operational buckets shown in the dashboard and budget status.
 
 Core V1 KPI families:
 

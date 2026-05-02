@@ -38,6 +38,7 @@ Advanced/recovery commands:
 
 - `uv run ingest`
 - `uv run transform`
+- `uv run planning`
 
 Canonical operator-facing outputs under `${FINANCE_PROCESSED_PATH}/transform/`:
 
@@ -284,6 +285,29 @@ normal `update` flow.
 
 `update` runs `planning` by default after `transform`. Use `--skip-planning`
 to stop at the transform stage.
+
+#### `uv run planning`
+
+- Builds the planning ledger, KPI summary, budget status, and planning dashboard.
+- Run it directly with:
+
+```bash
+uv run planning
+```
+
+- Reads canonical transform transactions from
+  `${FINANCE_PROCESSED_PATH}/transform/transform_transactions.parquet` by
+  default.
+- Computes `planning_budget_status.csv` from budget targets in YAML or JSON
+  format (`FINANCE_BUDGET_TARGETS_PATH`, or the adjacent
+  `config/budget_targets.yaml` by default).
+- `planning_bucket` is the semantic rollup used for planning KPIs and budget
+  comparison, derived from the canonical transaction semantics rather than a
+  raw statement field.
+- `description` and `account_holder` are intentionally part of the planning
+  ledger row model so the ledger stays traceable back to the source transaction
+  and account context.
+- Writes planning artifacts under `${FINANCE_PROCESSED_PATH}/planning/`.
 
 ### Guarded full refresh
 

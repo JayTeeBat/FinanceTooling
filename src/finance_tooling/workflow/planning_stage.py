@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import json
+import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
+from tqdm import tqdm
 
 from finance_tooling.categorization.classify import load_classification_rules
 from finance_tooling.core.config import (
@@ -66,6 +68,47 @@ def _value_counts(frame: pd.DataFrame, column: str) -> dict[str, int]:
         str(index): int(value)
         for index, value in frame[column].fillna("unknown").astype("string").value_counts().items()
     }
+
+
+def _summary_card(label: str, value: object, *, detail: str | None = None) -> str:
+    detail_html = f'<div class="detail">{detail}</div>' if detail else ""
+    return f"""
+      <div class="card">
+        <div class="label">{label}</div>
+        <div class="value">{value}</div>
+        {detail_html}
+      </div>
+    """
+
+
+def _payload_mapping(payload: dict[str, object], key: str) -> dict[str, object]:
+    value = payload.get(key)
+    return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+def _payload_float(payload: dict[str, object], key: str) -> float:
+    value = payload.get(key, 0.0)
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, int | float):
+        return float(value)
+    return 0.0
+
+
+def _row_text(row: dict[str, object], key: str) -> str:
+    value = row.get(key)
+    if value is None or pd.isna(value):
+        return ""
+    return str(value)
+
+
+def _row_float(row: dict[str, object], key: str) -> float:
+    value = row.get(key, 0.0)
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, int | float):
+        return float(value)
+    return 0.0
 
 
 def build_planning_kpi_summary(
@@ -138,20 +181,78 @@ def build_planning_kpi_summary(
     }
 
 
-def _serialize_payload(payload: dict[str, object]) -> str:
-    serialized = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
-    return serialized.replace("</", "<\\/")
-
-
 def render_planning_stage_dashboard_html(
     dashboard_path: Path,
     *,
     kpi_summary: dict[str, object],
+    ledger_rows: list[dict[str, object]],
     budget_rows: list[dict[str, object]],
 ) -> Path:
-    """Render a small self-contained planning dashboard from persisted stage artifacts."""
+    """Render a static planning dashboard from persisted stage artifacts."""
     dashboard_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = _serialize_payload({"kpis": kpi_summary, "budget_status": budget_rows})
+    totals_by_bucket = _payload_mapping(kpi_summary, "totals_by_planning_bucket")
+    cards = [
+        _summary_card("Ledger rows", kpi_summary.get("ledger_rows", 0)),
+        _summary_card(
+            "Month range",
+            f"{kpi_summary.get('month_min') or 'n/a'} to {kpi_summary.get('month_max') or 'n/a'}",
+            detail=f"YTD: {kpi_summary.get('ytd_year') or 'n/a'}",
+        ),
+        _summary_card("Expense", f"{_payload_float(totals_by_bucket, 'expense'):.2f}"),
+        _summary_card("Savings", f"{_payload_float(totals_by_bucket, 'savings'):.2f}"),
+        _summary_card(
+            "Budget variance",
+            f"{_payload_float(kpi_summary, 'budget_variance_total_eur'):.2f}",
+            detail=f"Targets loaded: {kpi_summary.get('budget_target_count', 0)}",
+        ),
+        _summary_card(
+            "Over budget",
+            kpi_summary.get("budget_over_target_count", 0),
+        ),
+    ]
+    ledger_preview_rows = ledger_rows[:50]
+    ledger_rows_html = (
+        "\n".join(
+            f"""
+        <tr>
+          <td>{_row_text(row, "month")}</td>
+          <td>{_row_text(row, "transaction_id")}</td>
+          <td>{_row_text(row, "description")}</td>
+          <td>{_row_text(row, "account_holder")}</td>
+          <td>{_row_text(row, "planning_bucket")}</td>
+          <td>{_row_float(row, "amount_eur"):.2f}</td>
+          <td>{_row_float(row, "planning_amount_eur"):.2f}</td>
+        </tr>
+        """
+            for row in ledger_preview_rows
+        )
+        or """
+        <tr>
+          <td colspan="7">No planning ledger rows available.</td>
+        </tr>
+    """
+    )
+    budget_rows_html = (
+        "\n".join(
+            f"""
+        <tr>
+          <td>{_row_text(row, "month")}</td>
+          <td>{_row_text(row, "category")}</td>
+          <td>{_row_text(row, "project")}</td>
+          <td>{_row_float(row, "budget_amount"):.2f}</td>
+          <td>{_row_float(row, "actual_amount"):.2f}</td>
+          <td>{_row_float(row, "variance"):.2f}</td>
+          <td>{_row_text(row, "status")}</td>
+        </tr>
+        """
+            for row in budget_rows
+        )
+        or """
+        <tr>
+          <td colspan="7">No budget targets loaded.</td>
+        </tr>
+    """
+    )
     html = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -170,6 +271,7 @@ def render_planning_stage_dashboard_html(
     .card {{ background: #fff; border: 1px solid #d8e1e8; border-radius: 8px; padding: 16px; }}
     .label {{ color: #52616b; font-size: 12px; text-transform: uppercase; }}
     .value {{ font-size: 28px; font-weight: 750; margin-top: 4px; }}
+    .detail {{ color: #52616b; font-size: 13px; margin-top: 4px; }}
     table {{ width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d8e1e8; }}
     th, td {{ padding: 10px; border-bottom: 1px solid #e6edf2; text-align: left; }}
     th {{ font-size: 12px; color: #52616b; text-transform: uppercase; }}
@@ -178,35 +280,38 @@ def render_planning_stage_dashboard_html(
 <body>
   <main>
     <h1>Planning Dashboard</h1>
-    <section class="grid" id="kpis"></section>
+    <section class="grid">
+      {"".join(cards)}
+    </section>
+    <section>
+      <h2>Planning Ledger</h2>
+      <p class="detail">
+        Previewing the first 50 ledger rows with description and account-holder context.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th><th>Transaction</th><th>Description</th><th>Account holder</th>
+            <th>Planning bucket</th><th>Amount</th><th>Planned</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ledger_rows_html}
+        </tbody>
+      </table>
+    </section>
     <section>
       <h2>Budget Status</h2>
       <table>
-        <thead><tr><th>Month</th><th>Category</th><th>Budget</th><th>Actual</th><th>Status</th></tr></thead>
-        <tbody id="budget"></tbody>
+        <thead>
+          <tr><th>Month</th><th>Category</th><th>Project</th><th>Budget</th><th>Actual</th><th>Variance</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {budget_rows_html}
+        </tbody>
       </table>
     </section>
   </main>
-  <script id="planning-stage-data" type="application/json">{payload}</script>
-  <script>
-    const payload = JSON.parse(document.getElementById("planning-stage-data").textContent);
-    const kpis = payload.kpis;
-    const cards = [
-      ["Ledger rows", kpis.ledger_rows],
-      ["Month range", `${{kpis.month_min || "n/a"}} to ${{kpis.month_max || "n/a"}}`],
-      ["Expense", (kpis.totals_by_planning_bucket.expense || 0).toFixed(2)],
-      ["Savings", (kpis.totals_by_planning_bucket.savings || 0).toFixed(2)],
-      ["Budget variance", kpis.budget_variance_total_eur.toFixed(2)],
-      ["Over budget", kpis.budget_over_target_count],
-    ];
-    document.getElementById("kpis").innerHTML = cards.map(([label, value]) =>
-      `<div class="card"><div class="label">${{label}}</div>` +
-      `<div class="value">${{value}}</div></div>`
-    ).join("");
-    document.getElementById("budget").innerHTML = payload.budget_status.map(row =>
-      `<tr><td>${{row.month}}</td><td>${{row.category}}</td><td>${{row.budget_amount}}</td><td>${{row.actual_amount}}</td><td>${{row.status}}</td></tr>`
-    ).join("");
-  </script>
 </body>
 </html>
 """
@@ -229,7 +334,17 @@ def run_planning(
     resolved_output_dir = output_dir or planning_root_path(settings)
     resolved_budget_path = budget_targets_path or settings.budget_targets_path
 
+    progress = tqdm(
+        total=5,
+        desc="Planning",
+        unit="step",
+        disable=not sys.stderr.isatty(),
+        leave=False,
+    )
+    progress.set_postfix_str("load transactions")
     transactions = _load_transactions(resolved_input)
+    progress.update()
+    progress.set_postfix_str("load config")
     classification_rules, rule_warnings = load_classification_rules(settings.category_rules_path)
     budget_config, budget_warnings = load_budget_config(resolved_budget_path)
     warnings = [*rule_warnings, *budget_warnings]
@@ -237,11 +352,14 @@ def run_planning(
         warnings.append(
             f"Budget targets file not found; using empty budget config: {resolved_budget_path}"
         )
-
+    progress.update()
+    progress.set_postfix_str("build ledger")
     ledger = build_monthly_planning_ledger(
         transactions,
         classification_rules=classification_rules,
     )
+    progress.update()
+    progress.set_postfix_str("build budget status")
     budget_status = build_budget_status(
         transactions,
         budget_config,
@@ -255,6 +373,7 @@ def run_planning(
     )
     kpi_summary["input_transactions_path"] = str(resolved_input)
     kpi_summary["budget_targets_path"] = str(resolved_budget_path)
+    progress.update()
 
     ledger_path = resolved_output_dir / PLANNING_LEDGER_FILENAME
     ledger_csv_path = resolved_output_dir / PLANNING_LEDGER_CSV_FILENAME
@@ -263,6 +382,7 @@ def run_planning(
     dashboard_path = resolved_output_dir / PLANNING_DASHBOARD_FILENAME
 
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    progress.set_postfix_str("write artifacts")
     ledger.to_parquet(ledger_path, index=False)
     ledger.to_csv(ledger_csv_path, index=False)
     budget_status.to_csv(budget_status_path, index=False)
@@ -270,8 +390,11 @@ def run_planning(
     render_planning_stage_dashboard_html(
         dashboard_path,
         kpi_summary=kpi_summary,
+        ledger_rows=ledger.to_dict(orient="records"),
         budget_rows=budget_status.to_dict(orient="records"),
     )
+    progress.update()
+    progress.close()
 
     return PlanningExecutionResult(
         ledger_path=ledger_path,

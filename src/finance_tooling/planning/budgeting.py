@@ -39,6 +39,7 @@ _PLANNING_LEDGER_COLUMNS = (
     "month",
     "booking_date",
     "source_document_id",
+    "description",
     "category_id",
     "reporting_category_id",
     "category",
@@ -52,6 +53,7 @@ _PLANNING_LEDGER_COLUMNS = (
     "planning_amount_eur",
     "bank",
     "account_label",
+    "account_holder",
 )
 
 
@@ -242,6 +244,14 @@ def _row_text(row: dict[str, object], key: str) -> str:
     return str(value).strip().casefold()
 
 
+def _optional_text(row: dict[str, object], key: str) -> str | None:
+    value = row.get(key)
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _resolve_row_category_id(
     row: dict[str, object],
     *,
@@ -356,6 +366,7 @@ def build_monthly_planning_ledger(
                 "month": month,
                 "booking_date": row.get("booking_date"),
                 "source_document_id": row.get("source_document_id"),
+                "description": row.get("description"),
                 "category_id": category_id,
                 "reporting_category_id": reporting_category_id,
                 "category": row.get("category"),
@@ -369,6 +380,8 @@ def build_monthly_planning_ledger(
                 "planning_amount_eur": round(planning_amount, 2),
                 "bank": row.get("bank"),
                 "account_label": row.get("account_label"),
+                "account_holder": _optional_text(row, "account_holder")
+                or _optional_text(row, "account_label"),
             }
         )
 

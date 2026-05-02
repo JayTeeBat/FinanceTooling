@@ -232,6 +232,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
             {
                 "transaction_id": "tx-income",
                 "booking_date": "2026-01-05",
+                "description": "Salary",
                 "source_document_id": "doc-income",
                 "category_id": "income.salary",
                 "reporting_category_id": "income.salary",
@@ -248,6 +249,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
             {
                 "transaction_id": "tx-fixed",
                 "booking_date": "2026-01-06",
+                "description": "Rent",
                 "source_document_id": "doc-fixed",
                 "category_id": "expense.housing.rent",
                 "reporting_category_id": "expense.housing.rent",
@@ -264,6 +266,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
             {
                 "transaction_id": "tx-variable",
                 "booking_date": "2026-01-07",
+                "description": "Groceries",
                 "source_document_id": "doc-variable",
                 "category_id": "expense.food.groceries",
                 "reporting_category_id": "expense.food.groceries",
@@ -280,6 +283,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
             {
                 "transaction_id": "tx-savings",
                 "booking_date": "2026-01-08",
+                "description": "Savings transfer",
                 "source_document_id": "doc-savings",
                 "category_id": "transfer.savings",
                 "reporting_category_id": "transfer.savings",
@@ -332,9 +336,22 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     ledger_csv = pd.read_csv(ledger_csv_path)
     summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
     budget_status = pd.read_csv(budget_status_path)
+    dashboard_html = dashboard_path.read_text(encoding="utf-8")
 
     assert set(ledger_parquet["transaction_id"]) == set(ledger_csv["transaction_id"])
     assert len(ledger_parquet) == 4
+    assert "description" in ledger_parquet.columns
+    assert "account_holder" in ledger_parquet.columns
+    assert (
+        ledger_parquet.loc[ledger_parquet["transaction_id"].eq("tx-income"), "description"].iloc[0]
+        == "Salary"
+    )
+    assert (
+        ledger_parquet.loc[ledger_parquet["transaction_id"].eq("tx-income"), "account_holder"].iloc[
+            0
+        ]
+        == "Main"
+    )
 
     income_total = float(
         ledger_parquet.loc[
@@ -383,6 +400,11 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert budget_status.loc[0, "category_id"] == "expense.food.groceries"
     assert budget_status.loc[0, "actual_amount"] == pytest.approx(200.0)
     assert budget_status.loc[0, "variance"] == pytest.approx(50.0)
+    assert "Planning Dashboard" in dashboard_html
+    assert "Planning Ledger" in dashboard_html
+    assert "Account holder" in dashboard_html
+    assert "Budget Status" in dashboard_html
+    assert "No budget targets loaded." not in dashboard_html
 
 
 def test_run_update_supports_skip_planning_and_stage_only_modes(
