@@ -476,6 +476,7 @@ def _render_planning_stage_dashboard_html_legacy(
     surface_json = _serialize_payload(
         {
             "surface_breakdowns": surface_breakdowns,
+            "surface_volume_notes": kpi_summary.get("surface_volume_notes", {}),
             "available_months": months,
         }
     )
@@ -856,6 +857,7 @@ def render_planning_stage_dashboard_html(
     surface_json = _serialize_payload(
         {
             "surface_breakdowns": surface_breakdowns,
+            "surface_volume_notes": kpi_summary.get("surface_volume_notes", {}),
             "available_months": available_months,
             "available_years": available_years,
             "default_window": kpi_summary.get("default_window", {}),

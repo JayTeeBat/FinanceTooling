@@ -476,6 +476,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert "balance (income - expenses)" in dashboard_html
     assert "transfer volume:" in dashboard_html
     assert "excluded net volume:" in dashboard_html
+    assert "surface_volume_notes" in dashboard_html
     assert 'id="chart-controls-cashflow_type"' in dashboard_html
     assert 'id="chart-controls-economic_role"' in dashboard_html
     assert 'id="chart-controls-decision_role"' in dashboard_html

@@ -148,17 +148,17 @@ Use this template:
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
-  - Split planning math into raw KPI aggregation and separate budget-vs-actual accounting so KPI summaries no longer flip signs for non-transfer rows.
-  - Updated the planning dashboard to compute pie shares from absolute magnitude while keeping the raw signed totals and net balances in the summary payload.
-  - Refreshed the planning contract tests to match the raw-sign KPI model.
+  - Added `surface_volume_notes` to the planning dashboard payload so the transfer and excluded volume annotations now render from real data instead of falling back to zero.
+  - Kept the compact chart notes under the cashflow and economic pies while preserving the removed toggle behavior.
+  - Added a regression assertion that the dashboard HTML embeds the new payload key.
 - Checks:
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_planning_stage_contract.py`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_planning_stage_contract.py`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_budgeting.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/workflow/planning_stage.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/workflow/planning_stage.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_budgeting.py`: pass
 - Open items:
   - None.
 - Next action:
-  - Keep the PR copy aligned with the raw-amount KPI model and the net-balance dashboard wording.
+  - Regenerate the planning artifact so the live HTML picks up the payload field.
 
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
