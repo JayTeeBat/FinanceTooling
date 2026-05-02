@@ -501,7 +501,7 @@ def test_resolve_economic_roles_keeps_legacy_refund_bucket_as_expense_when_not_i
         account_inference_config=_account_config(),
     )
 
-    assert result.dataframe.loc[0, "economic_role"] == "expense"
+    assert result.dataframe.loc[0, "economic_role"] == "variable_expense"
 
 
 def test_resolve_economic_roles_keeps_positive_health_refund_as_expense() -> None:
@@ -525,7 +525,7 @@ def test_resolve_economic_roles_keeps_positive_health_refund_as_expense() -> Non
         classification_rules=_rules(),
     )
 
-    assert result.dataframe.loc[0, "economic_role"] == "expense"
+    assert result.dataframe.loc[0, "economic_role"] == "variable_expense"
 
 
 def test_resolve_economic_roles_uses_rule_level_fixed_expense_override() -> None:
@@ -808,7 +808,7 @@ def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_
         account_inference_config=_account_config(),
     )
 
-    assert result.dataframe.loc[0, "economic_role"] == "expense"
+    assert result.dataframe.loc[0, "economic_role"] == "variable_expense"
 
 
 def test_cashflow_summary_treats_all_expense_roles_as_expenses() -> None:

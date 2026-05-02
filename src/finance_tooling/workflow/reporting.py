@@ -211,7 +211,7 @@ def _build_category_metrics_from_dataframe(
     )
     economic_role_series = economic_role_series.mask(
         economic_role_series.eq(""),
-        pd.Series("expense", index=dataframe.index, dtype="string"),
+        pd.Series("variable_expense", index=dataframe.index, dtype="string"),
     )
     cashflow_type_series = (
         dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))

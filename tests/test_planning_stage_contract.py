@@ -429,6 +429,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"][
         "fixed_expense"
     ] == pytest.approx(-300.0)
+    assert "expense" not in summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"]
     assert summary_payload["surface_breakdowns"]["economic_role"]["monthly_totals_by_month"][
         "2026-02"
     ]["income"] == pytest.approx(500.0)

@@ -362,7 +362,7 @@ def resolve_economic_roles_for_dataframe(
             elif cashflow_type == "out":
                 resolved_role = "variable_expense"
             else:
-                resolved_role = "expense"
+                resolved_role = "variable_expense"
         resolved_roles.append(resolved_role)
 
     resolved = normalized_frame.copy()

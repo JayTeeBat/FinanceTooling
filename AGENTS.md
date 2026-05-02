@@ -163,12 +163,14 @@ Use this template:
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
-  - Removed redundant `decision_role` stanzas from transfer taxonomy entries so transfer buckets are now cashflow-only in both the repo and live taxonomy files.
-  - Kept the parser-derived `not_applicable` fallback for transfer rows intact, so the schema stays lean without changing runtime behavior.
-  - Added a regression assertion that the repo transfer entry still resolves to `not_applicable`.
+  - Changed the semantic defaults so any unresolved spend row now falls back to `variable_expense` instead of the generic `expense` role.
+  - Updated the reporting and workflow normalization layers to keep the new default consistent across planning and transform outputs.
+  - Added a planning regression check so the economic-role summary no longer retains an `expense` bucket in the dashboard payload.
 - Checks:
-  - `rtk uv run pytest -q tests/test_classify.py tests/test_budgeting.py tests/test_cashflow.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/core/semantic_resolution.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/reporting.py tests/test_cashflow.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/core/semantic_resolution.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/reporting.py tests/test_cashflow.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_cashflow.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_budgeting.py`: pass
 - Open items:
   - None.
 - Next action:
-  - Keep the PR body aligned if reviewers want the transfer taxonomy simplification called out explicitly.
+  - Keep an eye on any legacy review/export views that still intentionally label rows as `expense`.

@@ -125,9 +125,7 @@ def normalize_economic_role_for_row(
     elif normalized_subcategory in {"salary", "interest"}:
         fallback = "income"
     else:
-        fallback = "expense"
-        if normalized_cashflow_role == "out":
-            fallback = "variable_expense"
+        fallback = "variable_expense"
     return fallback
 
 
@@ -223,7 +221,7 @@ def default_economic_role_for_category(
         return "income"
     if normalized in {"non personal transactions", "pass-through", "excluded"}:
         return "exclude"
-    return "expense"
+    return "variable_expense"
 
 
 def default_decision_role_for_category(
