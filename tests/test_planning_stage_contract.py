@@ -326,7 +326,6 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
                 "subcategory": "Savings Transfer",
                 "project": None,
                 "cashflow_type": "transfer",
-                "economic_role": "transfer",
                 "decision_role": "not_applicable",
                 "amount_eur": -100.0,
                 "bank": "DummyBank",
@@ -446,12 +445,13 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert summary_payload["surface_breakdowns"]["decision_role"]["bucket_totals"][
         "not_applicable"
     ] == pytest.approx(1600.0)
-    assert "" not in summary_payload["surface_breakdowns"]["economic_role"][
-        "bucket_totals"
-    ]
-    assert "" not in summary_payload["surface_breakdowns"]["economic_role"][
-        "monthly_totals_by_month"
-    ]["2026-02"]
+    assert "" not in summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"]
+    assert (
+        ""
+        not in summary_payload["surface_breakdowns"]["economic_role"]["monthly_totals_by_month"][
+            "2026-02"
+        ]
+    )
     assert fixed_expense_total == pytest.approx(300.0)
     assert variable_expense_total == pytest.approx(200.0)
 
@@ -480,13 +480,23 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert 'id="chart-controls-cashflow_type"' in dashboard_html
     assert 'id="chart-controls-economic_role"' in dashboard_html
     assert 'id="chart-controls-decision_role"' in dashboard_html
-    assert dashboard_html.index('data-surface="cashflow_type"') < dashboard_html.index(
-        'data-surface="economic_role"'
-    ) < dashboard_html.index('data-surface="decision_role"')
+    assert ".chart-card .panel-header {" in dashboard_html
+    assert "min-height: 54px;" in dashboard_html
+    assert ".chart-controls {" in dashboard_html
+    assert "min-height: 72px;" in dashboard_html
+    assert ".chart-card svg {" in dashboard_html
+    assert "flex: 0 0 auto;" in dashboard_html
+    assert ".legend {" in dashboard_html
+    assert "min-height: 84px;" in dashboard_html
+    assert (
+        dashboard_html.index('data-surface="cashflow_type"')
+        < dashboard_html.index('data-surface="economic_role"')
+        < dashboard_html.index('data-surface="decision_role"')
+    )
     assert 'hiddenBuckets: ["transfer"]' in dashboard_html
     assert 'hiddenBuckets: ["transfer", "exclude", "not_applicable"]' in dashboard_html
     assert 'hiddenBuckets: ["not_applicable"]' in dashboard_html
-    assert 'displayBucketLabel(bucketKey)' in dashboard_html
+    assert "displayBucketLabel(bucketKey)" in dashboard_html
     assert 'return normalized.replaceAll("_", " ");' in dashboard_html
     assert "Not applicable" not in dashboard_html
     assert _selected_option_value(dashboard_html, "month-start") == "2026-01"

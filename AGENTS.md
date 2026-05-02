@@ -189,6 +189,22 @@ Success target for the 2026 validation campaign:
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
+  - Migrated the public cashflow semantic to `cashflow_role`, kept `economic_role` transfer-free, and preserved spend-side `decision_role` classification for refund-like reversals.
+  - Updated the live taxonomy corpus under `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/config/` to match the new sequential semantic model.
+  - Fixed dashboard warning logic so cashflow and internal-transfer diagnostics follow the new role model while still surfacing useful exclusions.
+  - Updated the PR body to call out the `cashflow_type -> cashflow_role` rename and the live taxonomy migration explicitly.
+- Checks:
+  - `rtk uv run ruff check src/finance_tooling/reporting/dashboard.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/categorization/classify.py src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/reporting.py tests/test_dashboard.py tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py tests/test_workflow_stages.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_category_normalization.py`: pass
+  - `rtk uv run ruff format src/finance_tooling/categorization/classify.py src/finance_tooling/core/models.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/core/semantics.py src/finance_tooling/core/store.py src/finance_tooling/planning/budgeting.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/reporting/dashboard.py src/finance_tooling/workflow/planning_stage.py src/finance_tooling/workflow/reporting.py tests/test_budgeting.py tests/test_cashflow.py tests/test_category_normalization.py tests/test_classify.py tests/test_dashboard.py tests/test_planning_stage_contract.py tests/test_workflow_stages.py`: pass
+  - `rtk uv run pytest -q tests/test_dashboard.py tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py tests/test_workflow_stages.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_category_normalization.py`: pass
+- Open items:
+  - None.
+- Next action:
+  - Keep the PR focused on the semantic migration and merge once review is complete.
+
+### 2026-05-02 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
   - Documented the transform layering contract so `cashflow_type`, `economic_role`, and `decision_role` are resolved sequentially.
   - Renamed the canonical decision-role exclusion bucket to `not_applicable` across transform, planning, taxonomy defaults, and planning dashboard rendering.
   - Added transfer-subtype planning bucket inference that no longer depends on `decision_role`, plus regression coverage for planning and dashboard output.
@@ -214,21 +230,5 @@ Success target for the 2026 validation campaign:
   - None.
 - Next action:
   - Merge the doc changes and keep the workflow docs aligned if CLI behavior lands next.
-
-### 2026-05-02 - codex
-- Branch: `codex/scoped-review-export-taxonomy`
-- Completed:
-  - Added taxonomy-aware `review-export` filters for `category`, `subcategory`, `category_id`, and `reporting_category_id`.
-  - Updated CLI dispatch coverage and review-export tests for scoped selection, scope expansion, and missing-column validation.
-  - Refreshed the review-workflow docs and ran the full repo quality gates after formatting.
-- Checks:
-  - `rtk uv run ruff format .`: pass
-  - `rtk uv run ruff check .`: pass
-  - `rtk uv run ty check src/finance_tooling tests`: pass
-  - `rtk uv run pytest`: pass
-- Open items:
-  - None.
-- Next action:
-  - Commit, push, and open a draft PR to `main`.
 
 @RTK.md

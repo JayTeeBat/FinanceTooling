@@ -22,6 +22,7 @@ from finance_tooling.core.semantics import (
     VALID_CASHFLOW_TYPES,
     VALID_DECISION_ROLES,
     VALID_ECONOMIC_ROLES,
+    CashflowRoleType,
     CashflowType,
     DecisionRoleType,
     EconomicRoleType,
@@ -37,22 +38,22 @@ def _legacy_cashflow_type_for_category(category: str) -> CashflowType | None:
 def _legacy_economic_role_for_category(
     category: str,
     *,
-    cashflow_type: CashflowType | None,
-) -> EconomicRoleType:
-    return default_economic_role_for_category(category, cashflow_type=cashflow_type)
+    cashflow_role: CashflowRoleType | None,
+) -> EconomicRoleType | None:
+    return default_economic_role_for_category(category, cashflow_role=cashflow_role)
 
 
 def _legacy_decision_role_for_category(
     category: str,
     subcategory: str | None,
     *,
-    cashflow_type: CashflowType | None,
+    cashflow_role: CashflowRoleType | None,
     economic_role: EconomicRoleType | None,
 ) -> DecisionRoleType:
     return default_decision_role_for_category(
         category,
         subcategory,
-        cashflow_type=cashflow_type,
+        cashflow_role=cashflow_role,
         economic_role=economic_role,
     )
 
@@ -118,13 +119,13 @@ def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCat
                 economic_role=raw_entry.economic_role
                 or _legacy_economic_role_for_category(
                     category_label,
-                    cashflow_type=raw_entry.cashflow_type,
+                    cashflow_role=raw_entry.cashflow_type,
                 ),
                 decision_role=raw_entry.decision_role
                 or _legacy_decision_role_for_category(
                     category_label,
                     raw_entry.subcategory_label,
-                    cashflow_type=raw_entry.cashflow_type,
+                    cashflow_role=raw_entry.cashflow_type,
                     economic_role=raw_entry.economic_role,
                 ),
                 category_label=category_label,
@@ -144,13 +145,13 @@ def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCat
                     economic_role=raw_entry.economic_role
                     or _legacy_economic_role_for_category(
                         raw_entry.name,
-                        cashflow_type=raw_entry.cashflow_type,
+                        cashflow_role=raw_entry.cashflow_type,
                     ),
                     decision_role=raw_entry.decision_role
                     or _legacy_decision_role_for_category(
                         raw_entry.name,
                         subcategory,
-                        cashflow_type=raw_entry.cashflow_type,
+                        cashflow_role=raw_entry.cashflow_type,
                         economic_role=raw_entry.economic_role,
                     ),
                     category_label=raw_entry.name,
@@ -164,13 +165,13 @@ def _taxonomy_entries_by_id(rules: ClassificationRules) -> dict[str, TaxonomyCat
                 economic_role=raw_entry.economic_role
                 or _legacy_economic_role_for_category(
                     raw_entry.name,
-                    cashflow_type=raw_entry.cashflow_type,
+                    cashflow_role=raw_entry.cashflow_type,
                 ),
                 decision_role=raw_entry.decision_role
                 or _legacy_decision_role_for_category(
                     raw_entry.name,
                     None,
-                    cashflow_type=raw_entry.cashflow_type,
+                    cashflow_role=raw_entry.cashflow_type,
                     economic_role=raw_entry.economic_role,
                 ),
                 category_label=raw_entry.name,
@@ -546,7 +547,6 @@ def _default_rules() -> ClassificationRules:
             name="Transfers",
             subcategories=(),
             cashflow_type="transfer",
-            economic_role="transfer",
             decision_role="not_applicable",
             category_label="Transfers",
             subcategory_label="Internal/External",
@@ -554,7 +554,7 @@ def _default_rules() -> ClassificationRules:
         "non_personal_transactions": TaxonomyCategory(
             name="Non Personal Transactions",
             subcategories=(),
-            cashflow_type="exclude",
+            cashflow_type="out",
             economic_role="exclude",
             decision_role="not_applicable",
             category_label="Non Personal Transactions",
@@ -563,7 +563,7 @@ def _default_rules() -> ClassificationRules:
         "pass_through": TaxonomyCategory(
             name="Pass-through",
             subcategories=(),
-            cashflow_type="exclude",
+            cashflow_type="out",
             economic_role="exclude",
             decision_role="not_applicable",
             category_label="Pass-through",
@@ -714,15 +714,15 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
                 cashflow_type=cashflow_type,
                 economic_role=_legacy_economic_role_for_category(
                     category_label,
-                    cashflow_type=cashflow_type,
+                    cashflow_role=cashflow_type,
                 ),
                 decision_role=_legacy_decision_role_for_category(
                     category_label,
                     None,
-                    cashflow_type=cashflow_type,
+                    cashflow_role=cashflow_type,
                     economic_role=_legacy_economic_role_for_category(
                         category_label,
-                        cashflow_type=cashflow_type,
+                        cashflow_role=cashflow_type,
                     ),
                 ),
             )
@@ -774,13 +774,13 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
                 economic_role=economic_role
                 or _legacy_economic_role_for_category(
                     category_label,
-                    cashflow_type=cashflow_type,
+                    cashflow_role=cashflow_type,
                 ),
                 decision_role=decision_role
                 or _legacy_decision_role_for_category(
                     category_label,
                     subcategory_label,
-                    cashflow_type=cashflow_type,
+                    cashflow_role=cashflow_type,
                     economic_role=economic_role,
                 ),
                 category_label=category_label,
@@ -808,12 +808,12 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
             subcategories=subcategories,
             cashflow_type=cashflow_type,
             economic_role=economic_role
-            or _legacy_economic_role_for_category(raw_key, cashflow_type=cashflow_type),
+            or _legacy_economic_role_for_category(raw_key, cashflow_role=cashflow_type),
             decision_role=_normalize_decision_role(typed_value.get("decision_role"))
             or _legacy_decision_role_for_category(
                 raw_key,
                 None,
-                cashflow_type=cashflow_type,
+                cashflow_role=cashflow_type,
                 economic_role=economic_role,
             ),
         )

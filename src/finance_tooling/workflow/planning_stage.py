@@ -978,11 +978,17 @@ def render_planning_stage_dashboard_html(
       position: relative;
       overflow: hidden;
       height: 100%;
+      min-height: 548px;
+    }
+    .chart-card .panel-header {
+      min-height: 54px;
     }
     .chart-controls {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+      min-height: 72px;
+      align-content: flex-start;
     }
     .chart-toggle {
       display: inline-flex;
@@ -1003,7 +1009,7 @@ def render_planning_stage_dashboard_html(
       accent-color: var(--accent);
     }
     .chart-card svg {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
       width: 100%;
       height: 270px;
       border-radius: 16px;
@@ -1014,6 +1020,9 @@ def render_planning_stage_dashboard_html(
       display: flex;
       flex-wrap: wrap;
       gap: 8px 12px;
+      min-height: 84px;
+      align-content: flex-start;
+      overflow: auto;
       color: var(--muted);
       font-size: 13px;
     }

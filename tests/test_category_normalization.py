@@ -28,7 +28,7 @@ def _rules() -> ClassificationRules:
             "non personal transactions": TaxonomyCategory(
                 name="Non Personal Transactions",
                 subcategories=("Work", "APEL", "Other"),
-                cashflow_type="exclude",
+                cashflow_type="out",
             ),
             "leisure": TaxonomyCategory(
                 name="Leisure",

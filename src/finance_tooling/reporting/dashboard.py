@@ -89,7 +89,15 @@ def _build_cashflow_diagnostic_warnings(dataframe: pd.DataFrame) -> list[str]:
         return []
 
     warnings: list[str] = []
-    unknown_mask = rows_frame["cashflow_type"].astype("string").str.casefold().eq("unknown")
+    cashflow_role = (
+        rows_frame.get(
+            "cashflow_role",
+            rows_frame["cashflow_type"],
+        )
+        .astype("string")
+        .str.casefold()
+    )
+    unknown_mask = cashflow_role.eq("unknown")
     unknown_count = int(unknown_mask.sum())
     if unknown_count > 0:
         unknown_categories = sorted(
@@ -177,6 +185,16 @@ def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list
     if dataframe.empty:
         return []
 
+    cashflow_role = (
+        dataframe.get(
+            "cashflow_role",
+            dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object")),
+        )
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+    )
     from_type = (
         dataframe.get("from_account_type", pd.Series("", index=dataframe.index, dtype="object"))
         .astype("string")
@@ -191,13 +209,6 @@ def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list
         .str.strip()
         .str.casefold()
     )
-    economic_role = (
-        dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
-        .astype("string")
-        .fillna("")
-        .str.strip()
-        .str.casefold()
-    )
     category = (
         dataframe.get("category", pd.Series("", index=dataframe.index, dtype="object"))
         .astype("string")
@@ -206,7 +217,7 @@ def _build_account_transfer_diagnostic_warnings(dataframe: pd.DataFrame) -> list
         .str.casefold()
     )
     boundary_transfer_mask = (
-        from_type.eq("internal") & to_type.eq("internal") & economic_role.eq("transfer")
+        from_type.eq("internal") & to_type.eq("internal") & cashflow_role.eq("transfer")
     )
     override_count = int(boundary_transfer_mask.sum())
     if override_count == 0:

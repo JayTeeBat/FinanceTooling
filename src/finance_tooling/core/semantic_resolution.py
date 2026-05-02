@@ -7,9 +7,10 @@ from typing import cast
 
 from finance_tooling.core.semantics import (
     EXPENSE_LIKE_ECONOMIC_ROLES,
-    VALID_CASHFLOW_TYPES,
+    VALID_CASHFLOW_ROLES,
     VALID_DECISION_ROLES,
     VALID_ECONOMIC_ROLES,
+    CashflowRoleType,
     CashflowType,
     DecisionRoleType,
     EconomicRoleType,
@@ -65,18 +66,28 @@ def _transfer_planning_bucket_for_row(
     return None
 
 
-def normalize_cashflow_type_value(value: object) -> CashflowType | None:
-    """Return a valid cashflow type when the value is already canonical."""
+def normalize_cashflow_role_value(value: object) -> CashflowRoleType | None:
+    """Return a valid cashflow role when the value is already canonical."""
     if not isinstance(value, str):
         return None
     normalized = value.strip().casefold()
-    if normalized in VALID_CASHFLOW_TYPES:
-        return cast(CashflowType, normalized)
+    if normalized in VALID_CASHFLOW_ROLES:
+        return cast(CashflowRoleType, normalized)
     return None
 
 
-def normalize_cashflow_type_for_row(value: object) -> CashflowType | None:
+def normalize_cashflow_role_for_row(value: object) -> CashflowRoleType | None:
     """Compatibility alias for row-level cashflow normalization."""
+    return normalize_cashflow_role_value(value)
+
+
+def normalize_cashflow_type_value(value: object) -> CashflowType | None:
+    """Legacy compatibility alias for row-level cashflow normalization."""
+    return normalize_cashflow_role_value(value)
+
+
+def normalize_cashflow_type_for_row(value: object) -> CashflowType | None:
+    """Legacy compatibility alias for row-level cashflow normalization."""
     return normalize_cashflow_type_value(value)
 
 
@@ -93,32 +104,30 @@ def normalize_economic_role_value(value: object) -> EconomicRoleType | None:
 def normalize_economic_role_for_row(
     value: object,
     *,
+    cashflow_role: object = None,
     cashflow_type: object = None,
     category: object = None,
     subcategory: object = None,
-) -> EconomicRoleType:
+) -> EconomicRoleType | None:
     """Normalize a resolved economic role with semantic fallbacks."""
     normalized = normalize_economic_role_value(value)
     if normalized is not None:
         return normalized
-    normalized_cashflow_type = normalize_cashflow_type_value(cashflow_type)
+    normalized_cashflow_role = normalize_cashflow_role_value(cashflow_role or cashflow_type)
     normalized_category = _normalized_text(category)
     normalized_subcategory = _normalized_text(subcategory)
-    fallback: EconomicRoleType = "expense"
-    if normalized_cashflow_type == "out":
-        fallback = "variable_expense"
-    elif normalized_cashflow_type == "transfer":
-        fallback = "transfer"
-    elif normalized_cashflow_type == "exclude":
-        fallback = "exclude"
-    if normalized_category == "transfers":
-        fallback = "transfer"
-    elif normalized_category in {"non personal transactions", "pass-through", "excluded"}:
-        fallback = "exclude"
-    elif normalized_category == "income":
+    if normalized_cashflow_role == "transfer" or normalized_category == "transfers":
+        return None
+    if normalized_category in {"non personal transactions", "pass-through", "excluded"}:
+        return "exclude"
+    if normalized_category == "income":
         fallback = "income"
     elif normalized_subcategory in {"salary", "interest"}:
         fallback = "income"
+    else:
+        fallback = "expense"
+        if normalized_cashflow_role == "out":
+            fallback = "variable_expense"
     return fallback
 
 
@@ -135,6 +144,7 @@ def normalize_decision_role_value(value: object) -> DecisionRoleType | None:
 def normalize_decision_role_for_row(
     value: object,
     *,
+    cashflow_role: object = None,
     cashflow_type: object = None,
     economic_role: object = None,
     category: object = None,
@@ -144,16 +154,22 @@ def normalize_decision_role_for_row(
     normalized = normalize_decision_role_value(value)
     if normalized is not None:
         return normalized
-    normalized_cashflow_type = normalize_cashflow_type_value(cashflow_type)
+    normalized_cashflow_role = normalize_cashflow_role_value(cashflow_role or cashflow_type)
     normalized_economic_role = normalize_economic_role_value(economic_role)
     normalized_category = _normalized_text(category)
     normalized_subcategory = _normalized_text(subcategory)
 
-    if normalized_cashflow_type == "exclude" or normalized_economic_role == "exclude":
+    if normalized_cashflow_role == "transfer":
         return "not_applicable"
-    if normalized_cashflow_type == "transfer" or normalized_economic_role == "transfer":
+    if normalized_economic_role == "exclude" or normalized_category in {
+        "income",
+        "transfers",
+        "non personal transactions",
+        "pass-through",
+        "excluded",
+    }:
         return "not_applicable"
-    if normalized_category in _NOT_APPLICABLE_CATEGORY_NAMES:
+    if normalized_economic_role == "income":
         return "not_applicable"
 
     fallback: DecisionRoleType = "unknown"
@@ -189,8 +205,6 @@ def default_cashflow_type_for_category(category: str) -> CashflowType | None:
         return "in"
     if normalized == "transfers":
         return "transfer"
-    if normalized == "non personal transactions":
-        return "exclude"
     if normalized:
         return "out"
     return None
@@ -199,16 +213,16 @@ def default_cashflow_type_for_category(category: str) -> CashflowType | None:
 def default_economic_role_for_category(
     category: str,
     *,
-    cashflow_type: CashflowType | None,
-) -> EconomicRoleType:
+    cashflow_role: CashflowRoleType | None,
+) -> EconomicRoleType | None:
     """Return the legacy economic-role default for a category label."""
     normalized = _normalized_text(category)
-    if cashflow_type == "transfer":
-        return "transfer"
-    if cashflow_type == "exclude":
-        return "exclude"
+    if cashflow_role == "transfer" or normalized == "transfers":
+        return None
     if normalized == "income":
         return "income"
+    if normalized in {"non personal transactions", "pass-through", "excluded"}:
+        return "exclude"
     return "expense"
 
 
@@ -216,14 +230,12 @@ def default_decision_role_for_category(
     category: str,
     subcategory: str | None,
     *,
-    cashflow_type: CashflowType | None,
+    cashflow_role: CashflowRoleType | None,
     economic_role: EconomicRoleType | None,
 ) -> DecisionRoleType:
     """Return the legacy planning default for a category label."""
     normalized_category = _normalized_text(category)
-    if cashflow_type == "exclude" or economic_role == "exclude":
-        return "not_applicable"
-    if cashflow_type == "transfer" or economic_role == "transfer":
+    if cashflow_role == "transfer" or economic_role == "exclude":
         return "not_applicable"
     if normalized_category in _NOT_APPLICABLE_CATEGORY_NAMES:
         return "not_applicable"
@@ -237,7 +249,7 @@ def default_decision_role_for_category(
 
 
 def resolve_planning_bucket(
-    cashflow_type: object,
+    cashflow_role: object,
     economic_role: object,
     decision_role: object,
     amount_eur: object,
@@ -247,7 +259,7 @@ def resolve_planning_bucket(
     subcategory: object = None,
 ) -> tuple[str, float]:
     """Resolve the planning bucket and planned amount from semantic fields."""
-    normalized_cashflow_type = normalize_cashflow_type_value(cashflow_type)
+    normalized_cashflow_role = normalize_cashflow_role_value(cashflow_role)
     normalized_economic_role = normalize_economic_role_value(economic_role)
     _ = normalize_decision_role_value(decision_role)
     amount = 0.0
@@ -258,11 +270,7 @@ def resolve_planning_bucket(
     elif isinstance(amount_eur, Decimal):
         amount = float(amount_eur)
 
-    if normalized_economic_role in EXPENSE_LIKE_ECONOMIC_ROLES:
-        return "expense", (-amount if amount < 0 else 0.0)
-    if normalized_economic_role == "income":
-        return "income", (amount if amount > 0 else 0.0)
-    if normalized_cashflow_type == "transfer":
+    if normalized_cashflow_role == "transfer":
         transfer_bucket = _transfer_planning_bucket_for_row(
             category_id=category_id,
             category=category,
@@ -274,6 +282,10 @@ def resolve_planning_bucket(
             "transfer",
             abs(amount),
         )
-    if normalized_cashflow_type == "exclude" or normalized_economic_role == "exclude":
+    if normalized_economic_role in EXPENSE_LIKE_ECONOMIC_ROLES:
+        return "expense", -amount
+    if normalized_economic_role == "income":
+        return "income", (amount if amount > 0 else 0.0)
+    if normalized_economic_role == "exclude":
         return "excluded", 0.0
     return "unknown", 0.0

@@ -329,17 +329,17 @@ def build_monthly_planning_ledger(
             if category_id is not None and classification_rules is not None
             else category_id
         )
-        cashflow_type = _row_text(row, "cashflow_type")
+        cashflow_role = _row_text(row, "cashflow_role") or _row_text(row, "cashflow_type")
         economic_role = _row_text(row, "economic_role")
         decision_role = _row_text(row, "decision_role")
         if classification_rules is not None and category_id is not None:
-            if cashflow_type in {"", "unknown"}:
-                cashflow_type = (
+            if cashflow_role in {"", "unknown"}:
+                cashflow_role = (
                     resolve_taxonomy_cashflow_type_for_category_id(
                         category_id,
                         rules=classification_rules,
                     )
-                    or cashflow_type
+                    or cashflow_role
                 )
             if economic_role in {"", "unknown"}:
                 economic_role = (
@@ -359,13 +359,13 @@ def build_monthly_planning_ledger(
                 )
         decision_role = normalize_decision_role_for_row(
             decision_role,
-            cashflow_type=cashflow_type,
+            cashflow_role=cashflow_role,
             economic_role=economic_role,
             category=row.get("category"),
             subcategory=row.get("subcategory"),
         )
         planning_bucket, planning_amount = resolve_planning_bucket(
-            cashflow_type,
+            cashflow_role,
             economic_role,
             decision_role,
             amount,
@@ -385,7 +385,7 @@ def build_monthly_planning_ledger(
                 "category": row.get("category"),
                 "subcategory": row.get("subcategory"),
                 "project": row.get("project"),
-                "cashflow_type": cashflow_type or None,
+                "cashflow_type": cashflow_role or None,
                 "economic_role": economic_role or None,
                 "decision_role": decision_role or None,
                 "planning_bucket": planning_bucket,

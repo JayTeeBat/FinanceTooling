@@ -227,9 +227,11 @@ def test_render_dashboard_html_includes_cashflow_type_exclude_warning_when_prese
 
     payload = _extract_payload(destination.read_text(encoding="utf-8"))
     warnings = cast(list[str], payload["warnings"])
-    assert len(warnings) == 1
-    assert "Economic role exclude applies to 1 transaction" in warnings[0]
+    assert len(warnings) == 2
+    assert "Cashflow type unresolved for 1 transaction" in warnings[0]
     assert "Non Personal Transactions" in warnings[0]
+    assert "Economic role exclude applies to 1 transaction" in warnings[1]
+    assert "Non Personal Transactions" in warnings[1]
 
 
 def test_render_dashboard_html_includes_account_boundary_warning_when_unknown_present(
@@ -282,7 +284,6 @@ def test_render_dashboard_html_includes_account_transfer_warning_when_boundary_r
                 "amount_eur": -250.0,
                 "category": "Shopping",
                 "cashflow_type": "transfer",
-                "economic_role": "transfer",
                 "from_account_type": "internal",
                 "to_account_type": "internal",
                 "account_inference_source": "account_rule",

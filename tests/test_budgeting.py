@@ -100,7 +100,6 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
                 "subcategory": "Savings Transfer",
                 "project": "Mobility",
                 "cashflow_type": "transfer",
-                "economic_role": "transfer",
                 "decision_role": "not_applicable",
                 "amount_eur": -100.0,
             },
@@ -110,7 +109,7 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
                 "category": "Non Personal Transactions",
                 "category_id": "non.personal.transactions",
                 "project": "",
-                "cashflow_type": "exclude",
+                "cashflow_type": "out",
                 "economic_role": "exclude",
                 "decision_role": "not_applicable",
                 "amount_eur": -15.0,
@@ -123,6 +122,8 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
     ledger_by_id = ledger.set_index("transaction_id")
     assert ledger_by_id.loc["tx-1", "planning_bucket"] == "expense"
     assert ledger_by_id.loc["tx-1", "planning_amount_eur"] == 50.0
+    assert ledger_by_id.loc["tx-4", "planning_bucket"] == "expense"
+    assert ledger_by_id.loc["tx-4", "planning_amount_eur"] == -20.0
     assert ledger_by_id.loc["tx-5", "planning_bucket"] == "savings"
     assert ledger_by_id.loc["tx-5", "planning_amount_eur"] == 100.0
     assert ledger_by_id.loc["tx-6", "planning_bucket"] == "excluded"
@@ -138,9 +139,9 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
     assert groceries_row["category_id"] == "groceries.food_at_home"
 
     transport_row = next(row for row in status_rows if row["category"] == "Transport")
-    assert transport_row["actual_amount"] == 80.0
-    assert transport_row["variance"] == -20.0
-    assert transport_row["status"] == "over_budget"
+    assert transport_row["actual_amount"] == 60.0
+    assert transport_row["variance"] == 0.0
+    assert transport_row["status"] == "on_track"
     assert transport_row["category_id"] == "transport.public_transport"
 
 

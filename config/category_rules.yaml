@@ -42,7 +42,6 @@ taxonomy:
       category: Transfers
       subcategory: Account Transfer
     cashflow_type: transfer
-    economic_role: transfer
     decision_role: not_applicable
     status: active
   transfers.investment_transfer:
@@ -50,7 +49,6 @@ taxonomy:
       category: Transfers
       subcategory: Investment Transfer
     cashflow_type: transfer
-    economic_role: transfer
     decision_role: not_applicable
     status: active
   transfers.savings_transfer:
@@ -58,7 +56,6 @@ taxonomy:
       category: Transfers
       subcategory: Savings Transfer
     cashflow_type: transfer
-    economic_role: transfer
     decision_role: not_applicable
     status: active
   transfers.fx_exchange:
@@ -66,7 +63,6 @@ taxonomy:
       category: Transfers
       subcategory: FX Exchange
     cashflow_type: transfer
-    economic_role: transfer
     decision_role: not_applicable
     status: active
 
@@ -74,7 +70,7 @@ taxonomy:
     labels:
       category: Excluded
       subcategory: Non Personal
-    cashflow_type: exclude
+    cashflow_type: out
     economic_role: exclude
     decision_role: not_applicable
     status: active
@@ -82,7 +78,7 @@ taxonomy:
     labels:
       category: Excluded
       subcategory: Non-profit
-    cashflow_type: exclude
+    cashflow_type: out
     economic_role: exclude
     decision_role: not_applicable
     status: active
@@ -171,7 +167,9 @@ taxonomy:
     labels:
       category: Shopping
       subcategory: Apparel
+    cashflow_type: out
     economic_role: variable_expense
+    decision_role: discretionary
     deprecated_to: shopping.clothing
     status: deprecated
 

@@ -47,7 +47,7 @@ def _rules() -> ClassificationRules:
             "non personal transactions": TaxonomyCategory(
                 name="Non Personal Transactions",
                 subcategories=(),
-                cashflow_type="exclude",
+                cashflow_type="out",
             ),
         },
     )
@@ -191,7 +191,7 @@ def test_build_cashflow_yoy_summary_excludes_exclude_rows_from_metrics() -> None
             bank="HSBC",
             parser="hsbc",
             category="Non Personal Transactions",
-            cashflow_type="exclude",
+            cashflow_type="out",
             amount_eur=Decimal("-300.00"),
         ),
     ]
@@ -407,8 +407,8 @@ def test_resolve_economic_roles_marks_employer_as_income() -> None:
         "fixed_expense": 0,
         "variable_expense": 0,
         "expense": 0,
-        "transfer": 0,
         "exclude": 0,
+        "not_applicable": 0,
     }
 
 
@@ -673,7 +673,7 @@ def test_resolve_economic_roles_marks_transfer_and_exclude_before_income() -> No
             parser="hsbc",
             category="Income",
             subcategory="Interest",
-            cashflow_type="exclude",
+            cashflow_type="out",
             amount_eur=Decimal("1250.00"),
         ),
     ]
@@ -683,7 +683,7 @@ def test_resolve_economic_roles_marks_transfer_and_exclude_before_income() -> No
         account_inference_config=_account_config(employer_patterns=("acme",)),
     )
 
-    assert list(result.dataframe["economic_role"]) == ["transfer", "exclude"]
+    assert list(result.dataframe["economic_role"]) == ["not_applicable", "income"]
 
 
 def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
@@ -723,7 +723,6 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
             category="Transfers",
             subcategory="Savings Transfer",
             cashflow_type="transfer",
-            economic_role="transfer",
         ),
     ]
 
@@ -760,7 +759,7 @@ def test_resolve_decision_roles_marks_excluded_rows_as_not_applicable() -> None:
         bank="HSBC",
         parser="hsbc",
         category="Non Personal Transactions",
-        cashflow_type="exclude",
+        cashflow_type="out",
         economic_role="exclude",
         amount_eur=Decimal("-42.00"),
     )
@@ -782,7 +781,6 @@ def test_resolve_decision_roles_marks_transfer_rows_as_not_applicable() -> None:
         category="Transfers",
         subcategory="Mortgage payment",
         cashflow_type="transfer",
-        economic_role="transfer",
         amount_eur=Decimal("-250.00"),
     )
 

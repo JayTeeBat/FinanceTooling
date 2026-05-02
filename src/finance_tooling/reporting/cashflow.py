@@ -28,7 +28,7 @@ from finance_tooling.categorization.transaction_overrides import (
 )
 from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS
 from finance_tooling.core.semantic_resolution import (
-    normalize_cashflow_type_for_row,
+    normalize_cashflow_role_for_row,
     normalize_decision_role_for_row,
     normalize_economic_role_for_row,
 )
@@ -97,9 +97,12 @@ def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: 
 
 
 def _normalize_cashflow_type_series(dataframe: pd.DataFrame) -> pd.Series:
-    values = dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+    values = dataframe.get(
+        "cashflow_role",
+        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object")),
+    )
     normalized = [
-        normalize_cashflow_type_for_row(value) or "unknown"
+        normalize_cashflow_role_for_row(value) or "unknown"
         for value in values.astype("object").tolist()
     ]
     return pd.Series(normalized, index=dataframe.index, dtype="object")
@@ -113,7 +116,7 @@ def _normalize_economic_role_series(dataframe: pd.DataFrame) -> pd.Series:
     normalized = [
         normalize_economic_role_for_row(
             value,
-            cashflow_type=cashflow,
+            cashflow_role=cashflow,
             category=category_value,
             subcategory=subcategory_value,
         )
@@ -125,7 +128,11 @@ def _normalize_economic_role_series(dataframe: pd.DataFrame) -> pd.Series:
             strict=False,
         )
     ]
-    return pd.Series(normalized, index=dataframe.index, dtype="object")
+    return pd.Series(
+        ["not_applicable" if value is None else value for value in normalized],
+        index=dataframe.index,
+        dtype="object",
+    )
 
 
 def _normalize_decision_role_series(dataframe: pd.DataFrame) -> pd.Series:
@@ -139,7 +146,7 @@ def _normalize_decision_role_series(dataframe: pd.DataFrame) -> pd.Series:
     normalized = [
         normalize_decision_role_for_row(
             value,
-            cashflow_type=cashflow,
+            cashflow_role=cashflow,
             economic_role=economic,
             category=category_value,
             subcategory=subcategory_value,
@@ -241,8 +248,8 @@ def resolve_cashflow_types_for_dataframe(
             account_transfer_override_count += 1
             if taxonomy_type not in {None, "transfer"}:
                 account_transfer_conflict_count += 1
-        elif taxonomy_type == "exclude":
-            resolved_type = "exclude"
+        elif taxonomy_type in {"in", "out", "transfer"}:
+            resolved_type = taxonomy_type
         elif tx.amount_eur is not None and tx.amount_eur > 0:
             resolved_type = "in"
         elif tx.amount_eur is not None and tx.amount_eur < 0:
@@ -293,8 +300,8 @@ def resolve_economic_roles_for_dataframe(
                 "fixed_expense": 0,
                 "variable_expense": 0,
                 "expense": 0,
-                "transfer": 0,
                 "exclude": 0,
+                "not_applicable": 0,
             },
         )
 
@@ -322,7 +329,7 @@ def resolve_economic_roles_for_dataframe(
             )
         )
         if cashflow_type == "transfer":
-            resolved_role = "transfer"
+            resolved_role = "not_applicable"
         elif cashflow_type == "exclude":
             resolved_role = "exclude"
         else:
@@ -369,8 +376,8 @@ def resolve_economic_roles_for_dataframe(
             "fixed_expense",
             "variable_expense",
             "expense",
-            "transfer",
             "exclude",
+            "not_applicable",
         )
     }
     return EconomicRoleResolutionResult(dataframe=resolved, role_counts=role_counts)
@@ -423,7 +430,7 @@ def resolve_decision_roles_for_dataframe(
                 prefer_active=False,
             )
         )
-        if cashflow_type in {"exclude", "transfer"} or economic_role in {"exclude", "transfer"}:
+        if cashflow_type == "transfer" or economic_role in {"exclude", "income"}:
             resolved_role = "not_applicable"
         else:
             rule_role = None

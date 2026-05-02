@@ -251,20 +251,29 @@ def test_default_rules_include_exclude_categories() -> None:
     rules, warnings = load_classification_rules(Path("/tmp/does-not-exist-category-rules.yaml"))
 
     assert warnings == []
-    assert resolve_taxonomy_cashflow_type("Non Personal Transactions", rules=rules) == "exclude"
-    assert resolve_taxonomy_cashflow_type("Pass-through", rules=rules) == "exclude"
-    assert resolve_taxonomy_decision_role_for_category_id(
-        "income.salary",
-        rules=rules,
-    ) == "not_applicable"
-    assert resolve_taxonomy_decision_role_for_category_id(
-        "transfers.internal",
-        rules=rules,
-    ) == "not_applicable"
-    assert resolve_taxonomy_decision_role_for_category_id(
-        "non_personal_transactions",
-        rules=rules,
-    ) == "not_applicable"
+    assert resolve_taxonomy_cashflow_type("Non Personal Transactions", rules=rules) == "out"
+    assert resolve_taxonomy_cashflow_type("Pass-through", rules=rules) == "out"
+    assert (
+        resolve_taxonomy_decision_role_for_category_id(
+            "income.salary",
+            rules=rules,
+        )
+        == "not_applicable"
+    )
+    assert (
+        resolve_taxonomy_decision_role_for_category_id(
+            "transfers.internal",
+            rules=rules,
+        )
+        == "not_applicable"
+    )
+    assert (
+        resolve_taxonomy_decision_role_for_category_id(
+            "non_personal_transactions",
+            rules=rules,
+        )
+        == "not_applicable"
+    )
 
 
 def test_load_classification_rules_infers_cashflow_type_from_legacy_taxonomy_lists(
@@ -300,6 +309,8 @@ def test_repo_example_config_categorizes_generic_example_fingerprints() -> None:
     rules, warnings = load_classification_rules(Path("config/category_rules.yaml"))
 
     assert warnings == []
+    assert rules.taxonomy["shopping.apparel"].decision_role == "discretionary"
+    assert rules.taxonomy["shopping.apparel"].cashflow_type == "out"
 
     cases = [
         ("ACME PAYROLL APRIL", "income.salary", "Income", "Salary"),
