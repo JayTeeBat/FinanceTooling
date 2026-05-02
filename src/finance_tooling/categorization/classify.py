@@ -764,7 +764,9 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
                     else None
                 )
             )
-            cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
+            cashflow_type = _normalize_cashflow_type(
+                typed_value.get("cashflow_role", typed_value.get("cashflow_type"))
+            )
             economic_role = _normalize_economic_role(typed_value.get("economic_role"))
             decision_role = _normalize_decision_role(typed_value.get("decision_role"))
             taxonomy[_normalize_category_id(raw_key) or raw_key.casefold()] = TaxonomyCategory(
@@ -801,7 +803,9 @@ def _parse_taxonomy(raw_taxonomy: object) -> dict[str, TaxonomyCategory]:
             if isinstance(raw_subcategories, list)
             else ()
         )
-        cashflow_type = _normalize_cashflow_type(typed_value.get("cashflow_type"))
+        cashflow_type = _normalize_cashflow_type(
+            typed_value.get("cashflow_role", typed_value.get("cashflow_type"))
+        )
         economic_role = _normalize_economic_role(typed_value.get("economic_role"))
         taxonomy[raw_key.casefold()] = TaxonomyCategory(
             name=raw_key,

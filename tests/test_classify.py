@@ -106,7 +106,7 @@ def test_load_classification_rules_supports_yaml_schema_aliases(tmp_path: Path) 
                 "version: 1",
                 "taxonomy:",
                 "  Transfers:",
-                "    cashflow_type: transfer",
+                "    cashflow_role: transfer",
                 "    subcategories:",
                 "      - FX Exchange",
                 "rules:",

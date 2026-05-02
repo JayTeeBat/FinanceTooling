@@ -455,9 +455,9 @@ Target philosophy:
 - dedicated refund buckets should be treated as compatibility/fallback, not the
   long-term target design
 
-### Taxonomy-level `cashflow_type`
+### Taxonomy-level `cashflow_role`
 
-Current executable taxonomy still stores `cashflow_type` values on many bucket
+Current executable taxonomy still stores `cashflow_role` values on many bucket
 definitions.
 
 Target philosophy:

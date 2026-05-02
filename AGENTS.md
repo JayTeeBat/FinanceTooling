@@ -189,6 +189,20 @@ Success target for the 2026 validation campaign:
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
+  - Renamed the taxonomy schema so transfer buckets now use `cashflow_role` instead of `cashflow_type`.
+  - Updated the classification parser to accept `cashflow_role` while keeping legacy `cashflow_type` inputs working.
+  - Mirrored the schema rename into the live taxonomy corpus and updated the schema-alias test plus taxonomy spec.
+- Checks:
+  - `rtk uv run ruff format src/finance_tooling/categorization/classify.py tests/test_classify.py`: pass
+  - `rtk uv run pytest -q tests/test_classify.py tests/test_budgeting.py tests/test_cashflow.py`: pass
+- Open items:
+  - None.
+- Next action:
+  - Keep the PR wording and docs aligned if any other semantic key renames are requested.
+
+### 2026-05-02 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
   - Trimmed the taxonomy so only transfer rules carry explicit cashflow semantics; ordinary in/out now come from sign.
   - Mirrored the same cashflow cleanup into the live taxonomy corpus under `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/config/`.
   - Updated the taxonomy spec and the example test expectation to match the new transfer-only cashflow rule.
@@ -214,21 +228,5 @@ Success target for the 2026 validation campaign:
   - None.
 - Next action:
   - Keep the PR focused on the semantic migration and merge once review is complete.
-
-### 2026-05-02 - codex
-- Branch: `codex/stage-aligned-planning`
-- Completed:
-  - Documented the transform layering contract so `cashflow_type`, `economic_role`, and `decision_role` are resolved sequentially.
-  - Renamed the canonical decision-role exclusion bucket to `not_applicable` across transform, planning, taxonomy defaults, and planning dashboard rendering.
-  - Added transfer-subtype planning bucket inference that no longer depends on `decision_role`, plus regression coverage for planning and dashboard output.
-  - Reworked the planning dashboard UI so the charts render in precedence order, stay horizontally aligned on desktop, expose visibility toggles for transfer and not_applicable buckets, normalize bucket labels to lower-case plain text, and show cashflow/economic balances.
-- Checks:
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/workflow/planning_stage.py tests/test_planning_stage_contract.py`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ty check src/finance_tooling tests`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_cashflow.py tests/test_budgeting.py tests/test_classify.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py`: pass
-- Open items:
-  - None.
-- Next action:
-  - Keep the PR aligned with any follow-up semantic renames or dashboard wording changes.
 
 @RTK.md
