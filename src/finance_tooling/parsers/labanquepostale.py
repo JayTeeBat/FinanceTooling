@@ -18,14 +18,33 @@ from finance_tooling.parsers.base import (
 )
 from finance_tooling.parsers.common import parse_decimal
 
-_DAY_MONTH_PATTERN = re.compile(r"(0[1-9]|[12][0-9]|3[01])[/\-](0[1-9]|1[012])")
-_FILE_YEAR_PATTERN = re.compile(
-    r"((?:19|20)\d{2})[/-]?(0[1-9]|1[012])[/-]?(0[1-9]|[12][0-9]|3[01])"
+_VALID_DAY_MONTH = r"(0[1-9]|[12][0-9]|3[01])[/\-](0[1-9]|1[012])"
+_DAY_MONTH_PATTERN = re.compile(_VALID_DAY_MONTH)
+_AMOUNT_TOKEN = r"-?(?:\d{1,3}(?:(?:\.| )\d{3})*|\d+), ?\d{2}"
+_FILE_YEAR_PATTERNS = (
+    re.compile(r"(?<!\d)((?:19|20)\d{2})(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])(?=\D|$)"),
+    re.compile(r"(?<!\d)((?:19|20)\d{2})(0[1-9]|1[0-2])(?=\D|$)"),
+    re.compile(r"(?<!\d)((?:19|20)\d{2})(?=\D|$)"),
 )
+_HEADER_YEAR_PATTERNS = (
+    re.compile(r"\b(?:\d{2}[/-]\d{2}[/-](?P<year>(?:19|20)\d{2}))\b"),
+    re.compile(r"\b(?P<year>(?:19|20)\d{2})[/-]\d{2}[/-]\d{2}\b"),
+    re.compile(
+        r"\b(?:janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|"
+        r"octobre|novembre|decembre)\s+(?P<year>(?:19|20)\d{2})\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<year>(?:19|20)\d{2})\s+(?:janvier|fevrier|mars|avril|mai|juin|"
+        r"juillet|aout|septembre|octobre|novembre|decembre)\b",
+        re.IGNORECASE,
+    ),
+)
+_TRANSACTION_START_PATTERN = re.compile(rf"(?<!\d){_VALID_DAY_MONTH}\s+")
 _TRANSACTION_ROW_PATTERN = re.compile(
-    r"^\s*(?P<date>\d{2}/\d{2})\s+"
+    rf"^\s*(?P<date>{_VALID_DAY_MONTH})\s+"
     r"(?P<description>.*?)\s+"
-    r"(?P<amount>-?(?:\d{1,3}|\d{1,3}(?:(?:\.| )\d{3})+), ?\d{2})\s*$"
+    rf"(?P<amount>{_AMOUNT_TOKEN})(?:\s+.*)?\s*$"
 )
 _TOTAL_PATTERN = re.compile(
     r"Total\s?des\s?op.rations\s"
@@ -86,15 +105,20 @@ _CONTINUATION_BOUNDARY_MARKERS = (
     "releven",
 )
 _PAGE_MARKER_PATTERN = re.compile(r"^\s*PAGE\s+\d+\s*/\s*\d+\s*$", re.IGNORECASE)
+_PARTIAL_DATE_SUFFIX_PATTERN = re.compile(r"\d{2}/$")
+_DATE_FRAGMENT_PREFIX_PATTERN = re.compile(r"^\d{2}/\d{2}(?:\s|/|$)")
 _CREDIT_HINTS = (
     "VIREMENT DE",
     "VIREMENT INSTANTANE DE",
+    "VIREMENT INSTANTANE WERO DE",
+    "VIREMENT INTL",
     "CREDIT DU",
     "CREDIT CARTE BANCAIRE",
     "REMISE DE CHEQUES",
     "AVANTAGE CREDIT IMMOBILIER",
     "REMBOURSEMENT",
 )
+_DEBIT_HINTS = ("VIREMENT INSTANTANE A",)
 
 
 class LaBanquePostaleParser(BaseStatementParser):
@@ -117,15 +141,18 @@ class LaBanquePostaleParser(BaseStatementParser):
     def _extract_rows(
         self, file_path: Path, full_text: str
     ) -> tuple[list[ParsedRow], list[str], dict[str, object] | None]:
-        year = self._resolve_year(file_path.name)
+        year = self._resolve_year(file_path.name, full_text)
         rows: list[ParsedRow] = []
-        lines = full_text.splitlines()
+        lines, warnings = _expand_ocr_lines(file_path=file_path, full_text=full_text)
 
         for index, raw_line in enumerate(lines):
             match = _TRANSACTION_ROW_PATTERN.match(raw_line)
             if match is None:
                 continue
-            day, month = _DAY_MONTH_PATTERN.findall(match.group("date"))[0]
+            day_month = _DAY_MONTH_PATTERN.findall(match.group("date"))
+            if not day_month:
+                continue
+            day, month = day_month[0]
             details = _collect_continuation(lines=lines, start=index + 1)
             description = " ".join([match.group("description").strip(), details]).strip()
             description = _clean_lbp_description(description)
@@ -138,13 +165,14 @@ class LaBanquePostaleParser(BaseStatementParser):
                 )
             )
 
-        return rows, [], None
+        return rows, warnings, None
 
     def _normalize_config(self) -> NormalizeConfig:
         return NormalizeConfig(
-            sign_mode="debit_default_with_positive_hints",
+            sign_mode="hint_priority_with_default_debit",
             default_currency="EUR",
             positive_hints=_CREDIT_HINTS,
+            negative_hints=_DEBIT_HINTS,
             description_fallback="Unknown transaction",
         )
 
@@ -195,10 +223,13 @@ class LaBanquePostaleParser(BaseStatementParser):
         return warnings
 
     @staticmethod
-    def _resolve_year(filename: str) -> int:
-        matches = _FILE_YEAR_PATTERN.findall(filename)
-        if matches:
-            return int(matches[0][0])
+    def _resolve_year(filename: str, full_text: str) -> int:
+        year = _extract_year_from_filename(filename)
+        if year is not None:
+            return year
+        year = _extract_year_from_header(full_text)
+        if year is not None:
+            return year
         return date.today().year
 
 
@@ -237,6 +268,8 @@ def _collect_continuation(*, lines: list[str], start: int) -> str:
             break
         if _is_continuation_noise(line):
             continue
+        if _TRANSACTION_START_PATTERN.search(line):
+            break
         details.append(line)
     return " ".join(details).strip()
 
@@ -278,3 +311,77 @@ def _clean_lbp_description(description: str) -> str:
         flags=re.IGNORECASE,
     )
     return cleaned
+
+
+def _expand_ocr_lines(*, file_path: Path, full_text: str) -> tuple[list[str], list[str]]:
+    logical_lines: list[str] = []
+    warnings: list[str] = []
+    raw_lines = full_text.splitlines()
+    line_number = 0
+    while line_number < len(raw_lines):
+        raw_line = raw_lines[line_number]
+        cleaned_line = " ".join(raw_line.split())
+        if not cleaned_line:
+            line_number += 1
+            continue
+        if (
+            _PARTIAL_DATE_SUFFIX_PATTERN.search(cleaned_line)
+            and line_number + 1 < len(raw_lines)
+        ):
+            next_line = " ".join(raw_lines[line_number + 1].split())
+            if next_line and _DATE_FRAGMENT_PREFIX_PATTERN.match(next_line):
+                cleaned_line = f"{cleaned_line}{next_line}"
+                line_number += 1
+        segments, line_warning = _split_ocr_line(cleaned_line)
+        logical_lines.extend(segments)
+        if line_warning:
+            warnings.append(
+                f"{file_path.name}: OCR line {line_number + 1} contains multiple transaction starts; "
+                "rows may be merged"
+            )
+        line_number += 1
+    return logical_lines, warnings
+
+
+def _split_ocr_line(line: str) -> tuple[list[str], bool]:
+    matches = list(_TRANSACTION_START_PATTERN.finditer(line))
+    if not matches:
+        return [line], False
+    if len(matches) == 1 and matches[0].start() == 0:
+        return [line], False
+
+    segments: list[str] = []
+    first_match = matches[0]
+    if first_match.start() > 0:
+        prefix = line[:first_match.start()].strip()
+        if prefix:
+            segments.append(prefix)
+
+    for index, match in enumerate(matches):
+        segment_start = match.start()
+        segment_end = matches[index + 1].start() if index + 1 < len(matches) else len(line)
+        segment = line[segment_start:segment_end].strip()
+        if segment:
+            segments.append(segment)
+
+    return segments, len(matches) > 1
+
+
+def _extract_year_from_filename(filename: str) -> int | None:
+    for pattern in _FILE_YEAR_PATTERNS:
+        match = pattern.search(filename)
+        if match is not None:
+            return int(match.group(1))
+    return None
+
+
+def _extract_year_from_header(full_text: str) -> int | None:
+    header = "\n".join(full_text.splitlines()[:20])
+    for pattern in _HEADER_YEAR_PATTERNS:
+        match = pattern.search(header)
+        if match is not None:
+            return int(match.group("year"))
+    generic_match = re.search(r"\b((?:19|20)\d{2})\b", header)
+    if generic_match is not None:
+        return int(generic_match.group(1))
+    return None

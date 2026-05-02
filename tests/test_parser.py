@@ -124,6 +124,158 @@ def test_labanquepostale_parser_keeps_virement_a_negative() -> None:
     assert result.transactions[0].amount_native == Decimal("-200.00")
 
 
+def test_labanquepostale_parser_treats_instant_transfer_reimbursement_as_debit() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    20/04 VIREMENT INSTANTANE A 56,90
+         M OU MME THOMAZO XAVIER Remboursement ski billets PdF
+    """
+
+    result = parser.parse(Path("labanquepostale - 202304.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("-56.90")
+
+
+def test_labanquepostale_parser_resolves_june_2023_year_from_filename_or_header() -> None:
+    parser = LaBanquePostaleParser()
+
+    compact_filename_text = """
+    Releve de votre CCP
+    01/06 ACHAT CB LIBRAIRIE 12,34
+    """
+    compact_filename_result = parser.parse(
+        Path("releve_CCP1126215Y027_202306.pdf"), compact_filename_text
+    )
+
+    assert len(compact_filename_result.transactions) == 1
+    assert compact_filename_result.transactions[0].booking_date.year == 2023
+
+    header_year_text = """
+    Releve de votre CCP
+    Periode du 01/06/2023 au 30/06/2023
+    01/06 ACHAT CB LIBRAIRIE 12,34
+    """
+    header_year_result = parser.parse(Path("releve_CCP1126215Y027.pdf"), header_year_text)
+
+    assert len(header_year_result.transactions) == 1
+    assert header_year_result.transactions[0].booking_date.year == 2023
+
+
+def test_labanquepostale_parser_treats_virement_intl_as_credit() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    18/04 VIREMENT INTL. DESCP FOUCHERAND DEL OUIS R REF:01TRF034190918 PAYS: 228,39
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20230424.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("228.39")
+
+
+def test_labanquepostale_parser_treats_wero_de_as_credit() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    23/04 VIREMENT INSTANTANE WERO DE MME CLEMENTINE BARRAU 5,00
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_20260424.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].amount_native == Decimal("5.00")
+
+
+def test_labanquepostale_parser_splits_merged_transaction_rows() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    01/06 ACHAT CB AMAZON 12,34 02/06 VIREMENT DE EMPLOYEUR 1 200,00
+    03/06 ACHAT CB CARREFOUR 20,00 04/06 VIREMENT DE PARTICULIER 50,00
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_202306.pdf"), text)
+
+    assert len(result.transactions) == 4
+    assert [tx.booking_date.day for tx in result.transactions] == [1, 2, 3, 4]
+    assert result.transactions[0].description == "ACHAT CB AMAZON"
+    assert result.transactions[1].description == "VIREMENT DE EMPLOYEUR"
+    assert result.transactions[2].description == "ACHAT CB CARREFOUR"
+    assert result.transactions[3].description == "VIREMENT DE PARTICULIER"
+    assert result.transactions[0].amount_native == Decimal("-12.34")
+    assert result.transactions[1].amount_native == Decimal("1200.00")
+    assert result.transactions[2].amount_native == Decimal("-20.00")
+    assert result.transactions[3].amount_native == Decimal("50.00")
+    assert any("multiple transaction starts" in warning for warning in result.warnings)
+
+
+def test_labanquepostale_parser_splits_merged_edf_and_echeance_pret_rows() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    05/06 PRELEVEMENT EDF 104,00 06/06 PRELEVEMENT DE ECHEANCE PRET 450,00
+    """
+
+    result = parser.parse(Path("releve_CCP1126215Y027_202306.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert result.transactions[0].description == "PRELEVEMENT EDF"
+    assert result.transactions[1].description == "PRELEVEMENT DE ECHEANCE PRET"
+    assert result.transactions[0].amount_native == Decimal("-104.00")
+    assert result.transactions[1].amount_native == Decimal("-450.00")
+
+
+def test_labanquepostale_parser_parses_rows_with_trailing_ocr_noise() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    30/05 ACHAT CB INTER MARCHE 26.05.23 7,00 :
+    31/05 VIREMENT DE FORSEE POWER 6 583,28 À
+         FORSEE POWER 3150091427000194 REFERENCE : 0189151300000400 un
+    31/05 ACHAT CB LW-SNCF CONNEC 30.05.23 87,00 &
+    01/06 VIREMENT DE MARS NEDERLAND B.V. 24,02 763092
+         173200037101123 /INV/405-111429 28.4.2023 REFERENCE : 0189152300002200
+    05/06 PRELEVEMENT DE ECHEANCE PRET 1325,36
+    """
+
+    result = parser.parse(Path("labanquepostale - 202306.pdf"), text)
+
+    assert len(result.transactions) == 5
+    assert result.transactions[0].amount_native == Decimal("-7.00")
+    assert result.transactions[1].amount_native == Decimal("6583.28")
+    assert result.transactions[2].amount_native == Decimal("-87.00")
+    assert result.transactions[3].amount_native == Decimal("24.02")
+    assert result.transactions[4].amount_native == Decimal("-1325.36")
+
+
+def test_labanquepostale_parser_ignores_malformed_ocr_date_fragments() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    04/23 À 16H29 60,00
+    04/04 ACHAT CB INTER THOMAL 03.04.23 172,67
+    """
+
+    result = parser.parse(Path("labanquepostale - 202304.pdf"), text)
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].booking_date.day == 4
+    assert result.transactions[0].amount_native == Decimal("-172.67")
+
+
+def test_labanquepostale_parser_joins_split_date_fragments() -> None:
+    parser = LaBanquePostaleParser()
+    text = """
+    03/04 CARTE X3885 02/
+    04/23 À 16H29 60,00
+    03/04 ACHAT CB Spotify France 01.04.23 15,99
+    """
+
+    result = parser.parse(Path("labanquepostale - 202304.pdf"), text)
+
+    assert len(result.transactions) == 2
+    assert result.transactions[0].booking_date.day == 3
+    assert result.transactions[0].amount_native == Decimal("-60.00")
+    assert "CARTE X3885 02/04/23 À 16H29" in result.transactions[0].description
+    assert result.transactions[1].amount_native == Decimal("-15.99")
+
+
 def test_labanquepostale_parser_keeps_beneficiary_lines_for_consecutive_transfers() -> None:
     parser = LaBanquePostaleParser()
     lines = [
