@@ -31,7 +31,7 @@ The taxonomy should be:
 - complete enough that most real transactions have a natural home
 - stable enough to support durable `category_id`
 - simple enough to stay usable in review workflows
-- compatible with `cashflow_type` and `economic_role`
+- compatible with `cashflow_role` and `economic_role`
 
 The taxonomy should not primarily encode:
 
@@ -54,20 +54,18 @@ Those can be classification evidence, but they are not category meaning.
 
 ### Cash semantics
 
-- `cashflow_type` answers what happened to household cash.
+- `cashflow_role` answers what happened to household cash.
 - `economic_role` answers whether the flow is true income, fixed expense,
-  variable expense, legacy expense, transfer, or excluded.
+  variable expense, legacy expense, or excluded.
 
 Current intended model:
 
-- `cashflow_type = transfer` for owned-account movement
-- `cashflow_type = exclude` for explicitly excluded flows
-- otherwise `cashflow_type` follows transaction sign
+- `cashflow_role = transfer` for owned-account movement
+- otherwise `cashflow_role` follows transaction sign
   - positive => `in`
   - negative => `out`
 
-- `economic_role = transfer` when `cashflow_type = transfer`
-- `economic_role = exclude` when `cashflow_type = exclude`
+- `economic_role = exclude` for explicitly excluded flows
 - `economic_role = income` only for true income categories
 - `economic_role = fixed_expense` for recurring structural commitments such as
   rent, utilities, telecom, insurance, recurring taxes, and subscription-style
@@ -76,6 +74,10 @@ Current intended model:
   or ambiguous expenses
 - `economic_role = expense` remains valid as a legacy/unknown expense-side
   compatibility value
+- `decision_role = not_applicable` is the explicit display bucket for income,
+  transfer, and excluded flows after cashflow and economic-role filtering has
+  already removed them from the spend-side analysis. Transfer taxonomy entries
+  do not need to spell this out explicitly.
 
 This distinction is important because some positive inflows are not true
 income.
@@ -92,7 +94,8 @@ Important constraint:
 
 In other words:
 
-- `transfer` and `exclude` can be category semantics
+- `transfer` can be a category semantic
+- `exclude` should be carried by `economic_role`, not by cashflow direction
 - ordinary `in` and `out` should usually be derived from sign and account
   boundary, not hardcoded into purpose buckets
 
@@ -453,15 +456,17 @@ Target philosophy:
 - dedicated refund buckets should be treated as compatibility/fallback, not the
   long-term target design
 
-### Taxonomy-level `cashflow_type`
+### Taxonomy-level `cashflow_role`
 
-Current executable taxonomy still stores `cashflow_type` values on many bucket
+Current executable taxonomy still stores `cashflow_role` values on many bucket
 definitions.
 
 Target philosophy:
 
-- taxonomy may encode category semantics such as `transfer`, `exclude`, and
-  true-income meaning
+- taxonomy may encode category semantics such as `transfer` and true-income
+  meaning
+- transfer buckets should only carry the transfer cashflow marker; their
+  `decision_role` remains implied by the resolver
 - ordinary `in` / `out` should not be modeled as durable bucket properties for
   purpose categories
 - normal positive/negative direction should instead come from transaction sign

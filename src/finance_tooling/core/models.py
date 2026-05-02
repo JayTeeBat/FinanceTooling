@@ -89,6 +89,11 @@ class Transaction:
     source_record_index: int | None = None
     source_file_mtime: datetime | None = None
 
+    @property
+    def cashflow_role(self) -> CashflowType | None:
+        """Compatibility alias for the renamed cashflow semantic."""
+        return self.cashflow_type
+
 
 @dataclass(frozen=True)
 class WorkflowResult:

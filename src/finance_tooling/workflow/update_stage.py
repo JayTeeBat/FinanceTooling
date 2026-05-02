@@ -13,7 +13,13 @@ from finance_tooling.workflow.incremental_state import (
     source_registry_path,
 )
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult, run_ingest
+from finance_tooling.workflow.planning_stage import run_planning
 from finance_tooling.workflow.transform_stage import load_cached_transform_result, run_transform
+
+
+def _planning_inputs_ready(settings: Settings) -> bool:
+    """Return whether canonical transform outputs exist for planning."""
+    return settings.master_parquet_path.exists()
 
 
 def run_update(
@@ -23,6 +29,7 @@ def run_update(
     transform_only: bool = False,
     full_refresh: bool = False,
     emit_ingest_summary: bool = False,
+    skip_planning: bool = False,
 ) -> WorkflowResult | IngestExecutionResult:
     """Run ingest+transform orchestration with optional stage-only execution."""
     if ingest_only and transform_only:
@@ -44,7 +51,10 @@ def run_update(
                 settings.transaction_overrides_path,
             ),
         )
-        return run_transform(settings, backup_command="update", backup_run=backup_run)
+        transform_result = run_transform(settings, backup_command="update", backup_run=backup_run)
+        if not skip_planning and _planning_inputs_ready(settings):
+            run_planning(settings)
+        return transform_result
 
     if not full_refresh:
         registry = load_source_registry(source_registry_path(settings))
@@ -72,6 +82,8 @@ def run_update(
                 stale_reasons=(),
             )
             if cached_result is not None:
+                if not skip_planning and _planning_inputs_ready(settings):
+                    run_planning(settings)
                 return cached_result
             backup_run = create_stage_backup_run(
                 stage="update",
@@ -86,7 +98,14 @@ def run_update(
                     settings.transaction_overrides_path,
                 ),
             )
-            return run_transform(settings, backup_command="update", backup_run=backup_run)
+            transform_result = run_transform(
+                settings,
+                backup_command="update",
+                backup_run=backup_run,
+            )
+            if not skip_planning and _planning_inputs_ready(settings):
+                run_planning(settings)
+            return transform_result
 
     backup_run = create_stage_backup_run(
         stage="update",
@@ -112,13 +131,16 @@ def run_update(
     if ingest_only:
         return ingest_result
 
-    return run_transform(
+    transform_result = run_transform(
         settings,
         staged_path=ingest_result.staged_path,
         ingest_result=ingest_result,
         backup_command="update",
         backup_run=backup_run,
     )
+    if not skip_planning and _planning_inputs_ready(settings):
+        run_planning(settings)
+    return transform_result
 
 
 def run_workflow(settings: Settings) -> WorkflowResult:

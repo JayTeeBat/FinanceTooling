@@ -46,7 +46,7 @@ uv run review-export
 
 Default input/output paths when flags are omitted:
 
-- normalized input: `${FINANCE_PROCESSED_PATH}/outputs/transform_transactions.csv`
+- normalized input: `${FINANCE_PROCESSED_PATH}/transform/transform_transactions.csv`
 - review output: `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`
 
 Default export behavior is uncategorized-only. Optional filters:
@@ -119,7 +119,7 @@ Edit `${FINANCE_PROCESSED_PATH}/transactions_review.xlsx`:
     `transaction_overrides.yaml`.
 - `existing_project_tags` is informational; do not edit.
 - `reviewed` is persisted separately and also projected into
-  `outputs/transform_transactions.csv` after `transform`.
+  `transform/transform_transactions.csv` after `transform`.
 - `review_comment` is review metadata only; it is not used as `project` data and
   is not written into canonical normalized outputs.
 

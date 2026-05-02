@@ -38,6 +38,9 @@ TRANSACTION_OVERRIDES_PATH_ENV = "FINANCE_TRANSACTION_OVERRIDES_PATH"
 REVIEW_STATE_PATH_ENV = "FINANCE_REVIEW_STATE_PATH"
 REVIEW_EXPORT_DARK_SAFE_ENV = "FINANCE_REVIEW_EXPORT_DARK_SAFE"
 DOTENV_PATH = Path(".env")
+PIPELINE_INGEST_DIRNAME = "ingest"
+PIPELINE_TRANSFORM_DIRNAME = "transform"
+PIPELINE_PLANNING_DIRNAME = "planning"
 PIPELINE_OUTPUTS_DIRNAME = "outputs"
 PIPELINE_STATE_DIRNAME = "state"
 
@@ -62,6 +65,11 @@ HOUSEHOLD_HEALTHCHECK_FILENAME = "household_healthcheck.html"
 TRANSFORM_SOURCE_REGISTRY_FILENAME = "transform_source_registry.json"
 WORKFLOW_REVIEW_STATE_FILENAME = "workflow_review_state.parquet"
 WORKFLOW_FX_CACHE_FILENAME = "workflow_fx_rates_history.parquet"
+PLANNING_LEDGER_FILENAME = "planning_ledger.parquet"
+PLANNING_LEDGER_CSV_FILENAME = "planning_ledger.csv"
+PLANNING_KPI_SUMMARY_FILENAME = "planning_kpi_summary.json"
+PLANNING_BUDGET_STATUS_FILENAME = "planning_budget_status.csv"
+PLANNING_DASHBOARD_FILENAME = "planning_dashboard.html"
 
 
 @dataclass(frozen=True)
@@ -165,18 +173,63 @@ def _processed_root_from_settings(settings: Settings) -> Path:
 
 
 def outputs_root_path(settings: Settings) -> Path:
-    """Return the root directory for stable operator-facing outputs."""
-    return _processed_root_from_settings(settings) / PIPELINE_OUTPUTS_DIRNAME
+    """Return the transform root for backward-compatible callers."""
+    return transform_root_path(settings)
 
 
 def state_root_path(settings: Settings) -> Path:
-    """Return the root directory for internal state and diagnostics."""
+    """Return the transform root for backward-compatible state callers."""
+    return transform_root_path(settings)
+
+
+def ingest_root_path(settings: Settings) -> Path:
+    """Return the ingest-owned processed directory."""
+    return _processed_root_from_settings(settings) / PIPELINE_INGEST_DIRNAME
+
+
+def transform_root_path(settings: Settings) -> Path:
+    """Return the transform-owned processed directory."""
+    return _processed_root_from_settings(settings) / PIPELINE_TRANSFORM_DIRNAME
+
+
+def planning_root_path(settings: Settings) -> Path:
+    """Return the planning-owned processed directory."""
+    return _processed_root_from_settings(settings) / PIPELINE_PLANNING_DIRNAME
+
+
+def legacy_outputs_root_path(settings: Settings) -> Path:
+    """Return the legacy transform outputs directory for migration reads."""
+    return _processed_root_from_settings(settings) / PIPELINE_OUTPUTS_DIRNAME
+
+
+def legacy_state_root_path(settings: Settings) -> Path:
+    """Return the legacy state directory for migration reads."""
     return _processed_root_from_settings(settings) / PIPELINE_STATE_DIRNAME
 
 
+def resolve_transform_artifact_path(settings: Settings, preferred_path: Path) -> Path:
+    """Resolve a transform artifact with a legacy ``processed/outputs`` read fallback."""
+    if preferred_path.exists():
+        return preferred_path
+    legacy_path = legacy_outputs_root_path(settings) / preferred_path.name
+    if legacy_path.exists():
+        return legacy_path
+    return preferred_path
+
+
+def resolve_ingest_artifact_path(settings: Settings, preferred_path: Path) -> Path:
+    """Resolve an ingest artifact with a legacy ``processed/state`` read fallback."""
+    if preferred_path.exists():
+        return preferred_path
+    legacy_path = legacy_state_root_path(settings) / preferred_path.name
+    if legacy_path.exists():
+        return legacy_path
+    return preferred_path
+
+
 def ingest_state_path(settings: Settings) -> Path:
-    """Return the ingest-owned state directory under ``processed/state``."""
-    return state_root_path(settings)
+    """Return the ingest-owned state directory."""
+    return ingest_root_path(settings)
 
 
 def _load_dotenv(path: Path = DOTENV_PATH) -> None:
@@ -216,19 +269,19 @@ def load_settings_from_env() -> Settings:
     processed_dir = _resolve_path_from_env(PROCESSED_PATH_ENV)
     if processed_dir is None:
         raise ValueError(f"Missing required environment variable: {PROCESSED_PATH_ENV}")
-    outputs_dir = processed_dir / PIPELINE_OUTPUTS_DIRNAME
-    state_dir = processed_dir / PIPELINE_STATE_DIRNAME
+    ingest_dir = processed_dir / PIPELINE_INGEST_DIRNAME
+    transform_dir = processed_dir / PIPELINE_TRANSFORM_DIRNAME
     output_path = _resolve_path_from_env(OUTPUT_PATH_ENV) or (
-        outputs_dir / TRANSFORM_DASHBOARD_FILENAME
+        transform_dir / TRANSFORM_DASHBOARD_FILENAME
     )
     master_parquet_path = _resolve_path_from_env(MASTER_PARQUET_ENV) or (
-        outputs_dir / TRANSFORM_TRANSACTIONS_FILENAME
+        transform_dir / TRANSFORM_TRANSACTIONS_FILENAME
     )
     export_csv_path = _resolve_path_from_env(EXPORT_CSV_PATH_ENV) or (
-        outputs_dir / TRANSFORM_TRANSACTIONS_CSV_FILENAME
+        transform_dir / TRANSFORM_TRANSACTIONS_CSV_FILENAME
     )
     export_json_path = _resolve_path_from_env(EXPORT_JSON_PATH_ENV) or (
-        outputs_dir / TRANSFORM_TRANSACTIONS_JSON_FILENAME
+        transform_dir / TRANSFORM_TRANSACTIONS_JSON_FILENAME
     )
     export_json_enabled = _parse_bool(
         os.environ.get(EXPORT_JSON_ENABLED_ENV),
@@ -239,14 +292,14 @@ def load_settings_from_env() -> Settings:
         default=False,
     )
     staged_transactions_path = _resolve_path_from_env(STAGED_TRANSACTIONS_PATH_ENV) or (
-        state_dir / INGEST_STAGED_TRANSACTIONS_FILENAME
+        ingest_dir / INGEST_STAGED_TRANSACTIONS_FILENAME
     )
-    summary_json_path = outputs_dir / TRANSFORM_SUMMARY_FILENAME
-    completeness_json_path = state_dir / TRANSFORM_COMPLETENESS_FILENAME
+    summary_json_path = transform_dir / TRANSFORM_SUMMARY_FILENAME
+    completeness_json_path = transform_dir / TRANSFORM_COMPLETENESS_FILENAME
 
     base_currency = os.environ.get(BASE_CURRENCY_ENV, "EUR").strip().upper() or "EUR"
     fx_cache_path = _resolve_path_from_env(FX_CACHE_PATH_ENV) or (
-        state_dir / WORKFLOW_FX_CACHE_FILENAME
+        transform_dir / WORKFLOW_FX_CACHE_FILENAME
     )
     fx_auto_fetch = _parse_bool(os.environ.get(FX_AUTO_FETCH_ENV), default=True)
     ingest_workers = _parse_int(
@@ -259,7 +312,7 @@ def load_settings_from_env() -> Settings:
         default=False,
     )
     ingest_text_cache_path = _resolve_path_from_env(INGEST_TEXT_CACHE_PATH_ENV) or (
-        state_dir / INGEST_TEXT_CACHE_FILENAME
+        ingest_dir / INGEST_TEXT_CACHE_FILENAME
     )
     config_dir = input_path.parent / "config"
     category_rules_path = _resolve_path_from_env(CATEGORY_RULES_PATH_ENV) or (
@@ -281,7 +334,7 @@ def load_settings_from_env() -> Settings:
         config_dir / "transaction_overrides.yaml"
     )
     review_state_path = _resolve_path_from_env(REVIEW_STATE_PATH_ENV) or (
-        state_dir / WORKFLOW_REVIEW_STATE_FILENAME
+        transform_dir / WORKFLOW_REVIEW_STATE_FILENAME
     )
     review_export_dark_safe = _parse_bool(
         os.environ.get(REVIEW_EXPORT_DARK_SAFE_ENV),

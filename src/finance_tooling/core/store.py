@@ -14,9 +14,11 @@ import pandas as pd
 
 from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS, Transaction
 from finance_tooling.core.semantics import (
+    VALID_CASHFLOW_ROLES,
     VALID_CASHFLOW_TYPES,
     VALID_DECISION_ROLES,
     VALID_ECONOMIC_ROLES,
+    CashflowRoleType,
     CashflowType,
     DecisionRoleType,
     EconomicRoleType,
@@ -169,8 +171,17 @@ def _row_string(row: dict[str, object], column: str) -> str | None:
     return normalized or None
 
 
+def _cashflow_role_from_row(row: dict[str, object]) -> CashflowRoleType | None:
+    normalized = (
+        _row_string(row, "cashflow_role") or _row_string(row, "cashflow_type") or ""
+    ).casefold()
+    if normalized in VALID_CASHFLOW_ROLES:
+        return cast(CashflowRoleType, normalized)
+    return None
+
+
 def _cashflow_type_from_row(row: dict[str, object]) -> CashflowType | None:
-    normalized = (_row_string(row, "cashflow_type") or "").casefold()
+    normalized = _cashflow_role_from_row(row)
     if normalized in VALID_CASHFLOW_TYPES:
         return cast(CashflowType, normalized)
     return None

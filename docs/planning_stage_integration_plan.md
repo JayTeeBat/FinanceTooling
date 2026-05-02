@@ -17,8 +17,8 @@ HTML dashboard.
 
 - Public stage name: `planning`
 - Primary CLI: `uv run planning`
-- Primary input: `processed/outputs/transform_transactions.parquet`
-- Primary output directory: `processed/outputs/`
+- Primary input: `processed/transform/transform_transactions.parquet`
+- Primary output directory: `processed/planning/`
 - Initial UI surface: separate `planning_dashboard.html`
 - V1 scope: transaction-derived cashflow health KPIs
 - Budgeting role: included when budget targets exist, but not the whole stage
@@ -60,7 +60,7 @@ uv run planning --verbose
 Default paths should come from the existing settings object where possible:
 
 - input transactions: `settings.master_parquet_path`
-- budget targets: `settings.budget_targets_path`
+- budget targets: `settings.budget_targets_path` (YAML or JSON)
 - output directory: `settings.output_path.parent`
 
 The command should fail clearly if the canonical transform output is missing.
@@ -79,6 +79,13 @@ The stage should write:
 `planning_ledger` is the audit base. All dashboard and summary totals should be
 traceable back to ledger rows by `transaction_id`.
 
+The ledger row model should intentionally keep source-traceability fields such
+as `description` and `account_holder` so the planning outputs remain auditable
+without re-reading the source transactions.
+
+The dashboard should stay at a high level: it is a surface explorer for monthly
+financial structure, not a transaction list.
+
 ## KPI Model
 
 V1 KPIs should be grounded in canonical fields:
@@ -92,6 +99,14 @@ V1 KPIs should be grounded in canonical fields:
 - `decision_role`
 - `amount_eur`
 - `project`
+- `planning_bucket`
+
+`planning_bucket` is the semantic rollup dimension for planning analysis. It is
+derived from the canonical transaction semantics and used to group ledger rows
+into the operational buckets shown in the dashboard and budget status.
+
+The dashboard should support monthly views of the `economic_role`,
+`cashflow_type`, and `decision_role` splits over a selected period.
 
 Core V1 KPI families:
 
@@ -110,6 +125,19 @@ Core V1 KPI families:
 
 The stage should prefer semantic fields over display labels and sign-only
 heuristics.
+
+Near-future transform contract note:
+
+- `cashflow_type` should be resolved first to isolate transfer and excluded
+  flows from household income/expense pattern analysis.
+- `economic_role` should then remove non-personal flows such as associations,
+  work expenses, and other explicit out-of-scope rows.
+- `decision_role` should be applied last, only to the remaining spend-side
+  rows, and should use `not_applicable` as the explicit bucket for rows outside that
+  spend domain.
+
+This layering keeps the planning dashboard self-contained without making the
+decision-role chart depend on hidden buckets from the other two surfaces.
 
 ## Technical Recommendations
 
@@ -149,6 +177,9 @@ scenario page. It should emphasize:
 The existing `transform_dashboard.html` should remain stable while this stage
 is introduced.
 
+`update` should invoke `planning` by default after `transform`; use
+`--skip-planning` to keep the old transform-only stop point.
+
 ## Test Plan
 
 Add tests for:
@@ -158,8 +189,8 @@ Add tests for:
 - missing budget target warning
 - planning ledger generation from a small canonical fixture
 - KPI summary correctness for income, expense, fixed, variable, essential,
-  discretionary, savings, investment, debt-service, tax, excluded, and unknown
-  rows
+  discretionary, savings, investment, debt-service, tax, not_applicable, and
+  unknown rows
 - budget status generation when targets are configured
 - HTML renderer writes a self-contained document with valid embedded JSON
 
@@ -169,6 +200,7 @@ Acceptance criteria:
 - all KPI totals reconcile to `planning_ledger`
 - excluded rows do not affect household cashflow KPIs
 - transfer rows affect only the planning buckets implied by canonical semantics
+  and do not rely on `decision_role` for their transfer subtype
 - the HTML output is separate from the existing transform dashboard
 
 ## Follow-Up Integration
@@ -177,4 +209,3 @@ After V1 lands, evaluate whether to connect observed planning KPIs to the
 scenario-planning workspace. A useful later bridge would compare actual savings,
 investment, and debt-service flows against required monthly goal funding from
 the existing household planning engine.
-

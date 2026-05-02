@@ -16,3 +16,5 @@ as an active work package.
 - Add a first-class planning/KPI workflow command that consumes canonical
   transform outputs and produces budget-vs-actual and monthly planning
   summaries without re-running ingest.
+- Update workflow docs so `update` defaults to planning while `transform`
+  stays transform-only.

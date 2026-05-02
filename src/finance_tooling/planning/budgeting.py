@@ -20,7 +20,10 @@ from finance_tooling.categorization.classify import (
     resolve_taxonomy_decision_role_for_category_id,
     resolve_taxonomy_economic_role_for_category_id,
 )
-from finance_tooling.core.semantic_resolution import resolve_planning_bucket
+from finance_tooling.core.semantic_resolution import (
+    normalize_decision_role_for_row,
+    resolve_planning_bucket,
+)
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 _BUDGET_STATUS_COLUMNS = (
@@ -39,6 +42,7 @@ _PLANNING_LEDGER_COLUMNS = (
     "month",
     "booking_date",
     "source_document_id",
+    "description",
     "category_id",
     "reporting_category_id",
     "category",
@@ -49,10 +53,12 @@ _PLANNING_LEDGER_COLUMNS = (
     "decision_role",
     "planning_bucket",
     "amount_eur",
-    "planning_amount_eur",
     "bank",
     "account_label",
+    "account_holder",
 )
+
+_PLANNING_TRANSFER_BUCKETS = frozenset({"transfer", "savings", "investment", "debt_service", "tax"})
 
 
 @dataclass(frozen=True)
@@ -235,11 +241,42 @@ def _coerce_amount(value: object) -> float | None:
     return None
 
 
+def _kpi_amount_series(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype="float64")
+    if "amount_eur" not in frame.columns or "planning_bucket" not in frame.columns:
+        return pd.Series(0.0, index=frame.index, dtype="float64")
+    return pd.to_numeric(frame["amount_eur"], errors="coerce").fillna(0.0)
+
+
+def _budget_amount_series(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype="float64")
+    if "amount_eur" not in frame.columns or "planning_bucket" not in frame.columns:
+        return pd.Series(0.0, index=frame.index, dtype="float64")
+
+    amounts = pd.to_numeric(frame["amount_eur"], errors="coerce").fillna(0.0)
+    buckets = frame["planning_bucket"].astype("string").fillna("").str.strip().str.casefold()
+    planning_amount = pd.Series(0.0, index=frame.index, dtype="float64")
+    planning_amount.loc[buckets.eq("income")] = amounts.where(amounts > 0, 0.0)
+    planning_amount.loc[buckets.eq("expense")] = -amounts
+    planning_amount.loc[buckets.isin(_PLANNING_TRANSFER_BUCKETS)] = amounts.abs()
+    return planning_amount
+
+
 def _row_text(row: dict[str, object], key: str) -> str:
     value = row.get(key)
     if value is None or pd.isna(value):
         return ""
     return str(value).strip().casefold()
+
+
+def _optional_text(row: dict[str, object], key: str) -> str | None:
+    value = row.get(key)
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _resolve_row_category_id(
@@ -316,17 +353,17 @@ def build_monthly_planning_ledger(
             if category_id is not None and classification_rules is not None
             else category_id
         )
-        cashflow_type = _row_text(row, "cashflow_type")
+        cashflow_role = _row_text(row, "cashflow_role") or _row_text(row, "cashflow_type")
         economic_role = _row_text(row, "economic_role")
         decision_role = _row_text(row, "decision_role")
         if classification_rules is not None and category_id is not None:
-            if cashflow_type in {"", "unknown"}:
-                cashflow_type = (
+            if cashflow_role in {"", "unknown"}:
+                cashflow_role = (
                     resolve_taxonomy_cashflow_type_for_category_id(
                         category_id,
                         rules=classification_rules,
                     )
-                    or cashflow_type
+                    or cashflow_role
                 )
             if economic_role in {"", "unknown"}:
                 economic_role = (
@@ -336,19 +373,25 @@ def build_monthly_planning_ledger(
                     )
                     or economic_role
                 )
-            if decision_role in {"", "unknown"}:
-                decision_role = (
-                    resolve_taxonomy_decision_role_for_category_id(
-                        category_id,
-                        rules=classification_rules,
-                    )
-                    or decision_role
-                )
-        planning_bucket, planning_amount = resolve_planning_bucket(
-            cashflow_type,
+            decision_role = resolve_taxonomy_decision_role_for_category_id(
+                category_id,
+                rules=classification_rules,
+            )
+        decision_role = normalize_decision_role_for_row(
+            decision_role,
+            cashflow_role=cashflow_role,
+            economic_role=economic_role,
+            category=row.get("category"),
+            subcategory=row.get("subcategory"),
+        )
+        planning_bucket, _planning_amount = resolve_planning_bucket(
+            cashflow_role,
             economic_role,
             decision_role,
             amount,
+            category_id=category_id,
+            category=row.get("category"),
+            subcategory=row.get("subcategory"),
         )
         rows.append(
             {
@@ -356,19 +399,21 @@ def build_monthly_planning_ledger(
                 "month": month,
                 "booking_date": row.get("booking_date"),
                 "source_document_id": row.get("source_document_id"),
+                "description": row.get("description"),
                 "category_id": category_id,
                 "reporting_category_id": reporting_category_id,
                 "category": row.get("category"),
                 "subcategory": row.get("subcategory"),
                 "project": row.get("project"),
-                "cashflow_type": cashflow_type or None,
+                "cashflow_type": cashflow_role or None,
                 "economic_role": economic_role or None,
                 "decision_role": decision_role or None,
                 "planning_bucket": planning_bucket,
                 "amount_eur": amount,
-                "planning_amount_eur": round(planning_amount, 2),
                 "bank": row.get("bank"),
                 "account_label": row.get("account_label"),
+                "account_holder": _optional_text(row, "account_holder")
+                or _optional_text(row, "account_label"),
             }
         )
 
@@ -386,29 +431,36 @@ def build_budget_status(
     dataframe: pd.DataFrame,
     config: BudgetConfig,
     *,
+    ledger: pd.DataFrame | None = None,
     classification_rules: ClassificationRules | None = None,
 ) -> pd.DataFrame:
-    """Compute budget-vs-actual rows from transactions and budget targets."""
+    """Compute budget-vs-actual rows from transactions and budget targets.
+
+    When a precomputed planning ledger is available, pass it via ``ledger`` to
+    avoid rebuilding the same semantic row model twice.
+    """
     if not config.targets:
         return pd.DataFrame(columns=list(_BUDGET_STATUS_COLUMNS))
 
-    ledger = build_monthly_planning_ledger(
-        dataframe,
-        classification_rules=classification_rules,
-    )
+    if ledger is None:
+        ledger = build_monthly_planning_ledger(
+            dataframe,
+            classification_rules=classification_rules,
+        )
     if ledger.empty:
         return pd.DataFrame(columns=list(_BUDGET_STATUS_COLUMNS))
 
     by_category: dict[tuple[str, str], float] = defaultdict(float)
     by_project: dict[tuple[str, str, str], float] = defaultdict(float)
 
-    expense_ledger = ledger[ledger["planning_bucket"].eq("expense")]
+    expense_ledger = ledger[ledger["planning_bucket"].eq("expense")].copy()
+    expense_ledger["_planning_amount"] = _budget_amount_series(expense_ledger)
     for row in expense_ledger.to_dict(orient="records"):
         month = str(row.get("month") or "").strip()
         category_id = str(row.get("category_id") or "").strip()
         if not month or not category_id:
             continue
-        amount = _coerce_amount(row.get("planning_amount_eur"))
+        amount = _coerce_amount(row.get("_planning_amount"))
         if amount is None:
             continue
         by_category[(month, category_id.casefold())] += amount

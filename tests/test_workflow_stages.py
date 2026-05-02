@@ -245,8 +245,8 @@ def test_run_workflow_writes_completeness_report_and_summary(monkeypatch, tmp_pa
         "fixed_expense": 0,
         "variable_expense": 0,
         "expense": 0,
-        "transfer": 0,
         "exclude": 0,
+        "not_applicable": 0,
     }
     assert summary_payload["account_boundary_unknown_count"] == 1
     assert summary_payload["account_boundary_unknown_side_count"] == 2
@@ -443,7 +443,9 @@ def test_run_workflow_reports_exclude_metrics(monkeypatch, tmp_path: Path) -> No
                 "fx_source": "BASE",
                 "amount_eur": -25.0,
                 "category": "Non Personal Transactions",
-                "cashflow_type": "exclude",
+                "cashflow_type": "out",
+                "economic_role": "exclude",
+                "decision_role": "not_applicable",
                 "bank": "DummyBank",
                 "account_label": None,
                 "source_file": str(parsed_pdf),
@@ -475,8 +477,8 @@ def test_run_workflow_reports_exclude_metrics(monkeypatch, tmp_path: Path) -> No
         "fixed_expense": 0,
         "variable_expense": 0,
         "expense": 0,
-        "transfer": 0,
         "exclude": 1,
+        "not_applicable": 0,
     }
 
 

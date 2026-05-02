@@ -47,7 +47,7 @@ def _rules() -> ClassificationRules:
             "non personal transactions": TaxonomyCategory(
                 name="Non Personal Transactions",
                 subcategories=(),
-                cashflow_type="exclude",
+                cashflow_type="out",
             ),
         },
     )
@@ -191,7 +191,7 @@ def test_build_cashflow_yoy_summary_excludes_exclude_rows_from_metrics() -> None
             bank="HSBC",
             parser="hsbc",
             category="Non Personal Transactions",
-            cashflow_type="exclude",
+            cashflow_type="out",
             amount_eur=Decimal("-300.00"),
         ),
     ]
@@ -407,8 +407,8 @@ def test_resolve_economic_roles_marks_employer_as_income() -> None:
         "fixed_expense": 0,
         "variable_expense": 0,
         "expense": 0,
-        "transfer": 0,
         "exclude": 0,
+        "not_applicable": 0,
     }
 
 
@@ -501,7 +501,7 @@ def test_resolve_economic_roles_keeps_legacy_refund_bucket_as_expense_when_not_i
         account_inference_config=_account_config(),
     )
 
-    assert result.dataframe.loc[0, "economic_role"] == "expense"
+    assert result.dataframe.loc[0, "economic_role"] == "variable_expense"
 
 
 def test_resolve_economic_roles_keeps_positive_health_refund_as_expense() -> None:
@@ -525,7 +525,7 @@ def test_resolve_economic_roles_keeps_positive_health_refund_as_expense() -> Non
         classification_rules=_rules(),
     )
 
-    assert result.dataframe.loc[0, "economic_role"] == "expense"
+    assert result.dataframe.loc[0, "economic_role"] == "variable_expense"
 
 
 def test_resolve_economic_roles_uses_rule_level_fixed_expense_override() -> None:
@@ -673,7 +673,7 @@ def test_resolve_economic_roles_marks_transfer_and_exclude_before_income() -> No
             parser="hsbc",
             category="Income",
             subcategory="Interest",
-            cashflow_type="exclude",
+            cashflow_type="out",
             amount_eur=Decimal("1250.00"),
         ),
     ]
@@ -683,7 +683,7 @@ def test_resolve_economic_roles_marks_transfer_and_exclude_before_income() -> No
         account_inference_config=_account_config(employer_patterns=("acme",)),
     )
 
-    assert list(result.dataframe["economic_role"]) == ["transfer", "exclude"]
+    assert list(result.dataframe["economic_role"]) == ["not_applicable", "income"]
 
 
 def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
@@ -701,6 +701,18 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
             economic_role="variable_expense",
         ),
         Transaction(
+            booking_date=date(2025, 1, 3),
+            description="Salary",
+            amount_native=Decimal("1250.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Income",
+            cashflow_type="in",
+            economic_role="income",
+        ),
+        Transaction(
             booking_date=date(2025, 1, 4),
             description="Savings transfer",
             amount_native=Decimal("-200.00"),
@@ -711,7 +723,20 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
             category="Transfers",
             subcategory="Savings Transfer",
             cashflow_type="transfer",
-            economic_role="transfer",
+        ),
+        Transaction(
+            booking_date=date(2025, 1, 5),
+            description="To Trade Republic",
+            amount_native=Decimal("-1340.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Transfers",
+            subcategory="Investment Transfer",
+            cashflow_type="out",
+            economic_role="variable_expense",
+            decision_role="not_applicable",
         ),
     ]
 
@@ -726,15 +751,28 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
                 decision_role="savings",
                 category_label="Transfers",
                 subcategory_label="Savings Transfer",
-            )
+            ),
+            "transfers.investment_transfer": TaxonomyCategory(
+                name="Transfers",
+                subcategories=(),
+                cashflow_type="out",
+                decision_role="investment",
+                category_label="Transfers",
+                subcategory_label="Investment Transfer",
+            ),
         },
     )
     result = resolve_decision_roles_for_dataframe(dataframe, classification_rules=rules)
 
-    assert list(result.dataframe["decision_role"]) == ["essential", "savings"]
+    assert list(result.dataframe["decision_role"]) == [
+        "essential",
+        "not_applicable",
+        "not_applicable",
+        "investment",
+    ]
 
 
-def test_resolve_decision_roles_marks_excluded_rows_as_excluded() -> None:
+def test_resolve_decision_roles_marks_excluded_rows_as_not_applicable() -> None:
     tx = Transaction(
         booking_date=date(2025, 1, 7),
         description="Pass-through adjustment",
@@ -744,17 +782,37 @@ def test_resolve_decision_roles_marks_excluded_rows_as_excluded() -> None:
         bank="HSBC",
         parser="hsbc",
         category="Non Personal Transactions",
-        cashflow_type="exclude",
+        cashflow_type="out",
         economic_role="exclude",
         amount_eur=Decimal("-42.00"),
     )
 
     result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
 
-    assert result.dataframe.loc[0, "decision_role"] == "excluded"
+    assert result.dataframe.loc[0, "decision_role"] == "not_applicable"
 
 
-def test_resolve_decision_roles_uses_debt_service_transfer_defaults() -> None:
+def test_resolve_decision_roles_treats_unknown_income_as_not_applicable() -> None:
+    tx = Transaction(
+        booking_date=date(2025, 1, 7),
+        description="Salary correction",
+        amount_native=Decimal("42.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Income",
+        cashflow_type="in",
+        economic_role="income",
+        decision_role="unknown",
+    )
+
+    result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
+
+    assert result.dataframe.loc[0, "decision_role"] == "not_applicable"
+
+
+def test_resolve_decision_roles_marks_transfer_rows_as_not_applicable() -> None:
     tx = Transaction(
         booking_date=date(2025, 1, 8),
         description="Mortgage transfer",
@@ -766,13 +824,12 @@ def test_resolve_decision_roles_uses_debt_service_transfer_defaults() -> None:
         category="Transfers",
         subcategory="Mortgage payment",
         cashflow_type="transfer",
-        economic_role="transfer",
         amount_eur=Decimal("-250.00"),
     )
 
     result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
 
-    assert result.dataframe.loc[0, "decision_role"] == "debt_service"
+    assert result.dataframe.loc[0, "decision_role"] == "not_applicable"
 
 
 def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_inflow() -> None:
@@ -794,7 +851,7 @@ def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_
         account_inference_config=_account_config(),
     )
 
-    assert result.dataframe.loc[0, "economic_role"] == "expense"
+    assert result.dataframe.loc[0, "economic_role"] == "variable_expense"
 
 
 def test_cashflow_summary_treats_all_expense_roles_as_expenses() -> None:

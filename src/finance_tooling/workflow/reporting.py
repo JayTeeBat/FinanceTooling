@@ -211,7 +211,7 @@ def _build_category_metrics_from_dataframe(
     )
     economic_role_series = economic_role_series.mask(
         economic_role_series.eq(""),
-        pd.Series("expense", index=dataframe.index, dtype="string"),
+        pd.Series("variable_expense", index=dataframe.index, dtype="string"),
     )
     cashflow_type_series = (
         dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
@@ -336,14 +336,14 @@ def _build_exclude_metrics_from_dataframe(
     if dataframe.empty:
         return 0, 0.0, []
 
-    cashflow_type_series = (
-        dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
+    economic_role_series = (
+        dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
         .astype("string")
         .fillna("")
         .str.strip()
         .str.casefold()
     )
-    exclude_mask = cashflow_type_series.eq("exclude")
+    exclude_mask = economic_role_series.eq("exclude")
     exclude_count = int(exclude_mask.sum())
     if exclude_count == 0:
         return 0, 0.0, []
@@ -414,8 +414,8 @@ def _build_economic_role_metrics_from_dataframe(dataframe: DataFrame) -> dict[st
             "fixed_expense": 0,
             "variable_expense": 0,
             "expense": 0,
-            "transfer": 0,
             "exclude": 0,
+            "not_applicable": 0,
         }
 
     role_series = (
@@ -432,8 +432,8 @@ def _build_economic_role_metrics_from_dataframe(dataframe: DataFrame) -> dict[st
             "fixed_expense",
             "variable_expense",
             "expense",
-            "transfer",
             "exclude",
+            "not_applicable",
         )
     }
 

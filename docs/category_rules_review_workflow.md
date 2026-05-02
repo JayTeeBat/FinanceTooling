@@ -172,13 +172,13 @@ uv run update
 
 Minimum verification points:
 
-- `outputs/transform_run_summary.json`:
+- `transform/transform_run_summary.json`:
   - `categorized_count`
   - `uncategorized_count`
   - `uncategorized_ratio`
   - reconciliation counters
   - `top_uncategorized_descriptions`
-- `outputs/transform_transactions.csv`:
+- `transform/transform_transactions.csv`:
   - expected `category_source` distribution for `MONTH_START..MONTH_END`.
   - spot-check changed fingerprints/transactions.
 

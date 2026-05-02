@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 ingest = "finance_tooling.commands.ingest:main"
 transform = "finance_tooling.commands.transform:main"
+planning = "finance_tooling.commands.planning:main"
 update = "finance_tooling.commands.update:main"
 review-export = "finance_tooling.commands.review_export:main"
 review-import = "finance_tooling.commands.review_import:main"

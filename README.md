@@ -20,7 +20,8 @@ canonical dataset.
 ## Public API
 
 This tool's primary public API is its workflow CLI plus a small set of stable
-files under `processed/outputs/` and `processed/state/`.
+files under `processed/ingest/`, `processed/transform/`, and
+`processed/planning/`.
 
 Normal workflow commands print concise summaries by default and avoid emitting
 artifact paths. Use `--verbose` when you want fuller metric breakdowns for
@@ -37,8 +38,9 @@ Advanced/recovery commands:
 
 - `uv run ingest`
 - `uv run transform`
+- `uv run planning`
 
-Stable operator-facing outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
+Canonical operator-facing outputs under `${FINANCE_PROCESSED_PATH}/transform/`:
 
 - `household_healthcheck.html` (secondary compatibility dashboard)
 - `transform_transactions.parquet`
@@ -46,17 +48,27 @@ Stable operator-facing outputs under `${FINANCE_PROCESSED_PATH}/outputs/`:
 - `transform_run_summary.json` (finance/reporting summary)
 - `transform_dashboard.html` (primary finance dashboard)
 
-Internal state and diagnostics under `${FINANCE_PROCESSED_PATH}/state/`:
+Canonical ingest state under `${FINANCE_PROCESSED_PATH}/ingest/`:
 
 - `ingest_staged_transactions.parquet`
 - `ingest_staged_batch_manifest.json`
+- `ingest_summary.json` when requested
+
+Canonical shared state and diagnostics under `${FINANCE_PROCESSED_PATH}/state/`:
+
 - `workflow_pipeline_state.json`
-- `workflow_source_inventory.json`
 - `workflow_review_state.parquet`
 - `transform_source_registry.json`
 - `workflow_fx_rates_history.parquet`
 - `transform_completeness_report.json` when diagnostics are enabled
-- `ingest_summary.json` when requested
+
+Canonical planning outputs under `${FINANCE_PROCESSED_PATH}/planning/`:
+
+- `planning_ledger.parquet`
+- `planning_ledger.csv`
+- `planning_kpi_summary.json`
+- `planning_budget_status.csv`
+- `planning_dashboard.html`
 
 Compatibility-only optional export:
 
@@ -65,8 +77,10 @@ Compatibility-only optional export:
 Deprecated / compatibility-only surface:
 
 - `household_healthcheck.html` is retained as a secondary compatibility dashboard.
-- legacy state/output path fallbacks are still supported temporarily, but the code now warns
-  when those fallback paths are used so they can be migrated to the canonical `state/` layout.
+- legacy `processed/state/` and `processed/outputs/` read fallbacks are still
+  supported temporarily, but the code now warns when those fallback paths are
+  used so they can be migrated to `processed/ingest/`, `processed/transform/`,
+  and `processed/planning/`.
 - `finance_tooling.healthcheck()` is deprecated and should not be used for new integrations.
 
 ## Workflow Overview (Newcomer)
@@ -82,8 +96,10 @@ If you do not need a manual review stop, use:
 uv run update
 ```
 
-This runs `ingest` then `transform` end-to-end and refreshes the canonical
-outputs in `${FINANCE_PROCESSED_PATH}/outputs/`.
+This runs `ingest`, `transform`, and `planning` end-to-end and refreshes the
+canonical outputs in `${FINANCE_PROCESSED_PATH}/ingest/`,
+`${FINANCE_PROCESSED_PATH}/transform/`, and
+`${FINANCE_PROCESSED_PATH}/planning/`.
 
 ### 2) Optional review (human-in-the-loop categorization)
 
@@ -213,6 +229,13 @@ Dashboard expense totals treat `fixed_expense`, `variable_expense`, and legacy
 split for new outgoing classifications; rule-level `economic_role` overrides
 can mark recurring subscriptions as fixed without changing their purpose bucket.
 
+`decision_role` is the spend-side planning dimension:
+- `not_applicable` is the explicit bucket for income, transfers, and excluded rows
+- spend rows are then categorized into `essential`, `discretionary`,
+  `savings`, `investment`, `debt_service`, or `tax`
+- the planning dashboard uses that split as a separate surface from
+  `economic_role` and `cashflow_type`
+
 Account-boundary inference is configured separately in `account_rules.yaml`:
 - `internal_accounts` defines personal/internal statement accounts
 - `counterparty_rules` infers the emitting or receiving counterparty side
@@ -226,8 +249,8 @@ Carry-forward diagnostics include:
 ### 4) Dashboard
 
 Dashboard output:
-- Primary: `${FINANCE_PROCESSED_PATH}/outputs/transform_dashboard.html`
-- Secondary compatibility view: `${FINANCE_PROCESSED_PATH}/outputs/household_healthcheck.html`
+- Primary: `${FINANCE_PROCESSED_PATH}/transform/transform_dashboard.html`
+- Secondary compatibility view: `${FINANCE_PROCESSED_PATH}/transform/household_healthcheck.html`
 - Open the primary dashboard after `transform` or `update`.
 
 ### Advanced and recovery commands
@@ -264,6 +287,37 @@ normal `update` flow.
   when staged data, review state, and config are unchanged.
 - Useful after explicit staged-state changes or when `review-import`
   should not be the trigger for a rebuild.
+
+`transform` remains transform-only. It does not run `ingest` or `planning`.
+
+`update` runs `planning` by default after `transform`. Use `--skip-planning`
+to stop at the transform stage.
+
+#### `uv run planning`
+
+- Builds the planning ledger, KPI summary, budget status, and planning dashboard.
+- Run it directly with:
+
+```bash
+uv run planning
+```
+
+- Reads canonical transform transactions from
+  `${FINANCE_PROCESSED_PATH}/transform/transform_transactions.parquet` by
+  default.
+- Computes `planning_budget_status.csv` from budget targets in YAML or JSON
+  format (`FINANCE_BUDGET_TARGETS_PATH`, or the adjacent
+  `config/budget_targets.yaml` by default).
+- `planning_bucket` is the semantic rollup used for planning KPIs and budget
+  comparison, derived from the canonical transaction semantics rather than a
+  raw statement field.
+- `description` and `account_holder` are intentionally part of the planning
+  ledger row model so the ledger stays traceable back to the source transaction
+  and account context.
+- The dashboard is a high-level surface explorer, not a transaction list: it
+  lets you compare the monthly split across `economic_role`, `cashflow_type`,
+  and `decision_role`.
+- Writes planning artifacts under `${FINANCE_PROCESSED_PATH}/planning/`.
 
 ### Guarded full refresh
 
@@ -317,7 +371,7 @@ uv run review-export \
 
 # explicit paths
 uv run review-export \
-  --normalized-path "$FINANCE_PROCESSED_PATH/outputs/transform_transactions.csv" \
+  --normalized-path "$FINANCE_PROCESSED_PATH/transform/transform_transactions.csv" \
   --output-path "$FINANCE_PROCESSED_PATH/transactions_review.xlsx"
 
 # edit transactions_review.xlsx (set category/subcategory, reviewed, notes)
@@ -413,10 +467,10 @@ Supported advanced overrides:
 
 ```bash
 export FINANCE_DASHBOARD_PATH="/path/to/output/dashboard.html"
-export FINANCE_MASTER_PARQUET_PATH="/path/to/output/outputs/transform_transactions.parquet"
-export FINANCE_EXPORT_CSV_PATH="/path/to/output/outputs/transform_transactions.csv"
-export FINANCE_EXPORT_JSON_PATH="/path/to/output/outputs/transform_transactions.json"
-export FINANCE_STAGED_TRANSACTIONS_PATH="/path/to/output/state/ingest_staged_transactions.parquet"
+export FINANCE_MASTER_PARQUET_PATH="/path/to/output/transform/transform_transactions.parquet"
+export FINANCE_EXPORT_CSV_PATH="/path/to/output/transform/transform_transactions.csv"
+export FINANCE_EXPORT_JSON_PATH="/path/to/output/transform/transform_transactions.json"
+export FINANCE_STAGED_TRANSACTIONS_PATH="/path/to/output/ingest/ingest_staged_transactions.parquet"
 export FINANCE_BASE_CURRENCY="EUR"
 export FINANCE_INGEST_WORKERS="1"
 export FINANCE_CATEGORY_RULES_PATH="/path/to/data/config/category_rules.yaml"
@@ -467,22 +521,29 @@ mismatches are emitted as warnings and included in transform-summary reconciliat
 
 ## Outputs
 
-- `processed/outputs/`
+- `processed/ingest/`
+  - `ingest_staged_transactions.parquet`
+  - `ingest_staged_batch_manifest.json`
+  - `ingest_summary.json` when `--emit-ingest-summary` is used
+  - `workflow_source_inventory.json`
+- `processed/transform/`
   - `household_healthcheck.html`
   - `transform_dashboard.html`
   - `transform_transactions.parquet`
   - `transform_transactions.csv`
   - `transform_run_summary.json`
 - `processed/state/`
-  - `ingest_staged_transactions.parquet`
-  - `ingest_staged_batch_manifest.json`
-  - `ingest_summary.json` when `--emit-ingest-summary` is used
   - `transform_source_registry.json`
-  - `workflow_source_inventory.json`
   - `workflow_pipeline_state.json`
   - `workflow_review_state.parquet`
   - `workflow_fx_rates_history.parquet`
   - `transform_completeness_report.json` when diagnostics are enabled
+- `processed/planning/`
+  - `planning_ledger.parquet`
+  - `planning_ledger.csv`
+  - `planning_kpi_summary.json`
+  - `planning_budget_status.csv`
+  - `planning_dashboard.html`
 - Compatibility-only optional export:
   - `transform_transactions.json` when JSON export is enabled
 - Unified snapshot backups under `${FINANCE_STATEMENTS_PATH}/../backup/`

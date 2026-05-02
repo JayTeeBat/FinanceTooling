@@ -45,9 +45,11 @@ def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> Non
         ingest_only: bool,
         transform_only: bool,
         emit_ingest_summary: bool = False,
+        skip_planning: bool = False,
     ) -> object:  # pragma: no cover
         del settings
         del emit_ingest_summary
+        del skip_planning
         if ingest_only and transform_only:
             raise ValueError("--ingest-only and --transform-only are mutually exclusive.")
         return object()
@@ -59,6 +61,57 @@ def test_update_with_conflicting_flags_returns_error(monkeypatch, capsys) -> Non
 
     assert exit_code == 1
     assert "mutually exclusive" in stdio.out
+
+
+def test_update_passes_skip_planning_flag(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("finance_tooling.commands.update.load_settings_from_env", lambda: object())
+    captured: dict[str, bool] = {}
+
+    def _run_update(
+        settings: Any,
+        *,
+        ingest_only: bool,
+        transform_only: bool,
+        emit_ingest_summary: bool = False,
+        skip_planning: bool = False,
+    ) -> WorkflowResult:
+        del settings, ingest_only, transform_only, emit_ingest_summary
+        captured["skip_planning"] = skip_planning
+        return WorkflowResult(
+            dashboard_path=Path("dashboard.html"),
+            parquet_path=Path("transactions.parquet"),
+            csv_path=Path("transactions.csv"),
+            json_path=Path("transactions.json"),
+            summary_path=Path("summary.json"),
+            completeness_path=Path("completeness.json"),
+            files_scanned=1,
+            files_failed=0,
+            transactions_parsed=1,
+            new_rows=1,
+            total_rows=1,
+            completeness_status="pass",
+            completeness_coverage_ratio=1.0,
+            missing_source_file_count=0,
+            reconciliation_checkable_file_count=0,
+            reconciliation_fail_count=0,
+            reconciliation_uncheckable_file_count=0,
+            reconciliation_pass_ratio=None,
+            categorized_count=1,
+            uncategorized_count=0,
+            categorized_amount_eur_abs=1.0,
+            uncategorized_amount_eur_abs=0.0,
+            categorized_amount_eur_abs_ratio=1.0,
+            uncategorized_amount_eur_abs_ratio=0.0,
+        )
+
+    monkeypatch.setattr("finance_tooling.commands.update.run_update", _run_update)
+
+    exit_code = main(["update", "--skip-planning"])
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured["skip_planning"] is True
+    assert "Transactions: 1 total" in stdio.out
 
 
 def test_update_full_refresh_dry_run_prints_preflight(monkeypatch, capsys) -> None:

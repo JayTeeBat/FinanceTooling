@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-CashflowType = Literal["in", "out", "transfer", "exclude"]
+CashflowRoleType = Literal["in", "out", "transfer"]
+CashflowType = CashflowRoleType
 EconomicRoleType = Literal[
     "income",
     "fixed_expense",
     "variable_expense",
     "expense",
-    "transfer",
     "exclude",
 ]
 DecisionRoleType = Literal[
@@ -20,13 +20,14 @@ DecisionRoleType = Literal[
     "investment",
     "debt_service",
     "tax",
-    "excluded",
+    "not_applicable",
     "unknown",
 ]
 
-VALID_CASHFLOW_TYPES = frozenset({"in", "out", "transfer", "exclude"})
+VALID_CASHFLOW_ROLES = frozenset({"in", "out", "transfer"})
+VALID_CASHFLOW_TYPES = VALID_CASHFLOW_ROLES
 VALID_ECONOMIC_ROLES = frozenset(
-    {"income", "fixed_expense", "variable_expense", "expense", "transfer", "exclude"}
+    {"income", "fixed_expense", "variable_expense", "expense", "exclude"}
 )
 VALID_DECISION_ROLES = frozenset(
     {
@@ -36,7 +37,7 @@ VALID_DECISION_ROLES = frozenset(
         "investment",
         "debt_service",
         "tax",
-        "excluded",
+        "not_applicable",
         "unknown",
     }
 )

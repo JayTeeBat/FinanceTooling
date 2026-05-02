@@ -14,6 +14,8 @@ from finance_tooling.core.config import (
     INGEST_STAGED_TRANSACTIONS_FILENAME,
     LEGACY_STAGED_TRANSACTIONS_FILENAME,
     Settings,
+    legacy_outputs_root_path,
+    legacy_state_root_path,
 )
 from finance_tooling.core.models import Transaction
 from finance_tooling.core.source_inventory import compute_source_document_id
@@ -80,9 +82,10 @@ def resolve_staged_transactions_path(
         return candidate
     if staged_path is None and candidate.name == INGEST_STAGED_TRANSACTIONS_FILENAME:
         for legacy_path in (
+            legacy_state_root_path(settings) / INGEST_STAGED_TRANSACTIONS_FILENAME,
             candidate.with_name(LEGACY_STAGED_TRANSACTIONS_FILENAME),
             settings.processed_path / LEGACY_STAGED_TRANSACTIONS_FILENAME,
-            settings.summary_json_path.parent / LEGACY_STAGED_TRANSACTIONS_FILENAME,
+            legacy_outputs_root_path(settings) / LEGACY_STAGED_TRANSACTIONS_FILENAME,
         ):
             if legacy_path.exists():
                 _warn_legacy_staged_path(legacy_path, candidate)

@@ -137,7 +137,7 @@ improves:
 - `economic_role`: `income`, `fixed_expense`, `variable_expense`, `expense`,
   `transfer`, `exclude`, `unknown`
 - `decision_role`: `essential`, `discretionary`, `savings`, `investment`,
-  `debt_service`, `tax`, `excluded`, `unknown`
+  `debt_service`, `tax`, `not_applicable`, `unknown`
 - account-boundary fields: `from_account_ref`, `to_account_ref`,
   `from_account_type`, `to_account_type`, `account_inference_source`
 
@@ -182,7 +182,7 @@ The semantic order should be deterministic and explainable.
 | Rent payment | `housing.rent` | `out` | `fixed_expense` | `essential` |
 | Transfer to owned savings | `transfers.savings_transfer` | `transfer` | `transfer` | `savings` |
 | Broker contribution | `transfers.investment_transfer` | `transfer` | `transfer` | `investment` |
-| Friend reimbursement for shared dinner | `excluded.shared_expense_settlement` | `exclude` | `exclude` | `excluded` |
+| Friend reimbursement for shared dinner | `excluded.shared_expense_settlement` | `exclude` | `exclude` | `not_applicable` |
 
 ## Multi-PR Breakdown
 

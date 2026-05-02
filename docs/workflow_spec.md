@@ -46,10 +46,10 @@ Primary responsibilities:
 
 Primary outputs:
 
-- `processed/state/ingest_staged_transactions.parquet`
-- `processed/state/ingest_staged_batch_manifest.json`
-- `processed/state/ingest_summary.json` when requested
-- `processed/state/workflow_source_inventory.json`
+- `processed/ingest/ingest_staged_transactions.parquet`
+- `processed/ingest/ingest_staged_batch_manifest.json`
+- `processed/ingest/ingest_summary.json` when requested
+- `processed/ingest/workflow_source_inventory.json`
 
 Ingest should not assign durable categorization outcomes. It prepares normalized
 rows for the transform stage.
@@ -68,17 +68,34 @@ Primary responsibilities:
 - persist canonical transaction exports and transform summaries
 - keep the no-op cache available for unchanged staged/config/review inputs
 
+`decision_role` is part of the canonical transform output, but
+`not_applicable` is the display bucket for income, transfer, and excluded rows.
+
+Recommended evaluation order for the transform stage:
+
+1. `cashflow_type` identifies transfers and excluded rows first, so they can be
+   removed from income/expense pattern analysis.
+2. `economic_role` then identifies non-personal or otherwise out-of-scope rows
+   such as associations, work expenses, and similar exclusions.
+3. `decision_role` finally classifies the remaining spend-side rows into
+   planning buckets.
+
+That order keeps the transform output layered and avoids making
+`decision_role` responsible for detecting out-of-scope flows that were already
+resolved by cashflow or economic-role semantics.
+
 Primary outputs:
 
-- `processed/outputs/transform_transactions.parquet`
-- `processed/outputs/transform_transactions.csv`
-- `processed/outputs/transform_run_summary.json`
-- `processed/outputs/transform_dashboard.html`
+- `processed/transform/transform_transactions.parquet`
+- `processed/transform/transform_transactions.csv`
+- `processed/transform/transform_run_summary.json`
+- `processed/transform/transform_dashboard.html`
 - `processed/state/workflow_review_state.parquet`
 - `processed/state/transform_source_registry.json`
 - `processed/state/workflow_pipeline_state.json`
 
-Transform is intentionally transform-only. It does not re-run ingest.
+Transform is intentionally transform-only. It does not re-run ingest or
+planning.
 
 ### 3. Planning
 
@@ -92,6 +109,8 @@ Primary responsibilities:
 - compute budget-vs-actual status using stable IDs and semantic filters
 - group flows into planning buckets such as expense, transfer, savings,
   investment, debt service, tax, and excluded
+  - transfer subtypes are derived from semantic fields, not from the
+    `decision_role` display bucket
 - support KPI evaluation that is stable across dashboards and future planning
   surfaces
 
@@ -171,6 +190,8 @@ slice the data, but it should not own core semantic rules.
   taxonomy/configuration, or transform logic changes.
 - `transform --force` may be used to bypass the no-op cache and recompute the
   canonical corpus without re-running ingest.
+- `update` should run `planning` by default after `transform`; use
+  `--skip-planning` to stop at the transform stage.
 - Planning outputs should be reproducible from the canonical corpus and stable
   semantic rules.
 - Budgeting logic should rely on semantic fields and stable identifiers, not on
@@ -204,4 +225,3 @@ transform -> planning
   rules.
 - `docs/categorization_review_workflow.md` and
   `docs/category_rules_review_workflow.md` cover review and rule maintenance.
-
