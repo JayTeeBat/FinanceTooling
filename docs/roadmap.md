@@ -59,7 +59,25 @@ Add scoped `review-export` filters for taxonomy/category buckets so an operator
 can export review rows by `category`, `subcategory`, `category_id`, or
 `reporting_category_id` without exporting all categorized transactions first.
 
-2. Improve transform iteration speed for targeted review/config changes.
+2. Implement the first-class planning stage as the next major workflow item.
+
+The repo already has reusable planning helpers, but the missing piece is a
+dedicated `planning` stage that consumes canonical transform outputs and emits
+traceable KPIs, budget-vs-actual views, and a separate planning dashboard.
+
+Keep this on the roadmap as the next big feature after the current ingestion
+and categorization work.
+
+The stage should:
+
+- read canonical transaction outputs
+- build a row-level monthly planning ledger
+- compute decision-facing KPIs
+- compute budget-vs-actual status when targets are configured
+- write planning artifacts for reporting and review
+- render a dedicated `planning_dashboard.html`
+
+3. Improve transform iteration speed for targeted review/config changes.
 
 True no-op fast paths already exist for unchanged runs. The remaining gap is
 that small review-state or config edits still require a full transform when
@@ -68,7 +86,7 @@ any transform work is needed.
 Prefer targeted transform scopes or similarly minimal recomputation before
 adding more workflow surface area.
 
-3. Add pipeline observability and corpus diff reporting.
+4. Add pipeline observability and corpus diff reporting.
 
 Make it easy to understand how each run changes the corpus and the
 categorization state.
@@ -84,7 +102,7 @@ For full-refresh transform, report category-change deltas in count and EUR
 amount, surface stale transaction overrides, and export all rows whose
 category changed for HIL review.
 
-4. Expand planning and reporting only when it serves the core pipeline.
+5. Expand planning and reporting only when it serves the core pipeline.
 
 The repo includes planning, budgeting, and reporting modules plus the
 `planning/household_finance_360/` workspace. Keep additions to that surface
@@ -96,7 +114,7 @@ stage API that consumes the canonical transform output and exposes budget
 actuals, monthly planning ledgers, and other decision-facing summaries as a
 named workflow surface rather than only as library helpers.
 
-5. Keep quality gates mandatory.
+6. Keep quality gates mandatory.
 
 Continue enforcing:
 
@@ -122,9 +140,6 @@ Preserved repo-level follow-up ideas that are not yet scoped as active work:
   `transaction_explorer.html` for dense transaction/account/category/
   economic-role exploration. Keep legacy dashboard paths temporarily for
   compatibility.
-- Add a first-class `planning` or `budget-status` workflow command that reads
-  canonical transform outputs and emits budget-vs-actual and monthly planning
-  KPI artifacts without re-running ingest or transform.
 
 ## Success Target
 
