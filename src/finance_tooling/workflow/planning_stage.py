@@ -26,6 +26,7 @@ from finance_tooling.core.config import (
 )
 from finance_tooling.planning.budgeting import (
     BudgetConfig,
+    _planning_amount_series,
     build_budget_status,
     build_monthly_planning_ledger,
     load_budget_config,
@@ -59,7 +60,9 @@ def _load_transactions(path: Path) -> pd.DataFrame:
 def _bucket_totals(frame: pd.DataFrame) -> dict[str, float]:
     if frame.empty:
         return {}
-    totals = frame.groupby("planning_bucket", dropna=False)["planning_amount_eur"].sum()
+    working = frame.copy()
+    working["_planning_amount"] = _planning_amount_series(working)
+    totals = working.groupby("planning_bucket", dropna=False)["_planning_amount"].sum()
     return {str(bucket): round(float(amount), 2) for bucket, amount in totals.items()}
 
 
@@ -68,7 +71,8 @@ def _surface_totals(frame: pd.DataFrame, column: str) -> dict[str, float]:
         return {}
     working = frame.copy()
     working[column] = working[column].map(_normalize_surface_bucket_label)
-    totals = working.groupby(column, dropna=False)["planning_amount_eur"].sum()
+    working["_planning_amount"] = _planning_amount_series(working)
+    totals = working.groupby(column, dropna=False)["_planning_amount"].sum()
     return {
         _normalize_surface_bucket_label(bucket): round(float(amount), 2)
         for bucket, amount in totals.items()
@@ -80,7 +84,8 @@ def _monthly_surface_breakdown(frame: pd.DataFrame, column: str) -> list[dict[st
         return []
     working = frame.copy()
     working[column] = working[column].map(_normalize_surface_bucket_label)
-    grouped = working.groupby(["month", column], dropna=False)["planning_amount_eur"].sum()
+    working["_planning_amount"] = _planning_amount_series(working)
+    grouped = working.groupby(["month", column], dropna=False)["_planning_amount"].sum()
     rows: list[dict[str, object]] = []
     for (month, bucket), amount in grouped.items():
         rows.append(
@@ -102,7 +107,8 @@ def _surface_monthly_breakdown_by_month(
         return {}
     working = frame.copy()
     working[column] = working[column].map(_normalize_surface_bucket_label)
-    grouped = working.groupby(["month", column], dropna=False)["planning_amount_eur"].sum()
+    working["_planning_amount"] = _planning_amount_series(working)
+    grouped = working.groupby(["month", column], dropna=False)["_planning_amount"].sum()
     monthly: dict[str, dict[str, float]] = {}
     for (month, bucket), amount in grouped.items():
         month_key = str(month)
@@ -282,8 +288,10 @@ def build_planning_kpi_summary(
         ytd_frame = ledger[ledger["month"].astype("string").str.startswith(f"{ytd_year}-")]
         ytd_totals = _bucket_totals(ytd_frame)
         monthly_totals = []
-        grouped = ledger.groupby(["month", "planning_bucket"], dropna=False)[
-            "planning_amount_eur"
+        working = ledger.copy()
+        working["_planning_amount"] = _planning_amount_series(working)
+        grouped = working.groupby(["month", "planning_bucket"], dropna=False)[
+            "_planning_amount"
         ].sum()
         for (month, bucket), amount in grouped.items():
             monthly_totals.append(

@@ -120,14 +120,15 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
     ledger = build_monthly_planning_ledger(frame, classification_rules=rules)
     assert set(ledger["transaction_id"]) == {"tx-1", "tx-2", "tx-3", "tx-4", "tx-5", "tx-6"}
     ledger_by_id = ledger.set_index("transaction_id")
+    assert "planning_amount_eur" not in ledger.columns
     assert ledger_by_id.loc["tx-1", "planning_bucket"] == "expense"
-    assert ledger_by_id.loc["tx-1", "planning_amount_eur"] == 50.0
+    assert ledger_by_id.loc["tx-1", "amount_eur"] == -50.0
     assert ledger_by_id.loc["tx-4", "planning_bucket"] == "expense"
-    assert ledger_by_id.loc["tx-4", "planning_amount_eur"] == -20.0
+    assert ledger_by_id.loc["tx-4", "amount_eur"] == 20.0
     assert ledger_by_id.loc["tx-5", "planning_bucket"] == "savings"
-    assert ledger_by_id.loc["tx-5", "planning_amount_eur"] == 100.0
+    assert ledger_by_id.loc["tx-5", "amount_eur"] == -100.0
     assert ledger_by_id.loc["tx-6", "planning_bucket"] == "excluded"
-    assert ledger_by_id.loc["tx-6", "planning_amount_eur"] == 0.0
+    assert ledger_by_id.loc["tx-6", "amount_eur"] == -15.0
 
     status = build_budget_status(frame, config, classification_rules=rules)
     status_rows = status.to_dict(orient="records")

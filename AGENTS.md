@@ -133,6 +133,21 @@ Use this template:
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
+  - Removed `planning_amount_eur` from the persisted planning ledger and switched planning aggregation to derive amounts directly from `amount_eur` plus semantic buckets.
+  - Updated the budgeting and planning-stage tests to assert the raw amount model and the new transient internal amount handling.
+  - Renamed the internal scratch columns so `planning_amount_eur` no longer appears in the live code path.
+- Checks:
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_budgeting.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py`: pass
+- Open items:
+  - None.
+- Next action:
+  - Keep the PR wording and dashboard copy aligned with the raw-amount-only planning model.
+
+### 2026-05-02 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
   - Removed redundant `decision_role` stanzas from transfer taxonomy entries so transfer buckets are now cashflow-only in both the repo and live taxonomy files.
   - Kept the parser-derived `not_applicable` fallback for transfer rows intact, so the schema stays lean without changing runtime behavior.
   - Added a regression assertion that the repo transfer entry still resolves to `not_applicable`.
@@ -156,18 +171,3 @@ Use this template:
   - None.
 - Next action:
   - Keep the PR wording and docs aligned if any other semantic key renames are requested.
-
-### 2026-05-02 - codex
-- Branch: `codex/stage-aligned-planning`
-- Completed:
-  - Trimmed the taxonomy so only transfer rules carry explicit cashflow semantics; ordinary in/out now come from sign.
-  - Mirrored the same cashflow cleanup into the live taxonomy corpus under `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/config/`.
-  - Updated the taxonomy spec and the example test expectation to match the new transfer-only cashflow rule.
-- Checks:
-  - `rtk uv run pytest -q tests/test_classify.py tests/test_budgeting.py tests/test_cashflow.py`: pass
-- Open items:
-  - None.
-- Next action:
-  - Keep the PR body and taxonomy docs aligned if any further semantic refinements land.
-
-@RTK.md

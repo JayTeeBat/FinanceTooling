@@ -386,34 +386,30 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
         ]
         == "Main"
     )
+    assert "planning_amount_eur" not in ledger_parquet.columns
 
     income_total = float(
-        ledger_parquet.loc[
-            ledger_parquet["planning_bucket"].eq("income"),
-            "planning_amount_eur",
-        ].sum()
+        ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("income"), "amount_eur"].sum()
     )
     expense_total = float(
-        ledger_parquet.loc[
-            ledger_parquet["planning_bucket"].eq("expense"),
-            "planning_amount_eur",
-        ].sum()
+        (-ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("expense"), "amount_eur"]).sum()
     )
     savings_total = float(
-        ledger_parquet.loc[
-            ledger_parquet["planning_bucket"].eq("savings"),
-            "planning_amount_eur",
-        ].sum()
+        ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("savings"), "amount_eur"]
+        .abs()
+        .sum()
     )
     fixed_expense_total = float(
-        ledger_parquet.loc[
-            ledger_parquet["economic_role"].eq("fixed_expense"), "planning_amount_eur"
-        ].sum()
+        (
+            -ledger_parquet.loc[ledger_parquet["economic_role"].eq("fixed_expense"), "amount_eur"]
+        ).sum()
     )
     variable_expense_total = float(
-        ledger_parquet.loc[
-            ledger_parquet["economic_role"].eq("variable_expense"), "planning_amount_eur"
-        ].sum()
+        (
+            -ledger_parquet.loc[
+                ledger_parquet["economic_role"].eq("variable_expense"), "amount_eur"
+            ]
+        ).sum()
     )
 
     totals = summary_payload["totals_by_planning_bucket"]
@@ -520,9 +516,24 @@ def test_planning_surface_breakdowns_normalize_blank_labels_to_unknown() -> None
 
     frame = pd.DataFrame(
         [
-            {"month": "2026-01", "planning_amount_eur": 10.0, "economic_role": ""},
-            {"month": "2026-01", "planning_amount_eur": 5.0, "economic_role": None},
-            {"month": "2026-01", "planning_amount_eur": 7.0, "economic_role": "unknown"},
+            {
+                "month": "2026-01",
+                "amount_eur": -10.0,
+                "planning_bucket": "expense",
+                "economic_role": "",
+            },
+            {
+                "month": "2026-01",
+                "amount_eur": -5.0,
+                "planning_bucket": "expense",
+                "economic_role": None,
+            },
+            {
+                "month": "2026-01",
+                "amount_eur": -7.0,
+                "planning_bucket": "expense",
+                "economic_role": "unknown",
+            },
         ]
     )
 

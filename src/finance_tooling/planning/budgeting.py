@@ -53,11 +53,12 @@ _PLANNING_LEDGER_COLUMNS = (
     "decision_role",
     "planning_bucket",
     "amount_eur",
-    "planning_amount_eur",
     "bank",
     "account_label",
     "account_holder",
 )
+
+_PLANNING_TRANSFER_BUCKETS = frozenset({"transfer", "savings", "investment", "debt_service", "tax"})
 
 
 @dataclass(frozen=True)
@@ -240,6 +241,21 @@ def _coerce_amount(value: object) -> float | None:
     return None
 
 
+def _planning_amount_series(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype="float64")
+    if "amount_eur" not in frame.columns or "planning_bucket" not in frame.columns:
+        return pd.Series(0.0, index=frame.index, dtype="float64")
+
+    amounts = pd.to_numeric(frame["amount_eur"], errors="coerce").fillna(0.0)
+    buckets = frame["planning_bucket"].astype("string").fillna("").str.strip().str.casefold()
+    planning_amount = pd.Series(0.0, index=frame.index, dtype="float64")
+    planning_amount.loc[buckets.eq("income")] = amounts.where(amounts > 0, 0.0)
+    planning_amount.loc[buckets.eq("expense")] = -amounts
+    planning_amount.loc[buckets.isin(_PLANNING_TRANSFER_BUCKETS)] = amounts.abs()
+    return planning_amount
+
+
 def _row_text(row: dict[str, object], key: str) -> str:
     value = row.get(key)
     if value is None or pd.isna(value):
@@ -364,7 +380,7 @@ def build_monthly_planning_ledger(
             category=row.get("category"),
             subcategory=row.get("subcategory"),
         )
-        planning_bucket, planning_amount = resolve_planning_bucket(
+        planning_bucket, _planning_amount = resolve_planning_bucket(
             cashflow_role,
             economic_role,
             decision_role,
@@ -390,7 +406,6 @@ def build_monthly_planning_ledger(
                 "decision_role": decision_role or None,
                 "planning_bucket": planning_bucket,
                 "amount_eur": amount,
-                "planning_amount_eur": round(planning_amount, 2),
                 "bank": row.get("bank"),
                 "account_label": row.get("account_label"),
                 "account_holder": _optional_text(row, "account_holder")
@@ -434,13 +449,14 @@ def build_budget_status(
     by_category: dict[tuple[str, str], float] = defaultdict(float)
     by_project: dict[tuple[str, str, str], float] = defaultdict(float)
 
-    expense_ledger = ledger[ledger["planning_bucket"].eq("expense")]
+    expense_ledger = ledger[ledger["planning_bucket"].eq("expense")].copy()
+    expense_ledger["_planning_amount"] = _planning_amount_series(expense_ledger)
     for row in expense_ledger.to_dict(orient="records"):
         month = str(row.get("month") or "").strip()
         category_id = str(row.get("category_id") or "").strip()
         if not month or not category_id:
             continue
-        amount = _coerce_amount(row.get("planning_amount_eur"))
+        amount = _coerce_amount(row.get("_planning_amount"))
         if amount is None:
             continue
         by_category[(month, category_id.casefold())] += amount
