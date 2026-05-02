@@ -246,7 +246,11 @@ def render_planning_stage_dashboard_html(
         if isinstance(monthly_totals_raw, list)
         else []
     )
-    months = [str(row.get("month")) for row in monthly_totals if row.get("month") is not None]
+    months = list(
+        dict.fromkeys(
+            str(row.get("month")) for row in monthly_totals if row.get("month") is not None
+        )
+    )
     cards = [
         _summary_card("Income", f"{_payload_float(totals_by_bucket, 'income'):.2f}"),
         _summary_card("Expense", f"{_payload_float(totals_by_bucket, 'expense'):.2f}"),
@@ -411,7 +415,7 @@ def render_planning_stage_dashboard_html(
   <script id="planning-stage-data" type="application/json">{surface_json}</script>
   <script>
     const payload = JSON.parse(document.getElementById("planning-stage-data").textContent);
-    const months = payload.available_months || [];
+    const months = [...new Set(payload.available_months || [])];
     const surfaces = payload.surface_breakdowns || {{}};
     const surfaceSelect = document.getElementById("surface-select");
     const startSelect = document.getElementById("month-start");
