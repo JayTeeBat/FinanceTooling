@@ -1,0 +1,23 @@
+      Account (E-Money) £2.41 £0.00 £557.17 £37.03
+
+      Account transactions from 1 March 2026 to 31 March 2026                      
+                                                                                   
+       Date       Description                  Money out   Money in       Balance  
+       11 Mar 2026 From GBP LCL savings                    £550.00       £552.41   
+                                                                                   
+       13 Mar 2026 Ryanair                     £516.89                    £35.52   
+                  To: Ryanair D0000000ir4l4y, Www.ryanair.c, GBR                   
+                  Card: 535456******3389                                           
+       24 Mar 2026 Transfer to Isaure Thomazo  £1.20                      £34.32   
+                  Reference: To Isaure Thomazo                                     
+                  To: Isaure Thomazo                                               
+       24 Mar 2026 Transfer to Henry Thomazo   £1.63                      £32.69   
+                  Reference: To Henry Thomazo                                      
+                  To: Henry Thomazo                                                
+       31 Mar 2026 Payment from TTT MONEYCORP LIMITED      £4.34          £37.03   
+                  Reference: ZUGBALANCE                                            
+                  From: TTT MONEYCORP LIMITED, 76975527                            
+
+      Colombe's account transactions from 1 March 2026 to 31 March 2026            
+                                                                                   
+       Date       Description                  Money out   Money in       Balance  

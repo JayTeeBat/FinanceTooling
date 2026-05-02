@@ -32,6 +32,22 @@
     "expected_warning_substrings": []
   },
   {
+    "id": "revolut_named_account_sections_pass",
+    "description": "Parser stops at named sub-account headers and keeps only the main account block.",
+    "file_name": "Revolut Jacques account-statement_2026-03-01_2026-03-31_en-gb_cc691b_GBP.pdf",
+    "text_file": "case_named_account_sections_pass.txt",
+    "expected_transaction_amounts": ["550.00", "-516.89", "-1.20", "-1.63", "4.34"],
+    "expected_transaction_count": 5,
+    "expected_transaction_sum": "34.62",
+    "expected_opening_balance": "2.41",
+    "expected_closing_balance": "37.03",
+    "expected_validation_status": "pass",
+    "expected_validation_severity": "none",
+    "expected_validation_reason": null,
+    "expected_difference": "0.00",
+    "expected_warning_substrings": []
+  },
+  {
     "id": "revolut_missing_summary_uncheckable",
     "description": "When opening/closing balances are absent, parser still emits rows but marks reconciliation uncheckable.",
     "file_name": "Revolut account-statement_2019.pdf",
