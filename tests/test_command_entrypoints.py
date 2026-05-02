@@ -35,7 +35,7 @@ class _CommandModule(Protocol):
     ("module", "argv"),
     [
         (ingest_command, []),
-        (transform_command, ["--input-staged-path", "staged.parquet"]),
+        (transform_command, ["--input-staged-path", "staged.parquet", "--force"]),
         (update_command, ["--ingest-only"]),
         (review_export_command, ["--normalized-path", "n.csv", "--output-path", "r.csv"]),
         (

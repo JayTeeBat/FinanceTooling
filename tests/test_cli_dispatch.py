@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ from typing import Any
 
 from finance_tooling.__main__ import _build_parser, main
 from finance_tooling.categorization.transaction_overrides import TransactionOverrideStore
+from finance_tooling.commands import transform as transform_command
 from finance_tooling.core.backup import BackupRunResult
 from finance_tooling.core.models import WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
@@ -869,8 +871,9 @@ def test_transform_command_prints_backup_summary(monkeypatch, tmp_path: Path, ca
         staged_path: Path | None = None,
         backup_command: str = "transform",
         backup_run: object | None = None,
+        force: bool = False,
     ) -> WorkflowResult:
-        del staged_path, backup_command, backup_run
+        del staged_path, backup_command, backup_run, force
         return WorkflowResult(
             dashboard_path=processed_dir / "finance_dashboard.html",
             parquet_path=processed_dir / "transactions_master.parquet",
@@ -941,8 +944,9 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
         staged_path: Path | None = None,
         backup_command: str = "transform",
         backup_run: object | None = None,
+        force: bool = False,
     ) -> WorkflowResult:
-        del staged_path, backup_command, backup_run
+        del staged_path, backup_command, backup_run, force
         return WorkflowResult(
             dashboard_path=processed_dir / "finance_dashboard.html",
             parquet_path=processed_dir / "transactions_master.parquet",
@@ -989,3 +993,67 @@ def test_transform_command_verbose_prints_backup_and_detailed_metrics(
     assert (
         "Categorization by EUR amount vs Income: 0.00% uncategorized / 100.00% categorized"
     ) in stdio.out
+
+
+def test_transform_command_force_passes_force_flag(monkeypatch, tmp_path: Path, capsys) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "finance_tooling.commands.transform.load_settings_from_env", lambda: object()
+    )
+
+    def _run_transform(
+        _settings: object,
+        staged_path: Path | None = None,
+        backup_command: str = "transform",
+        backup_run: object | None = None,
+        force: bool = False,
+    ) -> WorkflowResult:
+        captured["staged_path"] = staged_path
+        captured["backup_command"] = backup_command
+        captured["backup_run"] = backup_run
+        captured["force"] = force
+        return WorkflowResult(
+            dashboard_path=processed_dir / "finance_dashboard.html",
+            parquet_path=processed_dir / "transactions_master.parquet",
+            csv_path=processed_dir / "transactions_normalized.csv",
+            json_path=processed_dir / "transactions_normalized.json",
+            summary_path=processed_dir / "run_summary.json",
+            completeness_path=processed_dir / "completeness_report.json",
+            files_scanned=1,
+            files_failed=0,
+            transactions_parsed=1,
+            new_rows=1,
+            total_rows=1,
+            completeness_status="pass",
+            completeness_coverage_ratio=1.0,
+            missing_source_file_count=0,
+            reconciliation_checkable_file_count=0,
+            reconciliation_fail_count=0,
+            reconciliation_uncheckable_file_count=0,
+            reconciliation_pass_ratio=None,
+            categorized_count=0,
+            uncategorized_count=0,
+            categorized_amount_eur_abs=0.0,
+            uncategorized_amount_eur_abs=0.0,
+            categorized_amount_eur_abs_ratio=0.0,
+            uncategorized_amount_eur_abs_ratio=0.0,
+        )
+
+    monkeypatch.setattr("finance_tooling.commands.transform.run_transform", _run_transform)
+
+    exit_code = transform_command.handle(
+        argparse.Namespace(
+            verbose=False,
+            input_staged_path=None,
+            force=True,
+        )
+    )
+    stdio = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured["force"] is True
+    assert captured["backup_command"] == "transform"
+    assert "Transactions: 1 total" in stdio.out

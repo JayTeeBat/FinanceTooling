@@ -16,3 +16,6 @@ as an active work package.
   labeling does not distinguish ownership clearly enough.
 - Add a taxonomy/reporting surface for fixed expenses, variable expenses, and
   savings so reports can quickly distinguish those item types.
+- Add a first-class planning/KPI workflow command that consumes canonical
+  transform outputs and produces budget-vs-actual and monthly planning
+  summaries without re-running ingest.
