@@ -310,7 +310,7 @@ def test_repo_example_config_categorizes_generic_example_fingerprints() -> None:
 
     assert warnings == []
     assert rules.taxonomy["shopping.apparel"].decision_role == "discretionary"
-    assert rules.taxonomy["shopping.apparel"].cashflow_type == "out"
+    assert rules.taxonomy["shopping.apparel"].cashflow_type is None
 
     cases = [
         ("ACME PAYROLL APRIL", "income.salary", "Income", "Salary"),

@@ -189,6 +189,19 @@ Success target for the 2026 validation campaign:
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
+  - Trimmed the taxonomy so only transfer rules carry explicit cashflow semantics; ordinary in/out now come from sign.
+  - Mirrored the same cashflow cleanup into the live taxonomy corpus under `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/config/`.
+  - Updated the taxonomy spec and the example test expectation to match the new transfer-only cashflow rule.
+- Checks:
+  - `rtk uv run pytest -q tests/test_classify.py tests/test_budgeting.py tests/test_cashflow.py`: pass
+- Open items:
+  - None.
+- Next action:
+  - Keep the PR body and taxonomy docs aligned if any further semantic refinements land.
+
+### 2026-05-02 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
   - Migrated the public cashflow semantic to `cashflow_role`, kept `economic_role` transfer-free, and preserved spend-side `decision_role` classification for refund-like reversals.
   - Updated the live taxonomy corpus under `/home/thomazo/.local/share/Cryptomator/mnt/FinanceVault/data/config/` to match the new sequential semantic model.
   - Fixed dashboard warning logic so cashflow and internal-transfer diagnostics follow the new role model while still surfacing useful exclusions.
@@ -217,18 +230,5 @@ Success target for the 2026 validation campaign:
   - None.
 - Next action:
   - Keep the PR aligned with any follow-up semantic renames or dashboard wording changes.
-
-### 2026-05-02 - codex
-- Branch: `codex/docs-canonical-layout`
-- Completed:
-  - Updated the public docs to present `processed/ingest/`, `processed/transform/`, and `processed/planning/` as the canonical layout.
-  - Documented legacy read fallbacks for `processed/state/` and `processed/outputs/`, plus the new default `update -> planning` behavior with `--skip-planning`.
-  - Added a same-day handoff entry for the doc-only workflow update.
-- Checks:
-  - Not run: documentation-only change.
-- Open items:
-  - None.
-- Next action:
-  - Merge the doc changes and keep the workflow docs aligned if CLI behavior lands next.
 
 @RTK.md

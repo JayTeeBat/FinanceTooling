@@ -70,7 +70,6 @@ taxonomy:
     labels:
       category: Excluded
       subcategory: Non Personal
-    cashflow_type: out
     economic_role: exclude
     decision_role: not_applicable
     status: active
@@ -78,7 +77,6 @@ taxonomy:
     labels:
       category: Excluded
       subcategory: Non-profit
-    cashflow_type: out
     economic_role: exclude
     decision_role: not_applicable
     status: active
@@ -167,7 +165,6 @@ taxonomy:
     labels:
       category: Shopping
       subcategory: Apparel
-    cashflow_type: out
     economic_role: variable_expense
     decision_role: discretionary
     deprecated_to: shopping.clothing
