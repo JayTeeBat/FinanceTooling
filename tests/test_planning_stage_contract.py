@@ -435,6 +435,12 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert summary_payload["surface_breakdowns"]["decision_role"]["bucket_totals"][
         "not_applicable"
     ] == pytest.approx(1400.0)
+    assert summary_payload["surface_volume_notes"]["cashflow_type"][
+        "transfer_volume_eur"
+    ] == pytest.approx(100.0)
+    assert summary_payload["surface_volume_notes"]["economic_role"][
+        "excluded_net_volume_eur"
+    ] == pytest.approx(0.0)
     assert "" not in summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"]
     assert (
         ""
@@ -467,6 +473,8 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert "const endAngle = startAngle + ((Math.PI * 2) * share);" in dashboard_html
     assert "balance (in - out)" in dashboard_html
     assert "balance (income - expenses)" in dashboard_html
+    assert "transfer volume:" in dashboard_html
+    assert "excluded net volume:" in dashboard_html
     assert 'id="chart-controls-cashflow_type"' in dashboard_html
     assert 'id="chart-controls-economic_role"' in dashboard_html
     assert 'id="chart-controls-decision_role"' in dashboard_html
@@ -486,7 +494,6 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert 'hiddenBuckets: ["transfer"]' in dashboard_html
     assert 'hiddenBuckets: ["transfer", "exclude", "not_applicable"]' in dashboard_html
     assert 'hiddenBuckets: ["not_applicable"]' in dashboard_html
-    assert "displayBucketLabel(bucketKey)" in dashboard_html
     assert 'return normalized.replaceAll("_", " ");' in dashboard_html
     assert "Not applicable" not in dashboard_html
     assert _selected_option_value(dashboard_html, "month-start") == "2026-01"

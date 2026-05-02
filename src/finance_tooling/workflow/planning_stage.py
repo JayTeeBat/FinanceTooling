@@ -66,6 +66,24 @@ def _bucket_totals(frame: pd.DataFrame) -> dict[str, float]:
     return {str(bucket): round(float(amount), 2) for bucket, amount in totals.items()}
 
 
+def _transfer_volume(frame: pd.DataFrame) -> float:
+    if frame.empty or "cashflow_type" not in frame.columns or "amount_eur" not in frame.columns:
+        return 0.0
+    cashflow_roles = frame["cashflow_type"].astype("string").fillna("").str.strip().str.casefold()
+    amounts = pd.to_numeric(frame["amount_eur"], errors="coerce").fillna(0.0)
+    transfer_volume = amounts.loc[cashflow_roles.eq("transfer")].abs().sum()
+    return round(float(transfer_volume), 2)
+
+
+def _excluded_net_volume(frame: pd.DataFrame) -> float:
+    if frame.empty or "economic_role" not in frame.columns or "amount_eur" not in frame.columns:
+        return 0.0
+    economic_roles = frame["economic_role"].astype("string").fillna("").str.strip().str.casefold()
+    amounts = pd.to_numeric(frame["amount_eur"], errors="coerce").fillna(0.0)
+    excluded_volume = amounts.loc[economic_roles.eq("exclude")].sum()
+    return round(float(excluded_volume), 2)
+
+
 def _surface_totals(frame: pd.DataFrame, column: str) -> dict[str, float]:
     if frame.empty or column not in frame.columns:
         return {}
@@ -278,6 +296,10 @@ def build_planning_kpi_summary(
         ytd_totals: dict[str, float] = {}
         monthly_totals: list[dict[str, object]] = []
         surface_breakdowns: dict[str, dict[str, object]] = {}
+        surface_volume_notes = {
+            "cashflow_type": {"transfer_volume_eur": 0.0},
+            "economic_role": {"excluded_net_volume_eur": 0.0},
+        }
     else:
         available_months = _available_months(ledger)
         available_years = _available_years(available_months)
@@ -330,6 +352,10 @@ def build_planning_kpi_summary(
                 "bucket_totals": _surface_totals(ledger, "decision_role"),
             },
         }
+        surface_volume_notes = {
+            "cashflow_type": {"transfer_volume_eur": _transfer_volume(ledger)},
+            "economic_role": {"excluded_net_volume_eur": _excluded_net_volume(ledger)},
+        }
 
     budget_actual_total = 0.0
     budget_target_total = 0.0
@@ -359,6 +385,7 @@ def build_planning_kpi_summary(
         "ytd_totals_by_planning_bucket": ytd_totals,
         "monthly_totals_by_planning_bucket": monthly_totals,
         "surface_breakdowns": surface_breakdowns,
+        "surface_volume_notes": surface_volume_notes,
         "cashflow_type_counts": _value_counts(ledger, "cashflow_type"),
         "economic_role_counts": _value_counts(ledger, "economic_role"),
         "decision_role_counts": _value_counts(ledger, "decision_role"),
@@ -1226,6 +1253,7 @@ def render_planning_stage_dashboard_html(
     const months = Array.isArray(payload.available_months) ? payload.available_months.slice() : [];
     const years = Array.isArray(payload.available_years) ? payload.available_years.slice() : [];
     const surfaces = payload.surface_breakdowns || {};
+    const surfaceVolumeNotes = payload.surface_volume_notes || {};
     const defaultWindow = payload.default_window || {};
     const startSelect = document.getElementById("month-start");
     const endSelect = document.getElementById("month-end");
@@ -1478,24 +1506,19 @@ def render_planning_stage_dashboard_html(
     function renderVisibilityControls() {
       surfaceKeys.forEach((surfaceKey) => {
         const container = document.getElementById(`chart-controls-${surfaceKey}`);
-        const hiddenBuckets = surfaceConfig(surfaceKey).hiddenBuckets || [];
         if (!container) {
           return;
         }
-        container.innerHTML = hiddenBuckets.map((bucketKey) => `
-          <label class="chart-toggle">
-            <input
-              type="checkbox"
-              data-surface="${surfaceKey}"
-              data-bucket="${bucketKey}"
-            />
-            <span>include ${displayBucketLabel(bucketKey)}</span>
-          </label>
-        `).join("");
+        container.innerHTML = "";
+        container.hidden = true;
       });
     }
 
     function bucketVisible(surfaceKey, bucketKey) {
+      const hiddenBuckets = surfaceConfig(surfaceKey).hiddenBuckets || [];
+      if (hiddenBuckets.includes(bucketKey)) {
+        return false;
+      }
       const input = document.querySelector(
         `input[data-surface="${surfaceKey}"][data-bucket="${bucketKey}"]`
       );
@@ -1516,6 +1539,7 @@ def render_planning_stage_dashboard_html(
       const total = buckets.reduce((sum, entry) => sum + Math.abs(Number(entry.amount || 0)), 0);
       const balance = balanceFor(surfaceKey, aggregation.totals);
       const context = windowLabel(windowMonths);
+      const notes = surfaceVolumeNotes[surfaceKey] || {};
       svg.innerHTML = "";
       legend.innerHTML = "";
       if (balance === null) {
@@ -1523,7 +1547,14 @@ def render_planning_stage_dashboard_html(
           ? `${buckets.length} visible buckets.`
           : "No visible buckets for the selected window.";
       } else {
-        note.textContent = `${surfaceConfig(surfaceKey).balanceLabel}: ${currency(balance)} · ${buckets.length} visible buckets`;
+        const extraNote = surfaceKey === "cashflow_type"
+          ? `transfer volume: ${currency(Number(notes.transfer_volume_eur || 0))}`
+          : surfaceKey === "economic_role"
+            ? `excluded net volume: ${currency(Number(notes.excluded_net_volume_eur || 0))}`
+            : null;
+        note.textContent = extraNote
+          ? `${surfaceConfig(surfaceKey).balanceLabel}: ${currency(balance)} · ${extraNote}`
+          : `${surfaceConfig(surfaceKey).balanceLabel}: ${currency(balance)} · ${buckets.length} visible buckets`;
       }
 
       if (!buckets.length || total <= 0) {
