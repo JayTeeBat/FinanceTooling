@@ -83,6 +83,9 @@ The ledger row model should intentionally keep source-traceability fields such
 as `description` and `account_holder` so the planning outputs remain auditable
 without re-reading the source transactions.
 
+The dashboard should stay at a high level: it is a surface explorer for monthly
+financial structure, not a transaction list.
+
 ## KPI Model
 
 V1 KPIs should be grounded in canonical fields:
@@ -101,6 +104,9 @@ V1 KPIs should be grounded in canonical fields:
 `planning_bucket` is the semantic rollup dimension for planning analysis. It is
 derived from the canonical transaction semantics and used to group ledger rows
 into the operational buckets shown in the dashboard and budget status.
+
+The dashboard should support monthly views of the `economic_role`,
+`cashflow_type`, and `decision_role` splits over a selected period.
 
 Core V1 KPI families:
 

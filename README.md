@@ -307,6 +307,9 @@ uv run planning
 - `description` and `account_holder` are intentionally part of the planning
   ledger row model so the ledger stays traceable back to the source transaction
   and account context.
+- The dashboard is a high-level surface explorer, not a transaction list: it
+  lets you compare the monthly split across `economic_role`, `cashflow_type`,
+  and `decision_role`.
 - Writes planning artifacts under `${FINANCE_PROCESSED_PATH}/planning/`.
 
 ### Guarded full refresh

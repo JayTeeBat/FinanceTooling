@@ -393,6 +393,10 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert ytd_totals["savings"] == pytest.approx(savings_total)
     assert summary_payload["economic_role_counts"]["fixed_expense"] == 1
     assert summary_payload["economic_role_counts"]["variable_expense"] == 1
+    assert "surface_breakdowns" in summary_payload
+    assert summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"][
+        "fixed_expense"
+    ] == pytest.approx(300.0)
     assert fixed_expense_total == pytest.approx(300.0)
     assert variable_expense_total == pytest.approx(200.0)
 
@@ -401,10 +405,13 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert budget_status.loc[0, "actual_amount"] == pytest.approx(200.0)
     assert budget_status.loc[0, "variance"] == pytest.approx(50.0)
     assert "Planning Dashboard" in dashboard_html
-    assert "Planning Ledger" in dashboard_html
-    assert "Account holder" in dashboard_html
+    assert "Surface Explorer" in dashboard_html
+    assert "economic_role" in dashboard_html
+    assert "cashflow_type" in dashboard_html
+    assert "decision_role" in dashboard_html
     assert "Budget Status" in dashboard_html
-    assert "No budget targets loaded." not in dashboard_html
+    assert "Planning Ledger" not in dashboard_html
+    assert "Transaction" not in dashboard_html
 
 
 def test_run_update_supports_skip_planning_and_stage_only_modes(
