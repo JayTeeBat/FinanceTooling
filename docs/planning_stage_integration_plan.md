@@ -133,7 +133,7 @@ Near-future transform contract note:
 - `economic_role` should then remove non-personal flows such as associations,
   work expenses, and other explicit out-of-scope rows.
 - `decision_role` should be applied last, only to the remaining spend-side
-  rows, and should use `non_spend` as the explicit bucket for rows outside that
+  rows, and should use `not_applicable` as the explicit bucket for rows outside that
   spend domain.
 
 This layering keeps the planning dashboard self-contained without making the
@@ -189,7 +189,7 @@ Add tests for:
 - missing budget target warning
 - planning ledger generation from a small canonical fixture
 - KPI summary correctness for income, expense, fixed, variable, essential,
-  discretionary, savings, investment, debt-service, tax, non_spend, and
+  discretionary, savings, investment, debt-service, tax, not_applicable, and
   unknown rows
 - budget status generation when targets are configured
 - HTML renderer writes a self-contained document with valid embedded JSON

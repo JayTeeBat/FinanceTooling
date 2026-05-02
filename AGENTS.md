@@ -190,7 +190,7 @@ Success target for the 2026 validation campaign:
 - Branch: `codex/stage-aligned-planning`
 - Completed:
   - Documented the transform layering contract so `cashflow_type`, `economic_role`, and `decision_role` are resolved sequentially.
-  - Implemented `non_spend` as the canonical decision-role exclusion bucket across transform, planning, taxonomy defaults, and planning dashboard rendering.
+  - Renamed the canonical decision-role exclusion bucket to `not_applicable` across transform, planning, taxonomy defaults, and planning dashboard rendering.
   - Added transfer-subtype planning bucket inference that no longer depends on `decision_role`, plus regression coverage for planning and dashboard output.
 - Checks:
   - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/core/semantics.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/planning/budgeting.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/planning_stage.py src/finance_tooling/categorization/classify.py tests/test_cashflow.py tests/test_budgeting.py tests/test_classify.py tests/test_planning_stage_contract.py`: pass
@@ -199,7 +199,7 @@ Success target for the 2026 validation campaign:
 - Open items:
   - None.
 - Next action:
-  - Open the PR for review and keep the metrics log aligned if a follow-up commit changes pipeline behavior again.
+  - Keep the PR aligned with any follow-up semantic renames or dashboard wording changes.
 
 ### 2026-05-02 - codex
 - Branch: `codex/docs-canonical-layout`

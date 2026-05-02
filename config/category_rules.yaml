@@ -13,28 +13,28 @@ taxonomy:
       category: Income
       subcategory: Salary
     economic_role: income
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
   income.benefits:
     labels:
       category: Income
       subcategory: Benefits
     economic_role: income
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
   income.business_income:
     labels:
       category: Income
       subcategory: Business Income
     economic_role: income
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
   income.other_income:
     labels:
       category: Income
       subcategory: Other Income
     economic_role: income
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
 
   transfers.account_transfer:
@@ -43,7 +43,7 @@ taxonomy:
       subcategory: Account Transfer
     cashflow_type: transfer
     economic_role: transfer
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
   transfers.investment_transfer:
     labels:
@@ -51,7 +51,7 @@ taxonomy:
       subcategory: Investment Transfer
     cashflow_type: transfer
     economic_role: transfer
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
   transfers.savings_transfer:
     labels:
@@ -59,7 +59,7 @@ taxonomy:
       subcategory: Savings Transfer
     cashflow_type: transfer
     economic_role: transfer
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
   transfers.fx_exchange:
     labels:
@@ -67,7 +67,7 @@ taxonomy:
       subcategory: FX Exchange
     cashflow_type: transfer
     economic_role: transfer
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
 
   excluded.non_personal:
@@ -76,7 +76,7 @@ taxonomy:
       subcategory: Non Personal
     cashflow_type: exclude
     economic_role: exclude
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
   excluded.non_profit:
     labels:
@@ -84,7 +84,7 @@ taxonomy:
       subcategory: Non-profit
     cashflow_type: exclude
     economic_role: exclude
-    decision_role: non_spend
+    decision_role: not_applicable
     status: active
 
   housing.rent:

@@ -68,8 +68,8 @@ Primary responsibilities:
 - persist canonical transaction exports and transform summaries
 - keep the no-op cache available for unchanged staged/config/review inputs
 
-`decision_role` is part of the canonical transform output, but `non_spend` is
-the display bucket for income, transfer, and excluded rows.
+`decision_role` is part of the canonical transform output, but
+`not_applicable` is the display bucket for income, transfer, and excluded rows.
 
 Recommended evaluation order for the transform stage:
 
@@ -81,7 +81,7 @@ Recommended evaluation order for the transform stage:
    planning buckets.
 
 That order keeps the transform output layered and avoids making
-`decision_role` responsible for detecting non-spend flows that were already
+`decision_role` responsible for detecting out-of-scope flows that were already
 resolved by cashflow or economic-role semantics.
 
 Primary outputs:

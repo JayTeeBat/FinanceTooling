@@ -19,7 +19,7 @@ _ESSENTIAL_CATEGORY_NAMES = frozenset(
     {"groceries", "housing", "utilities", "family", "insurance", "transport"}
 )
 _DISCRETIONARY_CATEGORY_NAMES = frozenset({"dining", "shopping", "leisure"})
-_NON_SPEND_CATEGORY_NAMES = frozenset(
+_NOT_APPLICABLE_CATEGORY_NAMES = frozenset(
     {"income", "transfers", "non personal transactions", "pass-through", "excluded"}
 )
 _TRANSFER_DECISION_ROLE_MARKERS: tuple[tuple[str, DecisionRoleType], ...] = (
@@ -127,8 +127,6 @@ def normalize_decision_role_value(value: object) -> DecisionRoleType | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().casefold()
-    if normalized == "excluded":
-        return cast(DecisionRoleType, "non_spend")
     if normalized in VALID_DECISION_ROLES:
         return cast(DecisionRoleType, normalized)
     return None
@@ -152,11 +150,11 @@ def normalize_decision_role_for_row(
     normalized_subcategory = _normalized_text(subcategory)
 
     if normalized_cashflow_type == "exclude" or normalized_economic_role == "exclude":
-        return "non_spend"
+        return "not_applicable"
     if normalized_cashflow_type == "transfer" or normalized_economic_role == "transfer":
-        return "non_spend"
-    if normalized_category in _NON_SPEND_CATEGORY_NAMES:
-        return "non_spend"
+        return "not_applicable"
+    if normalized_category in _NOT_APPLICABLE_CATEGORY_NAMES:
+        return "not_applicable"
 
     fallback: DecisionRoleType = "unknown"
     if normalized_category in _ESSENTIAL_CATEGORY_NAMES:
@@ -224,11 +222,11 @@ def default_decision_role_for_category(
     """Return the legacy planning default for a category label."""
     normalized_category = _normalized_text(category)
     if cashflow_type == "exclude" or economic_role == "exclude":
-        return "non_spend"
+        return "not_applicable"
     if cashflow_type == "transfer" or economic_role == "transfer":
-        return "non_spend"
-    if normalized_category in _NON_SPEND_CATEGORY_NAMES:
-        return "non_spend"
+        return "not_applicable"
+    if normalized_category in _NOT_APPLICABLE_CATEGORY_NAMES:
+        return "not_applicable"
     if normalized_category in _ESSENTIAL_CATEGORY_NAMES:
         return "essential"
     if normalized_category == "taxes":

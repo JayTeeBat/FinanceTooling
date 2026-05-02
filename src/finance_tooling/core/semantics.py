@@ -20,8 +20,7 @@ DecisionRoleType = Literal[
     "investment",
     "debt_service",
     "tax",
-    "non_spend",
-    "excluded",
+    "not_applicable",
     "unknown",
 ]
 
@@ -37,8 +36,7 @@ VALID_DECISION_ROLES = frozenset(
         "investment",
         "debt_service",
         "tax",
-        "non_spend",
-        "excluded",
+        "not_applicable",
         "unknown",
     }
 )

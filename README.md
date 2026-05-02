@@ -230,7 +230,7 @@ split for new outgoing classifications; rule-level `economic_role` overrides
 can mark recurring subscriptions as fixed without changing their purpose bucket.
 
 `decision_role` is the spend-side planning dimension:
-- `non_spend` is the explicit bucket for income, transfers, and excluded rows
+- `not_applicable` is the explicit bucket for income, transfers, and excluded rows
 - spend rows are then categorized into `essential`, `discretionary`,
   `savings`, `investment`, `debt_service`, or `tax`
 - the planning dashboard uses that split as a separate surface from

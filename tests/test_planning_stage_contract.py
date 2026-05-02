@@ -327,7 +327,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
                 "project": None,
                 "cashflow_type": "transfer",
                 "economic_role": "transfer",
-                "decision_role": "non_spend",
+                "decision_role": "not_applicable",
                 "amount_eur": -100.0,
                 "bank": "DummyBank",
                 "account_label": "Main",
@@ -444,7 +444,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
         "2026-02"
     ]["income"] == pytest.approx(500.0)
     assert summary_payload["surface_breakdowns"]["decision_role"]["bucket_totals"][
-        "non_spend"
+        "not_applicable"
     ] == pytest.approx(1600.0)
     assert "" not in summary_payload["surface_breakdowns"]["economic_role"][
         "bucket_totals"
@@ -475,7 +475,7 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert 'id="chart-tooltip"' in dashboard_html
     assert "index === buckets.length - 1" not in dashboard_html
     assert "const endAngle = startAngle + ((Math.PI * 2) * share);" in dashboard_html
-    assert "Non spend" in dashboard_html
+    assert "Not applicable" in dashboard_html
     assert _selected_option_value(dashboard_html, "month-start") == "2026-01"
     assert _selected_option_value(dashboard_html, "month-end") == "2026-02"
     assert _selected_option_value(dashboard_html, "quick-month") == "2026-02"

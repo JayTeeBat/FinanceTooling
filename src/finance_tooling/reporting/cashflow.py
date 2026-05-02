@@ -394,7 +394,7 @@ def resolve_decision_roles_for_dataframe(
                 "investment": 0,
                 "debt_service": 0,
                 "tax": 0,
-                "non_spend": 0,
+                "not_applicable": 0,
                 "unknown": 0,
             },
         )
@@ -424,7 +424,7 @@ def resolve_decision_roles_for_dataframe(
             )
         )
         if cashflow_type in {"exclude", "transfer"} or economic_role in {"exclude", "transfer"}:
-            resolved_role = "non_spend"
+            resolved_role = "not_applicable"
         else:
             rule_role = None
             if tx.category_rule_id:
@@ -438,7 +438,7 @@ def resolve_decision_roles_for_dataframe(
             )
             category = (tx.category or "").strip().casefold()
             if category in {"income", "transfers"}:
-                resolved_role = "non_spend"
+                resolved_role = "not_applicable"
             elif rule_role is not None:
                 resolved_role = rule_role
             elif taxonomy_role is not None:
@@ -473,7 +473,7 @@ def resolve_decision_roles_for_dataframe(
             "investment",
             "debt_service",
             "tax",
-            "non_spend",
+            "not_applicable",
             "unknown",
         )
     }

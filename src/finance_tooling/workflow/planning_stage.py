@@ -1208,7 +1208,7 @@ def render_planning_stage_dashboard_html(
       tax: "#0f766e",
       essential: "#0f766e",
       discretionary: "#b91c1c",
-      non_spend: "#8f8a83",
+      not_applicable: "#8f8a83",
       unknown: "#8f8a83",
       excluded: "#8f8a83",
       transfer: "#5f7fa8",
@@ -1244,14 +1244,14 @@ def render_planning_stage_dashboard_html(
 
     function displayBucketLabel(bucket) {
       const normalized = normalizedBucketKey(bucket);
-      if (normalized === "non_spend") {
-        return "Non spend";
+      if (normalized === "not_applicable") {
+        return "Not applicable";
       }
       if (normalized === "unknown" || normalized === "") {
         return "Unknown";
       }
       if (normalized === "excluded") {
-        return "Non spend";
+        return "Not applicable";
       }
       return bucket;
     }

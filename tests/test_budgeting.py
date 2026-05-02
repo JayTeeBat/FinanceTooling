@@ -101,7 +101,7 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
                 "project": "Mobility",
                 "cashflow_type": "transfer",
                 "economic_role": "transfer",
-                "decision_role": "non_spend",
+                "decision_role": "not_applicable",
                 "amount_eur": -100.0,
             },
             {
@@ -112,7 +112,7 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
                 "project": "",
                 "cashflow_type": "exclude",
                 "economic_role": "exclude",
-                "decision_role": "excluded",
+                "decision_role": "not_applicable",
                 "amount_eur": -15.0,
             },
         ]
