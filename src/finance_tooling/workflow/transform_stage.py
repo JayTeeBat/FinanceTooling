@@ -463,10 +463,11 @@ def run_transform(
     ingest_result: IngestExecutionResult | None = None,
     backup_command: str = "transform",
     backup_run: BackupRunResult | None = None,
+    force: bool = False,
 ) -> WorkflowResult:
     """Execute transform stage from staged transaction artifact."""
     cached_result = None
-    if ingest_result is None:
+    if ingest_result is None and not force:
         cached_result = load_cached_transform_result(
             settings,
             staged_path=staged_path,

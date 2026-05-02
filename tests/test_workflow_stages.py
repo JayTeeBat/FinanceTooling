@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pandas as pd
@@ -809,6 +810,170 @@ def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_pat
     assert result.uncategorized_count_delta == -3
     assert result.categorized_amount_eur_abs_delta == 30.0
     assert result.uncategorized_amount_eur_abs_delta == -30.0
+
+
+def test_run_transform_force_bypasses_cached_result(
+    monkeypatch, tmp_path: Path
+) -> None:
+    settings = _settings(tmp_path)
+    _write_transform_manifest(settings, [])
+    staged_transaction = Transaction(
+        booking_date=date(2026, 3, 21),
+        description="Salary",
+        amount_native=Decimal("100.00"),
+        currency="EUR",
+        source_file=tmp_path / "statement.pdf",
+        bank="REVOLUT",
+        parser="dummy",
+        amount_eur=Decimal("100.00"),
+    )
+    write_staged_transactions(settings.staged_transactions_path, [staged_transaction])
+
+    backup_run = BackupRunResult(
+        run_id="20260321T101530000000Z",
+        stage="transform",
+        command="transform",
+        created_at="2026-03-21T10:15:30+00:00",
+        processed_backup_dir=tmp_path / "backup" / "processed",
+        config_backup_dir=tmp_path / "backup" / "config",
+        manifest_paths=(),
+        copied_files=(),
+        skipped_missing_files=(),
+        pruned_run_ids=(),
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.load_cached_transform_result",
+        lambda *_args, **_kwargs: captured.setdefault("cache", True),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.load_staged_batch_manifest",
+        lambda _path: SimpleNamespace(
+            context={},
+            run_mode="incremental",
+            source_inventory=SimpleNamespace(),
+            source_inventory_path=None,
+            selected_source_files=(),
+            files_failed=0,
+            validations=(),
+            parser_selection_diagnostics=(),
+            parser_low_confidence_file_count=0,
+            hsbc_csv_files_scanned=0,
+            hsbc_merge_metrics={},
+            hsbc_period_parse_variant_match_count=0,
+            hsbc_boundary_metrics={},
+            hsbc_boundary_diagnostics=(),
+            hsbc_sign_metrics={},
+            hsbc_sign_diagnostics=(),
+            hsbc_selection_diagnostics=(),
+            ingest_parser_duration_seconds_by_parser={},
+            ingest_duration_seconds_by_bank={},
+            ingest_text_cache_enabled=False,
+            ingest_text_cache_hits=0,
+            ingest_text_cache_misses=0,
+            ingest_text_cache_write_count=0,
+            effective_ingest_workers=1,
+            files_selected_for_processing=0,
+            files_skipped_already_committed=0,
+            files_skipped_modified_existing=0,
+            files_missing_since_last_commit=0,
+            dataset_stale=False,
+            stale_reasons=(),
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.read_staged_transactions",
+        lambda _path: [staged_transaction],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.enrich_transactions",
+        lambda transactions, _settings: SimpleNamespace(
+            transactions=transactions,
+            warnings=(),
+            account_inference_config=SimpleNamespace(),
+            classification_rules=SimpleNamespace(),
+            transaction_override_store=SimpleNamespace(),
+            manual_category_carry_forward_applied_count=0,
+            manual_category_carry_forward_ambiguous_skipped_count=0,
+            manual_category_carry_forward_unmatched_count=0,
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.apply_review_state",
+        lambda transactions, _path: transactions,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.infer_accounts_for_transactions",
+        lambda transactions, config: transactions,
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.load_source_registry",
+        lambda _path: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.build_incremental_selection_plan",
+        lambda **_: SimpleNamespace(
+            all_representative_source_files=[tmp_path / "statement.pdf"],
+            current_inventory=SimpleNamespace(),
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.committed_validations_for_current_inventory",
+        lambda **_: [],
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.persist_and_report",
+        lambda **kwargs: (
+            WorkflowResult(
+                dashboard_path=settings.output_path,
+                parquet_path=settings.master_parquet_path,
+                csv_path=settings.export_csv_path,
+                json_path=settings.export_json_path,
+                summary_path=settings.summary_json_path,
+                completeness_path=settings.completeness_json_path,
+                files_scanned=1,
+                files_failed=0,
+                transactions_parsed=1,
+                new_rows=1,
+                total_rows=1,
+                completeness_status="pass",
+                completeness_coverage_ratio=1.0,
+                missing_source_file_count=0,
+                reconciliation_checkable_file_count=0,
+                reconciliation_fail_count=0,
+                reconciliation_uncheckable_file_count=0,
+                reconciliation_pass_ratio=None,
+                categorized_count=1,
+                uncategorized_count=0,
+                categorized_amount_eur_abs=1.0,
+                uncategorized_amount_eur_abs=0.0,
+                categorized_amount_eur_abs_ratio=1.0,
+                uncategorized_amount_eur_abs_ratio=0.0,
+                backup_run=backup_run,
+            ),
+            {
+                "categorized_count": 1,
+                "uncategorized_count": 0,
+                "categorized_amount_eur_abs": 1.0,
+                "uncategorized_amount_eur_abs": 0.0,
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.update_source_registry",
+        lambda **_: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        "finance_tooling.workflow.transform_stage.write_source_registry",
+        lambda *_args, **_kwargs: None,
+    )
+
+    result = run_transform(settings, backup_run=backup_run, force=True)
+
+    assert "cache" not in captured
+    assert result.transactions_parsed == 1
+    assert result.total_rows == 1
 
 
 def test_load_cached_transform_result_invalidates_when_master_parquet_lacks_cashflow_type(

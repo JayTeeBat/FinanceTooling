@@ -103,15 +103,29 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
                 "decision_role": "savings",
                 "amount_eur": -100.0,
             },
+            {
+                "booking_date": "2026-01-30",
+                "transaction_id": "tx-6",
+                "category": "Non Personal Transactions",
+                "category_id": "non.personal.transactions",
+                "project": "",
+                "cashflow_type": "exclude",
+                "economic_role": "exclude",
+                "decision_role": "excluded",
+                "amount_eur": -15.0,
+            },
         ]
     )
 
     ledger = build_monthly_planning_ledger(frame, classification_rules=rules)
-    assert list(ledger["transaction_id"]) == ["tx-1", "tx-2", "tx-3", "tx-4", "tx-5"]
-    assert ledger.loc[0, "planning_bucket"] == "expense"
-    assert ledger.loc[0, "planning_amount_eur"] == 50.0
-    assert ledger.loc[4, "planning_bucket"] == "savings"
-    assert ledger.loc[4, "planning_amount_eur"] == 100.0
+    assert set(ledger["transaction_id"]) == {"tx-1", "tx-2", "tx-3", "tx-4", "tx-5", "tx-6"}
+    ledger_by_id = ledger.set_index("transaction_id")
+    assert ledger_by_id.loc["tx-1", "planning_bucket"] == "expense"
+    assert ledger_by_id.loc["tx-1", "planning_amount_eur"] == 50.0
+    assert ledger_by_id.loc["tx-5", "planning_bucket"] == "savings"
+    assert ledger_by_id.loc["tx-5", "planning_amount_eur"] == 100.0
+    assert ledger_by_id.loc["tx-6", "planning_bucket"] == "excluded"
+    assert ledger_by_id.loc["tx-6", "planning_amount_eur"] == 0.0
 
     status = build_budget_status(frame, config, classification_rules=rules)
     status_rows = status.to_dict(orient="records")

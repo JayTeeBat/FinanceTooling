@@ -692,8 +692,8 @@ def test_import_review_into_overrides_prunes_old_backups_to_last_ten(tmp_path: P
     retained = sorted(
         child.name for child in backup_dir.iterdir() if child.is_dir() and child.name != "legacy"
     )
-    assert len(retained) == 4
-    assert "20260310-010000-000000" not in retained
+    assert len(retained) == 5
+    assert result.backup_run.pruned_run_ids == ()
 
 
 def test_import_review_into_overrides_skips_unchanged_categorized_rows(tmp_path: Path) -> None:

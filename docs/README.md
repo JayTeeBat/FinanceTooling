@@ -6,6 +6,10 @@ Core docs for day-to-day workflow:
   - Human-in-the-loop export/edit/import flow for transaction categorization.
 - `category_rules_review_workflow.md`
   - Process for creating, amending, and deleting category rules safely.
+- `workflow_spec.md`
+  - End-to-end workflow specification for ingest, transform, and planning.
+- `planning_stage_integration_plan.md`
+  - Implementation plan for the first-class planning KPI stage and dashboard.
 - `metrics_commit_log.csv`
   - Commit-level trend metrics.
 - `metrics_commit_log_by_bank.csv`

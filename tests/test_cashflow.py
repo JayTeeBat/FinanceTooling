@@ -734,6 +734,47 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
     assert list(result.dataframe["decision_role"]) == ["essential", "savings"]
 
 
+def test_resolve_decision_roles_marks_excluded_rows_as_excluded() -> None:
+    tx = Transaction(
+        booking_date=date(2025, 1, 7),
+        description="Pass-through adjustment",
+        amount_native=Decimal("-42.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Non Personal Transactions",
+        cashflow_type="exclude",
+        economic_role="exclude",
+        amount_eur=Decimal("-42.00"),
+    )
+
+    result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
+
+    assert result.dataframe.loc[0, "decision_role"] == "excluded"
+
+
+def test_resolve_decision_roles_uses_debt_service_transfer_defaults() -> None:
+    tx = Transaction(
+        booking_date=date(2025, 1, 8),
+        description="Mortgage transfer",
+        amount_native=Decimal("-250.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Transfers",
+        subcategory="Mortgage payment",
+        cashflow_type="transfer",
+        economic_role="transfer",
+        amount_eur=Decimal("-250.00"),
+    )
+
+    result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
+
+    assert result.dataframe.loc[0, "decision_role"] == "debt_service"
+
+
 def test_resolve_economic_roles_falls_back_to_expense_for_non_employer_positive_inflow() -> None:
     tx = Transaction(
         booking_date=date(2026, 1, 3),

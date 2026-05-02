@@ -27,11 +27,13 @@ from finance_tooling.categorization.transaction_overrides import (
     iter_matching_override_entries,
 )
 from finance_tooling.core.models import CANONICAL_TRANSACTION_COLUMNS
+from finance_tooling.core.semantic_resolution import (
+    normalize_cashflow_type_for_row,
+    normalize_decision_role_for_row,
+    normalize_economic_role_for_row,
+)
 from finance_tooling.core.semantics import (
     EXPENSE_LIKE_ECONOMIC_ROLES,
-    VALID_CASHFLOW_TYPES,
-    VALID_DECISION_ROLES,
-    VALID_ECONOMIC_ROLES,
 )
 from finance_tooling.core.store import transactions_from_dataframe
 from finance_tooling.workflow.types import (
@@ -96,69 +98,62 @@ def _normalized_string_series(dataframe: pd.DataFrame, column: str, *, default: 
 
 def _normalize_cashflow_type_series(dataframe: pd.DataFrame) -> pd.Series:
     values = dataframe.get("cashflow_type", pd.Series("", index=dataframe.index, dtype="object"))
-    normalized = values.astype("string").fillna("").str.strip().str.casefold()
-    return normalized.where(normalized.isin(VALID_CASHFLOW_TYPES), "unknown")
+    normalized = [
+        normalize_cashflow_type_for_row(value) or "unknown"
+        for value in values.astype("object").tolist()
+    ]
+    return pd.Series(normalized, index=dataframe.index, dtype="object")
 
 
 def _normalize_economic_role_series(dataframe: pd.DataFrame) -> pd.Series:
     values = dataframe.get("economic_role", pd.Series("", index=dataframe.index, dtype="object"))
-    normalized = values.astype("string").fillna("").str.strip().str.casefold()
-    valid = normalized.where(normalized.isin(VALID_ECONOMIC_ROLES))
     cashflow_type = _normalize_cashflow_type_series(dataframe)
     category = _normalized_string_series(dataframe, "category", default="").str.casefold()
     subcategory = _normalized_string_series(dataframe, "subcategory", default="").str.casefold()
-    fallback = pd.Series("expense", index=dataframe.index, dtype="string")
-    fallback = fallback.mask(cashflow_type.eq("out"), "variable_expense")
-    fallback = fallback.mask(cashflow_type.eq("transfer"), "transfer")
-    fallback = fallback.mask(cashflow_type.eq("exclude"), "exclude")
-    fallback = fallback.mask(category.eq("transfers"), "transfer")
-    fallback = fallback.mask(
-        category.isin({"non personal transactions", "pass-through", "excluded"}),
-        "exclude",
-    )
-    fallback = fallback.mask(category.eq("income"), "income")
-    fallback = fallback.mask(subcategory.isin({"salary", "interest"}), "income")
-    return valid.fillna(fallback)
+    normalized = [
+        normalize_economic_role_for_row(
+            value,
+            cashflow_type=cashflow,
+            category=category_value,
+            subcategory=subcategory_value,
+        )
+        for value, cashflow, category_value, subcategory_value in zip(
+            values.astype("object").tolist(),
+            cashflow_type.tolist(),
+            category.tolist(),
+            subcategory.tolist(),
+            strict=False,
+        )
+    ]
+    return pd.Series(normalized, index=dataframe.index, dtype="object")
 
 
 def _normalize_decision_role_series(dataframe: pd.DataFrame) -> pd.Series:
     values = dataframe.get("decision_role", pd.Series("", index=dataframe.index, dtype="object"))
-    normalized = values.astype("string").fillna("").str.strip().str.casefold()
-    valid = normalized.where(normalized.isin(VALID_DECISION_ROLES))
     if dataframe.empty:
-        return valid
+        return pd.Series(dtype="object")
     economic_role = _normalize_economic_role_series(dataframe)
     cashflow_type = _normalize_cashflow_type_series(dataframe)
     category = _normalized_string_series(dataframe, "category", default="").str.casefold()
     subcategory = _normalized_string_series(dataframe, "subcategory", default="").str.casefold()
-
-    fallback = pd.Series("unknown", index=dataframe.index, dtype="string")
-    fallback = fallback.mask(economic_role.eq("exclude") | cashflow_type.eq("exclude"), "excluded")
-    fallback = fallback.mask(
-        category.isin({"groceries", "housing", "utilities", "family", "insurance", "transport"}),
-        "essential",
-    )
-    fallback = fallback.mask(category.eq("taxes"), "tax")
-    fallback = fallback.mask(category.isin({"dining", "shopping", "leisure"}), "discretionary")
-    fallback = fallback.mask(
-        category.eq("transfers")
-        & subcategory.str.contains("savings|retirement|house|emergency", regex=True, na=False),
-        "savings",
-    )
-    fallback = fallback.mask(
-        category.eq("transfers") & subcategory.str.contains("investment", regex=True, na=False),
-        "investment",
-    )
-    fallback = fallback.mask(
-        category.eq("transfers")
-        & subcategory.str.contains("loan|debt|mortgage", regex=True, na=False),
-        "debt_service",
-    )
-    fallback = fallback.mask(
-        category.eq("transfers") & subcategory.str.contains("tax", regex=True, na=False),
-        "tax",
-    )
-    return valid.fillna(fallback)
+    normalized = [
+        normalize_decision_role_for_row(
+            value,
+            cashflow_type=cashflow,
+            economic_role=economic,
+            category=category_value,
+            subcategory=subcategory_value,
+        )
+        for value, cashflow, economic, category_value, subcategory_value in zip(
+            values.astype("object").tolist(),
+            cashflow_type.tolist(),
+            economic_role.tolist(),
+            category.tolist(),
+            subcategory.tolist(),
+            strict=False,
+        )
+    ]
+    return pd.Series(normalized, index=dataframe.index, dtype="object")
 
 
 def _contains_keyword(value: str) -> bool:

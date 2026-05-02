@@ -75,6 +75,11 @@ The repo includes planning, budgeting, and reporting modules plus the
 intentional and secondary to the ingestion and categorization workflow unless
 the task explicitly targets planning features.
 
+The next planning-step implementation target is a first-class decision/KPI
+stage API that consumes the canonical transform output and exposes budget
+actuals, monthly planning ledgers, and other decision-facing summaries as a
+named workflow surface rather than only as library helpers.
+
 4. Keep quality gates mandatory.
 
 Continue enforcing:
@@ -101,6 +106,9 @@ Preserved repo-level follow-up ideas that are not yet scoped as active work:
   `transaction_explorer.html` for dense transaction/account/category/
   economic-role exploration. Keep legacy dashboard paths temporarily for
   compatibility.
+- Add a first-class `planning` or `budget-status` workflow command that reads
+  canonical transform outputs and emits budget-vs-actual and monthly planning
+  KPI artifacts without re-running ingest or transform.
 - Add `review-export` filters for taxonomy/category buckets, such as
   `--category`, `--subcategory`, `--category-id`, and
   `--reporting-category-id`.

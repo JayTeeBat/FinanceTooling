@@ -260,6 +260,8 @@ normal `update` flow.
 #### `uv run transform`
 
 - Rebuilds canonical outputs from staged transactions without re-running ingest.
+- Add `--force` to bypass the no-op cache and recompute transform outputs even
+  when staged data, review state, and config are unchanged.
 - Useful after explicit staged-state changes or when `review-import`
   should not be the trigger for a rebuild.
 

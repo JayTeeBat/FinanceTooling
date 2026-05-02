@@ -23,6 +23,11 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Path to staged transactions parquet (defaults to configured staged path).",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass the no-op cache and recompute transform outputs even if inputs are unchanged.",
+    )
     parser.set_defaults(command="transform", handler=handle)
 
 
@@ -35,7 +40,11 @@ def handle(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        result = run_transform(settings, staged_path=args.input_staged_path)
+        result = run_transform(
+            settings,
+            staged_path=args.input_staged_path,
+            force=bool(args.force),
+        )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Transform error: {exc}")
         return 1
