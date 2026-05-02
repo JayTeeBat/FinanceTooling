@@ -15,11 +15,14 @@ import pandas as pd
 
 from finance_tooling.core.backup import backup_root_from_processed_dir
 from finance_tooling.core.config import (
+    INGEST_STAGED_TRANSACTIONS_FILENAME,
     LEGACY_STAGED_TRANSACTIONS_FILENAME,
     TRANSFORM_SOURCE_REGISTRY_FILENAME,
     Settings,
     ingest_state_path,
-    state_root_path,
+    legacy_outputs_root_path,
+    legacy_state_root_path,
+    transform_root_path,
 )
 from finance_tooling.core.scanner import discover_statement_pdfs
 from finance_tooling.core.source_inventory import (
@@ -144,12 +147,14 @@ class FullRefreshPreflight:
 
 
 def source_registry_path(settings: Settings) -> Path:
-    preferred = state_root_path(settings) / TRANSFORM_SOURCE_REGISTRY_FILENAME
+    preferred = transform_root_path(settings) / TRANSFORM_SOURCE_REGISTRY_FILENAME
     if preferred.exists():
         return preferred
     for legacy in (
+        legacy_state_root_path(settings) / TRANSFORM_SOURCE_REGISTRY_FILENAME,
+        legacy_outputs_root_path(settings) / TRANSFORM_SOURCE_REGISTRY_FILENAME,
         settings.processed_path / LEGACY_SOURCE_REGISTRY_FILENAME,
-        settings.summary_json_path.parent / LEGACY_SOURCE_REGISTRY_FILENAME,
+        legacy_outputs_root_path(settings) / LEGACY_SOURCE_REGISTRY_FILENAME,
     ):
         if legacy.exists():
             _warn_legacy_path_usage("source registry", legacy, preferred)
@@ -167,8 +172,9 @@ def resolve_staged_transactions_path(settings: Settings) -> Path:
     if preferred.exists():
         return preferred
     for legacy in (
+        legacy_state_root_path(settings) / INGEST_STAGED_TRANSACTIONS_FILENAME,
         settings.processed_path / LEGACY_STAGED_TRANSACTIONS_FILENAME,
-        settings.summary_json_path.parent / LEGACY_STAGED_TRANSACTIONS_FILENAME,
+        legacy_outputs_root_path(settings) / LEGACY_STAGED_TRANSACTIONS_FILENAME,
     ):
         if legacy.exists():
             _warn_legacy_path_usage("staged transactions", legacy, preferred)
@@ -182,8 +188,9 @@ def resolve_staged_batch_manifest_path(settings: Settings) -> Path:
     if preferred.exists():
         return preferred
     for legacy in (
+        legacy_state_root_path(settings) / INGEST_STAGED_BATCH_MANIFEST_FILENAME,
         settings.processed_path / LEGACY_STAGED_BATCH_MANIFEST_FILENAME,
-        settings.summary_json_path.parent / LEGACY_STAGED_BATCH_MANIFEST_FILENAME,
+        legacy_outputs_root_path(settings) / LEGACY_STAGED_BATCH_MANIFEST_FILENAME,
     ):
         if legacy.exists():
             _warn_legacy_path_usage("staged batch manifest", legacy, preferred)

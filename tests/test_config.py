@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import cast
 
 from finance_tooling.core.config import (
     BASE_CURRENCY_ENV,
@@ -16,8 +17,11 @@ from finance_tooling.core.config import (
     INPUT_PATH_ENV,
     MASTER_PARQUET_ENV,
     OUTPUT_PATH_ENV,
+    PIPELINE_INGEST_DIRNAME,
     PIPELINE_OUTPUTS_DIRNAME,
+    PIPELINE_PLANNING_DIRNAME,
     PIPELINE_STATE_DIRNAME,
+    PIPELINE_TRANSFORM_DIRNAME,
     PROCESSED_PATH_ENV,
     PROJECT_OVERRIDES_PATH_ENV,
     PROJECT_RULES_PATH_ENV,
@@ -33,7 +37,13 @@ from finance_tooling.core.config import (
     TRANSFORM_TRANSACTIONS_JSON_FILENAME,
     WORKFLOW_FX_CACHE_FILENAME,
     WORKFLOW_REVIEW_STATE_FILENAME,
+    Settings,
+    ingest_root_path,
     load_settings_from_env,
+    planning_root_path,
+    resolve_ingest_artifact_path,
+    resolve_transform_artifact_path,
+    transform_root_path,
 )
 
 
@@ -69,37 +79,37 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
 
     assert settings.input_path == raw_dir.resolve()
     assert (
-        settings.output_path == (processed_dir / "outputs" / "transform_dashboard.html").resolve()
+        settings.output_path == (processed_dir / "transform" / "transform_dashboard.html").resolve()
     )
     assert (
         settings.master_parquet_path
-        == (processed_dir / "outputs" / "transform_transactions.parquet").resolve()
+        == (processed_dir / "transform" / "transform_transactions.parquet").resolve()
     )
     assert (
         settings.export_csv_path
-        == (processed_dir / "outputs" / "transform_transactions.csv").resolve()
+        == (processed_dir / "transform" / "transform_transactions.csv").resolve()
     )
     assert (
         settings.export_json_path
-        == (processed_dir / "outputs" / "transform_transactions.json").resolve()
+        == (processed_dir / "transform" / "transform_transactions.json").resolve()
     )
     assert settings.export_json_enabled is False
     assert settings.transform_diagnostics_enabled is False
     assert (
         settings.staged_transactions_path
-        == (processed_dir / "state" / "ingest_staged_transactions.parquet").resolve()
+        == (processed_dir / "ingest" / "ingest_staged_transactions.parquet").resolve()
     )
     assert (
         settings.summary_json_path
-        == (processed_dir / "outputs" / "transform_run_summary.json").resolve()
+        == (processed_dir / "transform" / "transform_run_summary.json").resolve()
     )
     assert (
         settings.completeness_json_path
-        == (processed_dir / "state" / "transform_completeness_report.json").resolve()
+        == (processed_dir / "transform" / "transform_completeness_report.json").resolve()
     )
     assert (
         settings.fx_cache_path
-        == (processed_dir / "state" / "workflow_fx_rates_history.parquet").resolve()
+        == (processed_dir / "transform" / "workflow_fx_rates_history.parquet").resolve()
     )
     config_dir = raw_dir.parent / "config"
     assert settings.category_rules_path == (config_dir / "category_rules.yaml").resolve()
@@ -111,7 +121,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     )
     assert (
         settings.review_state_path
-        == (processed_dir / "state" / "workflow_review_state.parquet").resolve()
+        == (processed_dir / "transform" / "workflow_review_state.parquet").resolve()
     )
     assert settings.review_export_dark_safe is True
     assert settings.base_currency == "EUR"
@@ -120,7 +130,7 @@ def test_load_settings_defaults_outputs_to_processed_dir(monkeypatch, tmp_path: 
     assert settings.ingest_text_cache_enabled is False
     assert (
         settings.ingest_text_cache_path
-        == (processed_dir / "state" / "ingest_text_cache.parquet").resolve()
+        == (processed_dir / "ingest" / "ingest_text_cache.parquet").resolve()
     )
 
 
@@ -176,11 +186,11 @@ def test_load_settings_honors_explicit_output_overrides(monkeypatch, tmp_path: P
     assert settings.review_export_dark_safe is False
     assert (
         settings.summary_json_path
-        == (processed_dir / "outputs" / "transform_run_summary.json").resolve()
+        == (processed_dir / "transform" / "transform_run_summary.json").resolve()
     )
     assert (
         settings.completeness_json_path
-        == (processed_dir / "state" / "transform_completeness_report.json").resolve()
+        == (processed_dir / "transform" / "transform_completeness_report.json").resolve()
     )
     assert settings.base_currency == "GBP"
     assert settings.fx_auto_fetch is False
@@ -236,7 +246,7 @@ def test_load_settings_reads_required_paths_from_dotenv(monkeypatch, tmp_path: P
     assert settings.input_path == raw_dir.resolve()
     assert (
         settings.summary_json_path
-        == (processed_dir / "outputs" / "transform_run_summary.json").resolve()
+        == (processed_dir / "transform" / "transform_run_summary.json").resolve()
     )
     assert settings.base_currency == "USD"
     assert settings.fx_auto_fetch is False
@@ -265,6 +275,9 @@ def test_load_settings_rejects_invalid_ingest_workers(monkeypatch, tmp_path: Pat
 
 
 def test_artifact_constants_match_public_outputs_and_state_contract() -> None:
+    assert PIPELINE_INGEST_DIRNAME == "ingest"
+    assert PIPELINE_TRANSFORM_DIRNAME == "transform"
+    assert PIPELINE_PLANNING_DIRNAME == "planning"
     assert PIPELINE_OUTPUTS_DIRNAME == "outputs"
     assert PIPELINE_STATE_DIRNAME == "state"
     assert TRANSFORM_TRANSACTIONS_FILENAME == "transform_transactions.parquet"
@@ -276,3 +289,30 @@ def test_artifact_constants_match_public_outputs_and_state_contract() -> None:
     assert TRANSFORM_COMPLETENESS_FILENAME == "transform_completeness_report.json"
     assert WORKFLOW_FX_CACHE_FILENAME == "workflow_fx_rates_history.parquet"
     assert WORKFLOW_REVIEW_STATE_FILENAME == "workflow_review_state.parquet"
+
+
+def test_stage_root_helpers_and_legacy_artifact_fallbacks(tmp_path: Path) -> None:
+    settings = cast(
+        Settings,
+        type(
+            "SettingsStub",
+            (),
+            {
+                "processed_path": tmp_path / "processed",
+            },
+        )(),
+    )
+    transform_path = transform_root_path(settings) / TRANSFORM_TRANSACTIONS_FILENAME
+    ingest_path = ingest_root_path(settings) / INGEST_STAGED_TRANSACTIONS_FILENAME
+    legacy_transform_path = settings.processed_path / "outputs" / TRANSFORM_TRANSACTIONS_FILENAME
+    legacy_ingest_path = settings.processed_path / "state" / INGEST_STAGED_TRANSACTIONS_FILENAME
+    legacy_transform_path.parent.mkdir(parents=True)
+    legacy_ingest_path.parent.mkdir(parents=True)
+    legacy_transform_path.write_text("legacy transform", encoding="utf-8")
+    legacy_ingest_path.write_text("legacy ingest", encoding="utf-8")
+
+    assert ingest_root_path(settings) == settings.processed_path / "ingest"
+    assert transform_root_path(settings) == settings.processed_path / "transform"
+    assert planning_root_path(settings) == settings.processed_path / "planning"
+    assert resolve_transform_artifact_path(settings, transform_path) == legacy_transform_path
+    assert resolve_ingest_artifact_path(settings, ingest_path) == legacy_ingest_path

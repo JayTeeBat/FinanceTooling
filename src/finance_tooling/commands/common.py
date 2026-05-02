@@ -11,11 +11,13 @@ from finance_tooling.core.config import (
     TRANSFORM_TRANSACTIONS_CSV_FILENAME,
     Settings,
     load_settings_from_env,
+    resolve_transform_artifact_path,
 )
 from finance_tooling.core.models import WorkflowResult
 from finance_tooling.parsers.base import StatementValidation
 from finance_tooling.workflow.incremental_state import FullRefreshPreflight
 from finance_tooling.workflow.ingest_stage import IngestExecutionResult
+from finance_tooling.workflow.planning_stage import PlanningExecutionResult
 
 DEFAULT_REVIEW_WORKBOOK_FILENAME = "transactions_review.xlsx"
 LEGACY_REVIEW_CSV_FILENAME = "transactions_review.csv"
@@ -80,6 +82,7 @@ def resolve_review_export_paths(
         "export_csv_path",
         processed_dir / PIPELINE_OUTPUTS_DIRNAME / TRANSFORM_TRANSACTIONS_CSV_FILENAME,
     )
+    default_normalized_path = resolve_transform_artifact_path(settings, default_normalized_path)
     return (
         normalized_path or default_normalized_path,
         output_path or (processed_dir / DEFAULT_REVIEW_WORKBOOK_FILENAME),
@@ -397,6 +400,24 @@ def print_workflow_result(result: WorkflowResult, *, verbose: bool = False) -> i
 
     if result.transactions_parsed == 0 and result.total_rows == 0:
         return 2
+    return 0
+
+
+def print_planning_result(result: PlanningExecutionResult, *, verbose: bool = False) -> int:
+    """Print planning stage summary and return process exit code."""
+    print(f"Planning ledger: {result.ledger_rows} rows")
+    print(f"Budget status: {result.budget_status_rows} rows")
+    if verbose:
+        print(f"Input transactions: {result.input_transactions_path}")
+        print(f"Ledger parquet: {result.ledger_path}")
+        print(f"Ledger CSV: {result.ledger_csv_path}")
+        print(f"KPI summary: {result.kpi_summary_path}")
+        print(f"Budget status CSV: {result.budget_status_path}")
+        print(f"Planning dashboard: {result.dashboard_path}")
+    if result.warnings:
+        print("Warnings:")
+        for warning in result.warnings:
+            print(f"- {warning}")
     return 0
 
 

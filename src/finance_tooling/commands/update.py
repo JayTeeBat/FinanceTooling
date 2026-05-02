@@ -52,6 +52,11 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Write state/ingest_summary.json when the ingest stage runs.",
     )
+    parser.add_argument(
+        "--skip-planning",
+        action="store_true",
+        help="Skip the planning stage after transform.",
+    )
     parser.set_defaults(command="update", handler=handle)
 
 
@@ -90,6 +95,7 @@ def handle(args: argparse.Namespace) -> int:
                 transform_only=bool(args.transform_only),
                 full_refresh=True,
                 emit_ingest_summary=bool(args.emit_ingest_summary),
+                skip_planning=bool(args.skip_planning),
             )
         else:
             result = run_update(
@@ -97,6 +103,7 @@ def handle(args: argparse.Namespace) -> int:
                 ingest_only=bool(args.ingest_only),
                 transform_only=bool(args.transform_only),
                 emit_ingest_summary=bool(args.emit_ingest_summary),
+                skip_planning=bool(args.skip_planning),
             )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Update error: {exc}")

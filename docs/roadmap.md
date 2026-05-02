@@ -22,14 +22,15 @@ Keep the operator-facing workflow centered on the existing CLI commands:
 - `review-import`
 - `workflow-status`
 
-Canonical transform outputs live under `processed/outputs/`:
+Canonical ingest, transform, and planning outputs live under
+`processed/ingest/`, `processed/transform/`, and `processed/planning/`:
 
 - `transform_transactions.csv`
 - `transform_transactions.parquet`
 - `transform_run_summary.json`
 - `transform_dashboard.html`
 
-Staged ingest state lives under `processed/state/`, especially:
+Shared workflow state lives under `processed/state/`, especially:
 
 - `ingest_staged_transactions.parquet`
 - `ingest_staged_batch_manifest.json`
@@ -72,6 +73,9 @@ The stage should:
 - compute budget-vs-actual status when targets are configured
 - write planning artifacts for reporting and review
 - render a dedicated `planning_dashboard.html`
+
+`update` should run `planning` by default after `transform`; `transform`
+remains transform-only and `--skip-planning` preserves the old stop point.
 
 3. Improve transform iteration speed for targeted review/config changes.
 

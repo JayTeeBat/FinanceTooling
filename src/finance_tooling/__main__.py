@@ -8,6 +8,9 @@ from finance_tooling.commands import (
     ingest as ingest_command,
 )
 from finance_tooling.commands import (
+    planning as planning_command,
+)
+from finance_tooling.commands import (
     review_export as review_export_command,
 )
 from finance_tooling.commands import (
@@ -45,6 +48,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Advanced: rebuild canonical outputs from staged transactions.",
     )
     transform_command.configure_parser(transform_parser)
+
+    planning_parser = subparsers.add_parser(
+        "planning",
+        help="Recommended: build planning ledger, budget status, KPIs, and dashboard.",
+    )
+    planning_command.configure_parser(planning_parser)
 
     update_parser = subparsers.add_parser(
         "update",

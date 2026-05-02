@@ -17,8 +17,8 @@ HTML dashboard.
 
 - Public stage name: `planning`
 - Primary CLI: `uv run planning`
-- Primary input: `processed/outputs/transform_transactions.parquet`
-- Primary output directory: `processed/outputs/`
+- Primary input: `processed/transform/transform_transactions.parquet`
+- Primary output directory: `processed/planning/`
 - Initial UI surface: separate `planning_dashboard.html`
 - V1 scope: transaction-derived cashflow health KPIs
 - Budgeting role: included when budget targets exist, but not the whole stage
@@ -149,6 +149,9 @@ scenario page. It should emphasize:
 The existing `transform_dashboard.html` should remain stable while this stage
 is introduced.
 
+`update` should invoke `planning` by default after `transform`; use
+`--skip-planning` to keep the old transform-only stop point.
+
 ## Test Plan
 
 Add tests for:
@@ -177,4 +180,3 @@ After V1 lands, evaluate whether to connect observed planning KPIs to the
 scenario-planning workspace. A useful later bridge would compare actual savings,
 investment, and debt-service flows against required monthly goal funding from
 the existing household planning engine.
-

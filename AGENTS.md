@@ -136,10 +136,14 @@ Prioritized recommendations for the next worker:
 - Operator-facing CLI remains:
   `ingest`, `transform`, `update`, `review-export`, `review-import`,
   `workflow-status`.
-- Canonical transform outputs live under `processed/outputs/` with current names:
+- Canonical outputs live under `processed/ingest/`, `processed/transform/`,
+  and `processed/planning/` with the current workflow artifacts.
+- Legacy read fallbacks for `processed/state/` and `processed/outputs/` remain
+  supported temporarily but should be treated as compatibility paths only.
+- Canonical transform outputs live under `processed/transform/` with current names:
   `transform_transactions.csv`, `transform_transactions.parquet`,
   `transform_run_summary.json`, and `transform_dashboard.html`.
-- Staged ingest state lives under `processed/state/`, especially
+- Staged ingest state lives under `processed/ingest/`, especially
   `ingest_staged_transactions.parquet` and
   `ingest_staged_batch_manifest.json`.
 
@@ -183,6 +187,34 @@ Success target for the 2026 validation campaign:
 ## Hand-Off Log
 
 ### 2026-05-02 - codex
+- Branch: `main`
+- Completed:
+  - Implemented stage-owned processed directories with canonical `processed/ingest/`, `processed/transform/`, and `processed/planning/` defaults plus legacy read fallbacks.
+  - Added a first-class `planning` workflow command and integrated planning into `update` with `--skip-planning`.
+  - Updated workflow, perf-check, and test coverage to match the new path contract and planning stage behavior.
+- Checks:
+  - `rtk uv run pytest -q`: pass
+  - `rtk uv run ty check src/finance_tooling tests`: pass
+  - `rtk uv run ruff check .`: pass
+- Open items:
+  - None.
+- Next action:
+  - Keep any remaining doc or CLI references aligned if more path-owned artifacts move stages later.
+
+### 2026-05-02 - codex
+- Branch: `codex/docs-canonical-layout`
+- Completed:
+  - Updated the public docs to present `processed/ingest/`, `processed/transform/`, and `processed/planning/` as the canonical layout.
+  - Documented legacy read fallbacks for `processed/state/` and `processed/outputs/`, plus the new default `update -> planning` behavior with `--skip-planning`.
+  - Added a same-day handoff entry for the doc-only workflow update.
+- Checks:
+  - Not run: documentation-only change.
+- Open items:
+  - None.
+- Next action:
+  - Merge the doc changes and keep the workflow docs aligned if CLI behavior lands next.
+
+### 2026-05-02 - codex
 - Branch: `codex/scoped-review-export-taxonomy`
 - Completed:
   - Added taxonomy-aware `review-export` filters for `category`, `subcategory`, `category_id`, and `reporting_category_id`.
@@ -197,59 +229,5 @@ Success target for the 2026 validation campaign:
   - None.
 - Next action:
   - Commit, push, and open a draft PR to `main`.
-
-### 2026-05-01 - codex
-- Branch: `codex/decision-role-planning`
-- Completed:
-  - Added `decision_role` end-to-end for canonical transactions, taxonomy defaults, reporting, and planning buckets.
-  - Updated starter category rules and tests, then reconciled the live FinanceVault config and processed caches for the renamed February 2026 La Banque Postale statement.
-  - Regenerated the live transform successfully after the filename reconciliation.
-- Checks:
-  - `rtk uv run transform`: pass
-- Open items:
-  - Repo changes still need to be committed, pushed, and published as a PR.
-- Next action:
-  - Stage the full repo diff, commit it on the feature branch, push, and open a draft PR.
-
-### 2026-04-23 - codex
-- Branch: `feature/economic-role-expense-split`
-- Completed:
-  - Added shared cashflow/economic-role semantics with `fixed_expense`,
-    `variable_expense`, and legacy-compatible `expense`.
-  - Updated classification, cashflow reporting, dashboard expense totals,
-    summary role counts, tracked taxonomy docs/config, and focused tests.
-  - Migrated the live FinanceVault category rules and regenerated local
-    processed outputs with subscription rows fixed and ordinary Amazon
-    marketplace rows variable.
-  - Updated metrics logs from the migrated summary output.
-- Checks:
-  - `uv run ruff format .`: pass
-  - `uv run ruff check .`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest`: pass
-- Open items:
-  - Work is not committed or pushed because the worktree also contains
-    unrelated pre-existing edits and broad formatting churn that should not be
-    swept into this feature without careful staging.
-  - Live backup snapshot creation skipped unreadable legacy Cryptomator backup
-    paths; current workflow backups still completed for active files.
-- Next action:
-  - Carefully stage only the economic-role feature hunks, commit, push, and open
-    a draft PR.
-
-### 2026-04-09 - codex
-- Branch: `fix/ty-cleanup`
-- Completed:
-  - Drove `uv run ty check src/finance_tooling tests` to green by tightening reporting/workflow typed payloads, cashflow YoY summary typing, and a few JSON/dict boundary helpers.
-  - Fixed stale typed call sites in `perf_check`, safer numeric parsing in account inference, and pandas datetime coercion paths in FX enrichment.
-  - Updated focused tests to use clearer typed assertions around dashboard/cashflow/audit payloads and backup-path invariants.
-- Checks:
-  - `uv run ruff check src/finance_tooling/__init__.py src/finance_tooling/categorization/account_inference.py src/finance_tooling/workflow/types.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/transform_stage.py src/finance_tooling/maintenance/perf_check.py src/finance_tooling/reporting/metrics_log.py src/finance_tooling/reporting/workflow_status.py src/finance_tooling/workflow/enrichment.py tests/test_healthcheck.py tests/test_cashflow.py tests/test_categorization_audit.py tests/test_category_id_migration_audit.py tests/test_category_normalization.py tests/test_dashboard.py tests/test_review_workflow.py`: pass
-  - `uv run ty check src/finance_tooling tests`: pass
-  - `uv run pytest -q tests/test_healthcheck.py tests/test_cashflow.py tests/test_dashboard.py tests/test_category_normalization.py tests/test_categorization_audit.py tests/test_category_id_migration_audit.py tests/test_review_workflow.py tests/test_workflow_status.py tests/test_backup.py tests/test_perf_check.py tests/test_workflow_stages.py`: pass
-- Open items:
-  - This branch has the ty cleanup locally but is not yet committed or pushed.
-- Next action:
-  - Commit the `fix/ty-cleanup` branch and open a focused PR for the type-cleanup slice.
 
 @RTK.md

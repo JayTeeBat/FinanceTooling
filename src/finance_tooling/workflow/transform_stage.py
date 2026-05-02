@@ -15,7 +15,11 @@ from tqdm import tqdm
 
 from finance_tooling.categorization.account_inference import infer_accounts_for_transactions
 from finance_tooling.core.backup import BackupRunResult, create_stage_backup_run
-from finance_tooling.core.config import HOUSEHOLD_HEALTHCHECK_FILENAME, Settings
+from finance_tooling.core.config import (
+    HOUSEHOLD_HEALTHCHECK_FILENAME,
+    Settings,
+    resolve_transform_artifact_path,
+)
 from finance_tooling.core.fx import FX_RATE_SEMANTICS_VERSION
 from finance_tooling.core.models import WorkflowResult
 from finance_tooling.core.source_inventory import load_source_inventory
@@ -112,6 +116,13 @@ def _required_transform_outputs(settings: Settings) -> tuple[Path, ...]:
     return tuple(outputs)
 
 
+def _required_transform_read_outputs(settings: Settings) -> tuple[Path, ...]:
+    return tuple(
+        resolve_transform_artifact_path(settings, output)
+        for output in _required_transform_outputs(settings)
+    )
+
+
 def _is_transform_output_current(
     settings: Settings,
     *,
@@ -119,7 +130,7 @@ def _is_transform_output_current(
     manifest_path: Path,
     manifest_config_fingerprint: str,
 ) -> bool:
-    required_outputs = _required_transform_outputs(settings)
+    required_outputs = _required_transform_read_outputs(settings)
     if any(not path.exists() for path in required_outputs):
         return False
     current_config_fingerprint = compute_config_fingerprint(settings)
@@ -141,7 +152,8 @@ def _is_transform_output_current(
     earliest_output_mtime_ns = min(path.stat().st_mtime_ns for path in required_outputs)
     if earliest_output_mtime_ns < latest_input_mtime_ns:
         return False
-    summary_payload = _load_previous_summary(settings.summary_json_path)
+    summary_path = resolve_transform_artifact_path(settings, settings.summary_json_path)
+    summary_payload = _load_previous_summary(summary_path)
     if summary_payload is None:
         return False
     summary_config_fingerprint = summary_payload.get("transform_config_fingerprint")
@@ -153,7 +165,8 @@ def _is_transform_output_current(
     if _summary_int(summary_payload, "fx_rate_semantics_version") != FX_RATE_SEMANTICS_VERSION:
         return False
     try:
-        canonical_columns = set(pd.read_parquet(settings.master_parquet_path).columns)
+        master_path = resolve_transform_artifact_path(settings, settings.master_parquet_path)
+        canonical_columns = set(pd.read_parquet(master_path).columns)
     except Exception:
         return False
     required_columns = {
@@ -185,7 +198,10 @@ def _workflow_result_from_summary(
     dataset_stale: bool,
     stale_reasons: tuple[str, ...],
 ) -> WorkflowResult:
-    completeness_payload = _load_json(settings.completeness_json_path) or {}
+    completeness_payload = (
+        _load_json(resolve_transform_artifact_path(settings, settings.completeness_json_path))
+        or {}
+    )
     completeness_status = str(completeness_payload.get("status", "pass"))
     completeness_coverage_ratio = _summary_float(completeness_payload, "file_coverage_ratio")
     missing_source_file_count = _summary_int(completeness_payload, "missing_source_file_count")
@@ -268,7 +284,9 @@ def load_cached_transform_result(
     stale_reasons: tuple[str, ...] | None = None,
 ) -> WorkflowResult | None:
     """Return a cached workflow result when current outputs are already up to date."""
-    previous_summary = _load_previous_summary(settings.summary_json_path)
+    previous_summary = _load_previous_summary(
+        resolve_transform_artifact_path(settings, settings.summary_json_path)
+    )
     if previous_summary is None:
         return None
 

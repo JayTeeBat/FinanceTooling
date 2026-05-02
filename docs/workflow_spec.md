@@ -46,10 +46,10 @@ Primary responsibilities:
 
 Primary outputs:
 
-- `processed/state/ingest_staged_transactions.parquet`
-- `processed/state/ingest_staged_batch_manifest.json`
-- `processed/state/ingest_summary.json` when requested
-- `processed/state/workflow_source_inventory.json`
+- `processed/ingest/ingest_staged_transactions.parquet`
+- `processed/ingest/ingest_staged_batch_manifest.json`
+- `processed/ingest/ingest_summary.json` when requested
+- `processed/ingest/workflow_source_inventory.json`
 
 Ingest should not assign durable categorization outcomes. It prepares normalized
 rows for the transform stage.
@@ -70,15 +70,16 @@ Primary responsibilities:
 
 Primary outputs:
 
-- `processed/outputs/transform_transactions.parquet`
-- `processed/outputs/transform_transactions.csv`
-- `processed/outputs/transform_run_summary.json`
-- `processed/outputs/transform_dashboard.html`
+- `processed/transform/transform_transactions.parquet`
+- `processed/transform/transform_transactions.csv`
+- `processed/transform/transform_run_summary.json`
+- `processed/transform/transform_dashboard.html`
 - `processed/state/workflow_review_state.parquet`
 - `processed/state/transform_source_registry.json`
 - `processed/state/workflow_pipeline_state.json`
 
-Transform is intentionally transform-only. It does not re-run ingest.
+Transform is intentionally transform-only. It does not re-run ingest or
+planning.
 
 ### 3. Planning
 
@@ -171,6 +172,8 @@ slice the data, but it should not own core semantic rules.
   taxonomy/configuration, or transform logic changes.
 - `transform --force` may be used to bypass the no-op cache and recompute the
   canonical corpus without re-running ingest.
+- `update` should run `planning` by default after `transform`; use
+  `--skip-planning` to stop at the transform stage.
 - Planning outputs should be reproducible from the canonical corpus and stable
   semantic rules.
 - Budgeting logic should rely on semantic fields and stable identifiers, not on
@@ -204,4 +207,3 @@ transform -> planning
   rules.
 - `docs/categorization_review_workflow.md` and
   `docs/category_rules_review_workflow.md` cover review and rule maintenance.
-

@@ -9,7 +9,7 @@ from typing import TypedDict, cast
 
 import pandas as pd
 
-from finance_tooling.core.config import Settings, state_root_path
+from finance_tooling.core.config import Settings, ingest_root_path, transform_root_path
 from finance_tooling.core.scanner import discover_statement_pdfs
 from finance_tooling.core.source_inventory import (
     SourceInventorySnapshot,
@@ -267,8 +267,8 @@ def _master_snapshot(path: Path) -> MasterState:
 def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path]:
     """Build and persist a machine-readable pipeline status snapshot."""
     processed_dir = settings.processed_path
-    pipeline_state_path = state_root_path(settings) / PIPELINE_STATE_FILENAME
-    stored_inventory_path = state_root_path(settings) / SOURCE_INVENTORY_FILENAME
+    pipeline_state_path = transform_root_path(settings) / PIPELINE_STATE_FILENAME
+    stored_inventory_path = ingest_root_path(settings) / SOURCE_INVENTORY_FILENAME
 
     current_inventory = build_source_inventory(discover_statement_pdfs(settings.input_path))
     registry = load_source_registry(source_registry_path(settings))
@@ -615,6 +615,7 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
         },
         "findings": findings,
     }
+    pipeline_state_path.parent.mkdir(parents=True, exist_ok=True)
     pipeline_state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload, pipeline_state_path
 
@@ -622,5 +623,5 @@ def build_pipeline_state(settings: Settings) -> tuple[PipelineStatePayload, Path
 def refresh_source_inventory(settings: Settings) -> Path:
     """Persist a fresh source inventory snapshot without running the pipeline."""
     inventory = build_source_inventory(discover_statement_pdfs(settings.input_path))
-    path = settings.summary_json_path.parent / SOURCE_INVENTORY_FILENAME
+    path = ingest_root_path(settings) / SOURCE_INVENTORY_FILENAME
     return write_source_inventory(path, inventory)

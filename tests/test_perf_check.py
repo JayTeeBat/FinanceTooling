@@ -14,31 +14,31 @@ from finance_tooling.workflow.types import EnrichmentResult, HsbcDiagnosticsResu
 
 
 def _settings(tmp_path: Path, processed_dir: Path) -> Settings:
-    (processed_dir / "outputs").mkdir(parents=True, exist_ok=True)
-    (processed_dir / "state").mkdir(parents=True, exist_ok=True)
+    (processed_dir / "transform").mkdir(parents=True, exist_ok=True)
+    (processed_dir / "ingest").mkdir(parents=True, exist_ok=True)
     return Settings(
         input_path=tmp_path / "input",
         processed_path=processed_dir,
-        output_path=processed_dir / "outputs" / "transform_dashboard.html",
-        master_parquet_path=processed_dir / "outputs" / "transform_transactions.parquet",
-        export_csv_path=processed_dir / "outputs" / "transform_transactions.csv",
-        export_json_path=processed_dir / "outputs" / "transform_transactions.json",
-        staged_transactions_path=processed_dir / "state" / "ingest_staged_transactions.parquet",
-        summary_json_path=processed_dir / "outputs" / "transform_run_summary.json",
-        completeness_json_path=processed_dir / "state" / "transform_completeness_report.json",
+        output_path=processed_dir / "transform" / "transform_dashboard.html",
+        master_parquet_path=processed_dir / "transform" / "transform_transactions.parquet",
+        export_csv_path=processed_dir / "transform" / "transform_transactions.csv",
+        export_json_path=processed_dir / "transform" / "transform_transactions.json",
+        staged_transactions_path=processed_dir / "ingest" / "ingest_staged_transactions.parquet",
+        summary_json_path=processed_dir / "transform" / "transform_run_summary.json",
+        completeness_json_path=processed_dir / "transform" / "transform_completeness_report.json",
         base_currency="EUR",
-        fx_cache_path=processed_dir / "state" / "workflow_fx_rates_history.parquet",
+        fx_cache_path=processed_dir / "transform" / "workflow_fx_rates_history.parquet",
         fx_auto_fetch=False,
         ingest_workers=1,
         ingest_text_cache_enabled=False,
-        ingest_text_cache_path=processed_dir / "state" / "ingest_text_cache.parquet",
+        ingest_text_cache_path=processed_dir / "ingest" / "ingest_text_cache.parquet",
         category_rules_path=processed_dir / "category_rules.yaml",
         project_rules_path=processed_dir / "project_rules.yaml",
         budget_targets_path=processed_dir / "budget_targets.yaml",
         account_rules_path=processed_dir / "account_rules.yaml",
         project_overrides_path=Path("config/project_overrides.yaml").resolve(),
         transaction_overrides_path=Path("config/transaction_overrides.yaml").resolve(),
-        review_state_path=processed_dir / "state" / "workflow_review_state.parquet",
+        review_state_path=processed_dir / "transform" / "workflow_review_state.parquet",
         review_export_dark_safe=True,
     )
 
@@ -208,11 +208,11 @@ def test_run_perf_check_writes_performance_summary_and_stage_timings(
 
     result = run_perf_check(settings)
 
-    payload = (processed_dir / "state" / "workflow_performance_summary.json").read_text(
+    payload = (processed_dir / "transform" / "workflow_performance_summary.json").read_text(
         encoding="utf-8"
     )
     assert result.performance_summary_path == (
-        processed_dir / "state" / "workflow_performance_summary.json"
+        processed_dir / "transform" / "workflow_performance_summary.json"
     )
     assert result.total_duration_seconds == 10.0
     assert result.stage_durations_seconds == {
