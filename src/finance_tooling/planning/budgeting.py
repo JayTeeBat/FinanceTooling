@@ -241,7 +241,15 @@ def _coerce_amount(value: object) -> float | None:
     return None
 
 
-def _planning_amount_series(frame: pd.DataFrame) -> pd.Series:
+def _kpi_amount_series(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype="float64")
+    if "amount_eur" not in frame.columns or "planning_bucket" not in frame.columns:
+        return pd.Series(0.0, index=frame.index, dtype="float64")
+    return pd.to_numeric(frame["amount_eur"], errors="coerce").fillna(0.0)
+
+
+def _budget_amount_series(frame: pd.DataFrame) -> pd.Series:
     if frame.empty:
         return pd.Series(dtype="float64")
     if "amount_eur" not in frame.columns or "planning_bucket" not in frame.columns:
@@ -450,7 +458,7 @@ def build_budget_status(
     by_project: dict[tuple[str, str, str], float] = defaultdict(float)
 
     expense_ledger = ledger[ledger["planning_bucket"].eq("expense")].copy()
-    expense_ledger["_planning_amount"] = _planning_amount_series(expense_ledger)
+    expense_ledger["_planning_amount"] = _budget_amount_series(expense_ledger)
     for row in expense_ledger.to_dict(orient="records"):
         month = str(row.get("month") or "").strip()
         category_id = str(row.get("category_id") or "").strip()

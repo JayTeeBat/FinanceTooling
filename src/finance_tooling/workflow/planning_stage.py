@@ -26,7 +26,7 @@ from finance_tooling.core.config import (
 )
 from finance_tooling.planning.budgeting import (
     BudgetConfig,
-    _planning_amount_series,
+    _kpi_amount_series,
     build_budget_status,
     build_monthly_planning_ledger,
     load_budget_config,
@@ -61,7 +61,7 @@ def _bucket_totals(frame: pd.DataFrame) -> dict[str, float]:
     if frame.empty:
         return {}
     working = frame.copy()
-    working["_planning_amount"] = _planning_amount_series(working)
+    working["_planning_amount"] = _kpi_amount_series(working)
     totals = working.groupby("planning_bucket", dropna=False)["_planning_amount"].sum()
     return {str(bucket): round(float(amount), 2) for bucket, amount in totals.items()}
 
@@ -71,7 +71,7 @@ def _surface_totals(frame: pd.DataFrame, column: str) -> dict[str, float]:
         return {}
     working = frame.copy()
     working[column] = working[column].map(_normalize_surface_bucket_label)
-    working["_planning_amount"] = _planning_amount_series(working)
+    working["_planning_amount"] = _kpi_amount_series(working)
     totals = working.groupby(column, dropna=False)["_planning_amount"].sum()
     return {
         _normalize_surface_bucket_label(bucket): round(float(amount), 2)
@@ -84,7 +84,7 @@ def _monthly_surface_breakdown(frame: pd.DataFrame, column: str) -> list[dict[st
         return []
     working = frame.copy()
     working[column] = working[column].map(_normalize_surface_bucket_label)
-    working["_planning_amount"] = _planning_amount_series(working)
+    working["_planning_amount"] = _kpi_amount_series(working)
     grouped = working.groupby(["month", column], dropna=False)["_planning_amount"].sum()
     rows: list[dict[str, object]] = []
     for (month, bucket), amount in grouped.items():
@@ -107,7 +107,7 @@ def _surface_monthly_breakdown_by_month(
         return {}
     working = frame.copy()
     working[column] = working[column].map(_normalize_surface_bucket_label)
-    working["_planning_amount"] = _planning_amount_series(working)
+    working["_planning_amount"] = _kpi_amount_series(working)
     grouped = working.groupby(["month", column], dropna=False)["_planning_amount"].sum()
     monthly: dict[str, dict[str, float]] = {}
     for (month, bucket), amount in grouped.items():
@@ -289,7 +289,7 @@ def build_planning_kpi_summary(
         ytd_totals = _bucket_totals(ytd_frame)
         monthly_totals = []
         working = ledger.copy()
-        working["_planning_amount"] = _planning_amount_series(working)
+        working["_planning_amount"] = _kpi_amount_series(working)
         grouped = working.groupby(["month", "planning_bucket"], dropna=False)[
             "_planning_amount"
         ].sum()
@@ -1247,7 +1247,7 @@ def render_planning_stage_dashboard_html(
         bucketOrder: ["in", "out", "transfer", "exclude", "unknown"],
         balanceLabel: "balance (in - out)",
         balanceFn: (totals) => (
-          Number(totals.get("in") || 0) - Number(totals.get("out") || 0)
+          Number(totals.get("in") || 0) + Number(totals.get("out") || 0)
         ),
       },
       economic_role: {
@@ -1265,9 +1265,9 @@ def render_planning_stage_dashboard_html(
         balanceLabel: "balance (income - expenses)",
         balanceFn: (totals) => (
           Number(totals.get("income") || 0)
-          - Number(totals.get("fixed_expense") || 0)
-          - Number(totals.get("variable_expense") || 0)
-          - Number(totals.get("expense") || 0)
+          + Number(totals.get("fixed_expense") || 0)
+          + Number(totals.get("variable_expense") || 0)
+          + Number(totals.get("expense") || 0)
         ),
       },
       decision_role: {
@@ -1513,7 +1513,7 @@ def render_planning_stage_dashboard_html(
       const note = document.getElementById(`chart-note-${surfaceKey}`);
       const aggregation = aggregateSurface(surfaceKey, windowMonths);
       const buckets = aggregation.entries.filter((entry) => bucketVisible(surfaceKey, entry.key));
-      const total = buckets.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+      const total = buckets.reduce((sum, entry) => sum + Math.abs(Number(entry.amount || 0)), 0);
       const balance = balanceFor(surfaceKey, aggregation.totals);
       const context = windowLabel(windowMonths);
       svg.innerHTML = "";
@@ -1544,14 +1544,15 @@ def render_planning_stage_dashboard_html(
       let startAngle = -Math.PI / 2;
       buckets.forEach((entry) => {
         const value = Number(entry.amount || 0);
-        const share = value / total;
+        const sliceValue = Math.abs(value);
+        const share = sliceValue / total;
         const endAngle = startAngle + ((Math.PI * 2) * share);
         const color = bucketColor(entry.key);
         const path = createSvgElement("path");
         path.setAttribute("fill", color);
         path.setAttribute("stroke", "rgba(255,250,244,0.92)");
         path.setAttribute("stroke-width", "2");
-        path.setAttribute(
+          path.setAttribute(
           "d",
           share >= 0.999999 ? fullCirclePath(cx, cy, radius) : arcPath(cx, cy, radius, startAngle, endAngle)
         );

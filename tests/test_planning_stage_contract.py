@@ -392,24 +392,18 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
         ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("income"), "amount_eur"].sum()
     )
     expense_total = float(
-        (-ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("expense"), "amount_eur"]).sum()
+        ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("expense"), "amount_eur"].sum()
     )
     savings_total = float(
-        ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("savings"), "amount_eur"]
-        .abs()
-        .sum()
+        ledger_parquet.loc[ledger_parquet["planning_bucket"].eq("savings"), "amount_eur"].sum()
     )
     fixed_expense_total = float(
-        (
-            -ledger_parquet.loc[ledger_parquet["economic_role"].eq("fixed_expense"), "amount_eur"]
-        ).sum()
+        ledger_parquet.loc[ledger_parquet["economic_role"].eq("fixed_expense"), "amount_eur"].sum()
     )
     variable_expense_total = float(
-        (
-            -ledger_parquet.loc[
-                ledger_parquet["economic_role"].eq("variable_expense"), "amount_eur"
-            ]
-        ).sum()
+        ledger_parquet.loc[
+            ledger_parquet["economic_role"].eq("variable_expense"), "amount_eur"
+        ].sum()
     )
 
     totals = summary_payload["totals_by_planning_bucket"]
@@ -434,13 +428,13 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert "surface_breakdowns" in summary_payload
     assert summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"][
         "fixed_expense"
-    ] == pytest.approx(300.0)
+    ] == pytest.approx(-300.0)
     assert summary_payload["surface_breakdowns"]["economic_role"]["monthly_totals_by_month"][
         "2026-02"
     ]["income"] == pytest.approx(500.0)
     assert summary_payload["surface_breakdowns"]["decision_role"]["bucket_totals"][
         "not_applicable"
-    ] == pytest.approx(1600.0)
+    ] == pytest.approx(1400.0)
     assert "" not in summary_payload["surface_breakdowns"]["economic_role"]["bucket_totals"]
     assert (
         ""
@@ -448,8 +442,8 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
             "2026-02"
         ]
     )
-    assert fixed_expense_total == pytest.approx(300.0)
-    assert variable_expense_total == pytest.approx(200.0)
+    assert fixed_expense_total == pytest.approx(-300.0)
+    assert variable_expense_total == pytest.approx(-200.0)
 
     assert len(budget_status) == 1
     assert budget_status.loc[0, "category_id"] == "expense.food.groceries"
@@ -539,7 +533,7 @@ def test_planning_surface_breakdowns_normalize_blank_labels_to_unknown() -> None
 
     monthly = surface_breakdown(frame, "economic_role")
 
-    assert monthly == {"2026-01": {"unknown": 22.0}}
+    assert monthly == {"2026-01": {"unknown": -22.0}}
 
 
 def test_run_planning_builds_the_ledger_once(tmp_path: Path, monkeypatch) -> None:

@@ -133,6 +133,21 @@ Use this template:
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
+  - Split planning math into raw KPI aggregation and separate budget-vs-actual accounting so KPI summaries no longer flip signs for non-transfer rows.
+  - Updated the planning dashboard to compute pie shares from absolute magnitude while keeping the raw signed totals and net balances in the summary payload.
+  - Refreshed the planning contract tests to match the raw-sign KPI model.
+- Checks:
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/planning/budgeting.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_budgeting.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py`: pass
+- Open items:
+  - None.
+- Next action:
+  - Keep the PR copy aligned with the raw-amount KPI model and the net-balance dashboard wording.
+
+### 2026-05-02 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
   - Removed `planning_amount_eur` from the persisted planning ledger and switched planning aggregation to derive amounts directly from `amount_eur` plus semantic buckets.
   - Updated the budgeting and planning-stage tests to assert the raw amount model and the new transient internal amount handling.
   - Renamed the internal scratch columns so `planning_amount_eur` no longer appears in the live code path.
@@ -157,17 +172,3 @@ Use this template:
   - None.
 - Next action:
   - Keep the PR body aligned if reviewers want the transfer taxonomy simplification called out explicitly.
-
-### 2026-05-02 - codex
-- Branch: `codex/stage-aligned-planning`
-- Completed:
-  - Renamed the taxonomy schema so transfer buckets now use `cashflow_role` instead of `cashflow_type`.
-  - Updated the classification parser to accept `cashflow_role` while keeping legacy `cashflow_type` inputs working.
-  - Mirrored the schema rename into the live taxonomy corpus and updated the schema-alias test plus taxonomy spec.
-- Checks:
-  - `rtk uv run ruff format src/finance_tooling/categorization/classify.py tests/test_classify.py`: pass
-  - `rtk uv run pytest -q tests/test_classify.py tests/test_budgeting.py tests/test_cashflow.py`: pass
-- Open items:
-  - None.
-- Next action:
-  - Keep the PR wording and docs aligned if any other semantic key renames are requested.
