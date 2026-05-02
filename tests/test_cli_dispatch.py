@@ -205,6 +205,10 @@ def test_review_export_defaults_paths_from_settings(monkeypatch, tmp_path: Path,
         contains: str | None = None,
         bank: str | None = None,
         account_label: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        category_id: str | None = None,
+        reporting_category_id: str | None = None,
         min_amount: str | None = None,
         max_amount: str | None = None,
         min_abs_amount: str | None = None,
@@ -257,6 +261,10 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
         contains: str | None = None,
         bank: str | None = None,
         account_label: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        category_id: str | None = None,
+        reporting_category_id: str | None = None,
         min_amount: str | None = None,
         max_amount: str | None = None,
         min_abs_amount: str | None = None,
@@ -276,6 +284,10 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
                 "contains": contains,
                 "bank": bank,
                 "account_label": account_label,
+                "category": category,
+                "subcategory": subcategory,
+                "category_id": category_id,
+                "reporting_category_id": reporting_category_id,
                 "min_amount": min_amount,
                 "max_amount": max_amount,
                 "min_abs_amount": min_abs_amount,
@@ -308,6 +320,14 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
             "revolut",
             "--account-label",
             "main",
+            "--category",
+            "Transport",
+            "--subcategory",
+            "Mobility",
+            "--category-id",
+            "transit.mobility",
+            "--reporting-category-id",
+            "transport.mobility",
             "--min-amount",
             "-200",
             "--max-amount",
@@ -327,6 +347,10 @@ def test_review_export_passes_explicit_filter_flags(monkeypatch, capsys) -> None
     assert captured["contains"] == "merchant"
     assert captured["bank"] == "revolut"
     assert captured["account_label"] == "main"
+    assert captured["category"] == "Transport"
+    assert captured["subcategory"] == "Mobility"
+    assert captured["category_id"] == "transit.mobility"
+    assert captured["reporting_category_id"] == "transport.mobility"
     assert captured["min_amount"] == "-200"
     assert captured["max_amount"] == "50"
     assert captured["min_abs_amount"] is None

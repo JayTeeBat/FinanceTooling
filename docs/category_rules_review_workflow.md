@@ -110,6 +110,17 @@ uv run review-export \
   --end-date "${MONTH_END}"
 ```
 
+To inspect a specific taxonomy bucket, scope the same export with exact
+taxonomy filters instead of exporting the whole month:
+
+```bash
+uv run review-export \
+  --normalized-path "${CAND_DIR}/outputs/transform_transactions.csv" \
+  --output-path "${RUN_ROOT}/candidate_transport_review.xlsx" \
+  --category-id "transit.mobility" \
+  --reporting-category-id "transport.mobility"
+```
+
 Optional full rerun command for sanity:
 
 ```bash

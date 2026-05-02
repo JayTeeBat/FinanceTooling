@@ -59,6 +59,30 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         help="Optional exact account label filter.",
     )
     parser.add_argument(
+        "--category",
+        type=str,
+        default=None,
+        help="Optional exact category filter.",
+    )
+    parser.add_argument(
+        "--subcategory",
+        type=str,
+        default=None,
+        help="Optional exact subcategory filter.",
+    )
+    parser.add_argument(
+        "--category-id",
+        type=str,
+        default=None,
+        help="Optional exact durable category_id filter.",
+    )
+    parser.add_argument(
+        "--reporting-category-id",
+        type=str,
+        default=None,
+        help="Optional exact reporting_category_id filter.",
+    )
+    parser.add_argument(
         "--min-amount",
         type=str,
         default=None,
@@ -123,6 +147,10 @@ def handle(args: argparse.Namespace) -> int:
             contains=args.contains,
             bank=args.bank,
             account_label=args.account_label,
+            category=args.category,
+            subcategory=args.subcategory,
+            category_id=args.category_id,
+            reporting_category_id=args.reporting_category_id,
             min_amount=args.min_amount,
             max_amount=args.max_amount,
             min_abs_amount=args.min_abs_amount,

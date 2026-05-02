@@ -147,8 +147,7 @@ def _extract_account_rows(full_text: str) -> list[tuple[str, str, str, str]]:
             in_account_transactions = True
             continue
         if in_account_transactions and (
-            _ACCOUNT_TRANSACTIONS_STOP.match(line)
-            or _NAMED_ACCOUNT_TRANSACTIONS_STOP.match(line)
+            _ACCOUNT_TRANSACTIONS_STOP.match(line) or _NAMED_ACCOUNT_TRANSACTIONS_STOP.match(line)
         ):
             break
         if not in_account_transactions:

@@ -812,9 +812,7 @@ def test_run_transform_computes_delta_from_previous_summary(monkeypatch, tmp_pat
     assert result.uncategorized_amount_eur_abs_delta == -30.0
 
 
-def test_run_transform_force_bypasses_cached_result(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_run_transform_force_bypasses_cached_result(monkeypatch, tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     _write_transform_manifest(settings, [])
     staged_transaction = Transaction(
