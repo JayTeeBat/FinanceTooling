@@ -55,10 +55,6 @@ corrections.
 Capture high-frequency residual fingerprints discovered during 2026 review and
 feed them back into reusable rule updates.
 
-Add scoped `review-export` filters for taxonomy/category buckets so an operator
-can export review rows by `category`, `subcategory`, `category_id`, or
-`reporting_category_id` without exporting all categorized transactions first.
-
 2. Implement the first-class planning stage as the next major workflow item.
 
 The repo already has reusable planning helpers, but the missing piece is a

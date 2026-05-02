@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 import pytest
@@ -129,6 +130,188 @@ def test_export_review_rows_include_categorized_option_includes_all_sources(
     assert exported == 2
     exported_df = pd.read_csv(output_path)
     assert exported_df["transaction_id"].tolist() == ["tx_1", "tx_2"]
+
+
+@pytest.mark.parametrize(
+    ("filter_kwargs", "expected_transaction_ids"),
+    [
+        ({"category": " transport "}, ["tx_transport"]),
+        ({"subcategory": " mobility "}, ["tx_transport"]),
+        ({"category_id": " TRANSIT.MOBILITY "}, ["tx_transport"]),
+        (
+            {"reporting_category_id": " TRANSPORT.MOBILITY "},
+            ["tx_transport"],
+        ),
+    ],
+)
+def test_export_review_rows_filters_by_taxonomy_column(
+    tmp_path: Path,
+    filter_kwargs: dict[str, str],
+    expected_transaction_ids: list[str],
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_uncategorized",
+                "booking_date": "2026-01-01",
+                "description": "UNKNOWN MERCHANT 123",
+                "amount_native": -10.5,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Uncategorized",
+                "subcategory": None,
+                "category_id": "uncategorized",
+                "reporting_category_id": "uncategorized",
+                "category_source": "uncategorized",
+            },
+            {
+                "transaction_id": "tx_transport",
+                "booking_date": "2026-01-02",
+                "description": "CARD UBER",
+                "amount_native": -12.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Transport",
+                "subcategory": "Mobility",
+                "category_id": "transit.mobility",
+                "reporting_category_id": "transport.mobility",
+                "category_source": "rule",
+            },
+            {
+                "transaction_id": "tx_food",
+                "booking_date": "2026-01-03",
+                "description": "GROCERY STORE",
+                "amount_native": -25.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Food",
+                "subcategory": "Groceries",
+                "category_id": "groceries.supermarket",
+                "reporting_category_id": "food.groceries",
+                "category_source": "rule",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_review_rows(
+        normalized_path, output_path, **cast(dict[str, Any], filter_kwargs)
+    )
+
+    assert exported == 1
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == expected_transaction_ids
+
+
+def test_export_review_rows_filters_by_taxonomy_columns_and_other_filters(
+    tmp_path: Path,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_match",
+                "booking_date": "2026-01-01",
+                "description": "CARD UBER",
+                "amount_native": -12.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": "Main",
+                "category": "Transport",
+                "subcategory": "Mobility",
+                "category_id": "transit.mobility",
+                "reporting_category_id": "transport.mobility",
+                "category_source": "rule",
+            },
+            {
+                "transaction_id": "tx_other_subcategory",
+                "booking_date": "2026-01-02",
+                "description": "TAXI RIDE",
+                "amount_native": -18.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": "Main",
+                "category": "Transport",
+                "subcategory": "Taxi",
+                "category_id": "transit.taxi",
+                "reporting_category_id": "transport.taxi",
+                "category_source": "rule",
+            },
+            {
+                "transaction_id": "tx_other_bank",
+                "booking_date": "2026-01-03",
+                "description": "CARD UBER",
+                "amount_native": -15.0,
+                "currency": "EUR",
+                "bank": "N26",
+                "account_label": "Main",
+                "category": "Transport",
+                "subcategory": "Mobility",
+                "category_id": "transit.mobility",
+                "reporting_category_id": "transport.mobility",
+                "category_source": "rule",
+            },
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    exported = export_review_rows(
+        normalized_path,
+        output_path,
+        category="transport",
+        subcategory="mobility",
+        category_id="TRANSIT.MOBILITY",
+        reporting_category_id="TRANSPORT.MOBILITY",
+        bank="revolut",
+        account_label="main",
+        contains="uber",
+    )
+
+    assert exported == 1
+    exported_df = pd.read_csv(output_path)
+    assert exported_df["transaction_id"].tolist() == ["tx_match"]
+
+
+@pytest.mark.parametrize(
+    ("filter_kwargs", "missing_column"),
+    [
+        ({"category_id": "transit.mobility"}, "category_id"),
+        (
+            {"reporting_category_id": "transport.mobility"},
+            "reporting_category_id",
+        ),
+    ],
+)
+def test_export_review_rows_rejects_missing_taxonomy_columns_for_requested_filters(
+    tmp_path: Path,
+    filter_kwargs: dict[str, str],
+    missing_column: str,
+) -> None:
+    normalized_path = tmp_path / "transactions_normalized.csv"
+    output_path = tmp_path / "review.csv"
+    pd.DataFrame(
+        [
+            {
+                "transaction_id": "tx_1",
+                "booking_date": "2026-01-01",
+                "description": "CARD UBER",
+                "amount_native": -12.0,
+                "currency": "EUR",
+                "bank": "REVOLUT",
+                "account_label": None,
+                "category": "Transport",
+                "subcategory": "Mobility",
+                "category_source": "rule",
+            }
+        ]
+    ).to_csv(normalized_path, index=False)
+
+    with pytest.raises(ValueError, match=missing_column):
+        export_review_rows(normalized_path, output_path, **cast(dict[str, Any], filter_kwargs))
 
 
 def test_export_review_rows_includes_legacy_fallback_uncategorized_rows(

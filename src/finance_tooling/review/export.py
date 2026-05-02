@@ -60,6 +60,12 @@ _PROVENANCE_EXPORT_COLUMNS = (
     "source_file",
 )
 _LEGACY_UNCATEGORIZED_SOURCES = {"fallback", "uncategorized"}
+_TAXONOMY_FILTER_COLUMNS = (
+    "category",
+    "subcategory",
+    "category_id",
+    "reporting_category_id",
+)
 
 
 def _apply_existing_review_values(
@@ -138,6 +144,24 @@ def _apply_exact_filter(dataframe: pd.DataFrame, column: str, value: str | None)
         return dataframe
     values = dataframe[column].map(normalize_optional_upper)
     return dataframe.loc[values == normalized]
+
+
+def _requested_taxonomy_filter_columns(
+    *,
+    category: str | None,
+    subcategory: str | None,
+    category_id: str | None,
+    reporting_category_id: str | None,
+) -> tuple[str, ...]:
+    requested_columns: list[str] = []
+    for column, value in zip(
+        _TAXONOMY_FILTER_COLUMNS,
+        (category, subcategory, category_id, reporting_category_id),
+        strict=True,
+    ):
+        if normalize_optional_upper(value) is not None:
+            requested_columns.append(column)
+    return tuple(requested_columns)
 
 
 def _parse_decimal_filter(value: str | None, *, label: str) -> Decimal | None:
@@ -243,6 +267,10 @@ def export_review_rows(
     contains: str | None = None,
     bank: str | None = None,
     account_label: str | None = None,
+    category: str | None = None,
+    subcategory: str | None = None,
+    category_id: str | None = None,
+    reporting_category_id: str | None = None,
     min_amount: str | None = None,
     max_amount: str | None = None,
     min_abs_amount: str | None = None,
@@ -276,12 +304,30 @@ def export_review_rows(
             "min_amount/max_amount cannot be combined with min_abs_amount/max_abs_amount"
         )
 
+    requested_taxonomy_columns = _requested_taxonomy_filter_columns(
+        category=category,
+        subcategory=subcategory,
+        category_id=category_id,
+        reporting_category_id=reporting_category_id,
+    )
+    missing_taxonomy_columns = [
+        column for column in requested_taxonomy_columns if column not in dataframe.columns
+    ]
+    if missing_taxonomy_columns:
+        joined = ", ".join(missing_taxonomy_columns)
+        raise ValueError(
+            f"Input table missing required taxonomy columns for review-export filters: {joined}"
+        )
+
     filtered_rows = dataframe.copy()
     filtered_rows[FINGERPRINT_COLUMN] = filtered_rows["description"].map(
         lambda value: normalize_description(str(value))
     )
 
-    filtered_rows = _filter_review_scope(filtered_rows, include_categorized=include_categorized)
+    filtered_rows = _filter_review_scope(
+        filtered_rows,
+        include_categorized=include_categorized or bool(requested_taxonomy_columns),
+    )
 
     if start_date_value is not None or end_date_value is not None:
         booking_dates = pd.to_datetime(filtered_rows["booking_date"], errors="coerce")
@@ -294,6 +340,14 @@ def export_review_rows(
     filtered_rows = _apply_contains_filter(filtered_rows, contains)
     filtered_rows = _apply_exact_filter(filtered_rows, "bank", bank)
     filtered_rows = _apply_exact_filter(filtered_rows, "account_label", account_label)
+    filtered_rows = _apply_exact_filter(filtered_rows, "category", category)
+    filtered_rows = _apply_exact_filter(filtered_rows, "subcategory", subcategory)
+    filtered_rows = _apply_exact_filter(filtered_rows, "category_id", category_id)
+    filtered_rows = _apply_exact_filter(
+        filtered_rows,
+        "reporting_category_id",
+        reporting_category_id,
+    )
     filtered_rows = _apply_amount_filter(
         filtered_rows,
         min_amount=min_amount,

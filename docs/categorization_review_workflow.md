@@ -57,16 +57,25 @@ Default export behavior is uncategorized-only. Optional filters:
 - `--contains TEXT`: case-insensitive match across description/normalized description/bank/account.
 - `--bank BANK`: exact bank filter.
 - `--account-label LABEL`: exact account-label filter.
+- `--category CATEGORY`: exact taxonomy category filter.
+- `--subcategory SUBCATEGORY`: exact taxonomy subcategory filter.
+- `--category-id CATEGORY_ID`: exact durable taxonomy bucket filter.
+- `--reporting-category-id REPORTING_CATEGORY_ID`: exact reporting taxonomy filter.
 - `--only-unreviewed`: export only rows whose persisted review marker is false.
 - `--dark-safe` / `--no-dark-safe`: force explicit light-on-dark workbook
   styling for dark-mode readability. Default comes from
   `FINANCE_REVIEW_EXPORT_DARK_SAFE` and falls back to enabled.
 
+Taxonomy filters automatically expand the export scope to include categorized
+rows, so you do not need to add `--include-categorized` just to reach a bucket
+by `category`, `subcategory`, `category_id`, or `reporting_category_id`.
+
 Example scoped export:
 
 ```bash
 uv run review-export \
-  --include-categorized \
+  --category "Transport" \
+  --subcategory "Mobility" \
   --start-date "2026-01-01" \
   --end-date "2026-01-31"
 ```

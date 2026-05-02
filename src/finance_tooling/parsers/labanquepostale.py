@@ -324,10 +324,7 @@ def _expand_ocr_lines(*, file_path: Path, full_text: str) -> tuple[list[str], li
         if not cleaned_line:
             line_number += 1
             continue
-        if (
-            _PARTIAL_DATE_SUFFIX_PATTERN.search(cleaned_line)
-            and line_number + 1 < len(raw_lines)
-        ):
+        if _PARTIAL_DATE_SUFFIX_PATTERN.search(cleaned_line) and line_number + 1 < len(raw_lines):
             next_line = " ".join(raw_lines[line_number + 1].split())
             if next_line and _DATE_FRAGMENT_PREFIX_PATTERN.match(next_line):
                 cleaned_line = f"{cleaned_line}{next_line}"
@@ -353,7 +350,7 @@ def _split_ocr_line(line: str) -> tuple[list[str], bool]:
     segments: list[str] = []
     first_match = matches[0]
     if first_match.start() > 0:
-        prefix = line[:first_match.start()].strip()
+        prefix = line[: first_match.start()].strip()
         if prefix:
             segments.append(prefix)
 

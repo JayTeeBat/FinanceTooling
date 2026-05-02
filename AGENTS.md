@@ -182,6 +182,22 @@ Success target for the 2026 validation campaign:
 
 ## Hand-Off Log
 
+### 2026-05-02 - codex
+- Branch: `codex/scoped-review-export-taxonomy`
+- Completed:
+  - Added taxonomy-aware `review-export` filters for `category`, `subcategory`, `category_id`, and `reporting_category_id`.
+  - Updated CLI dispatch coverage and review-export tests for scoped selection, scope expansion, and missing-column validation.
+  - Refreshed the review-workflow docs and ran the full repo quality gates after formatting.
+- Checks:
+  - `rtk uv run ruff format .`: pass
+  - `rtk uv run ruff check .`: pass
+  - `rtk uv run ty check src/finance_tooling tests`: pass
+  - `rtk uv run pytest`: pass
+- Open items:
+  - None.
+- Next action:
+  - Commit, push, and open a draft PR to `main`.
+
 ### 2026-05-01 - codex
 - Branch: `codex/decision-role-planning`
 - Completed:
