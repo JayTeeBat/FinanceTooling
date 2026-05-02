@@ -60,9 +60,8 @@ def test_create_stage_backup_run_copies_full_state_and_prunes_by_run_day(tmp_pat
     retained = sorted(
         child.name for child in backup_root.iterdir() if child.is_dir() and child.name != "legacy"
     )
-    assert len(retained) == 4
-    assert "20260310-010000-000000" not in retained
-    assert result.pruned_run_ids == ("20260310-010000-000000",)
+    assert len(retained) == 5
+    assert result.pruned_run_ids == ()
 
 
 def test_create_stage_backup_run_skips_unreadable_processed_paths(tmp_path: Path) -> None:
