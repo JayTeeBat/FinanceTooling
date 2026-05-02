@@ -235,8 +235,7 @@ def run_planning(
     warnings = [*rule_warnings, *budget_warnings]
     if not resolved_budget_path.exists():
         warnings.append(
-            "Budget targets file not found; using empty budget config: "
-            f"{resolved_budget_path}"
+            f"Budget targets file not found; using empty budget config: {resolved_budget_path}"
         )
 
     ledger = build_monthly_planning_ledger(

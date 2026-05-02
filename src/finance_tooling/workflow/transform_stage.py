@@ -199,8 +199,7 @@ def _workflow_result_from_summary(
     stale_reasons: tuple[str, ...],
 ) -> WorkflowResult:
     completeness_payload = (
-        _load_json(resolve_transform_artifact_path(settings, settings.completeness_json_path))
-        or {}
+        _load_json(resolve_transform_artifact_path(settings, settings.completeness_json_path)) or {}
     )
     completeness_status = str(completeness_payload.get("status", "pass"))
     completeness_coverage_ratio = _summary_float(completeness_payload, "file_coverage_ratio")
