@@ -32,6 +32,10 @@ _ACCOUNT_TRANSACTIONS_STOP = re.compile(
     r"^(Reverted from\b|Personal and Group Pockets transactions\b)",
     re.IGNORECASE,
 )
+_NAMED_ACCOUNT_TRANSACTIONS_STOP = re.compile(
+    r"^[A-Za-z][A-Za-z' -]+ account transactions from\b",
+    re.IGNORECASE,
+)
 _SEPT_PATTERN = re.compile(r"\bSept\b", re.IGNORECASE)
 _SIGN_TOLERANCE = Decimal("0.02")
 
@@ -142,7 +146,10 @@ def _extract_account_rows(full_text: str) -> list[tuple[str, str, str, str]]:
         if _ACCOUNT_TRANSACTIONS_START.match(line):
             in_account_transactions = True
             continue
-        if in_account_transactions and _ACCOUNT_TRANSACTIONS_STOP.match(line):
+        if in_account_transactions and (
+            _ACCOUNT_TRANSACTIONS_STOP.match(line)
+            or _NAMED_ACCOUNT_TRANSACTIONS_STOP.match(line)
+        ):
             break
         if not in_account_transactions:
             continue

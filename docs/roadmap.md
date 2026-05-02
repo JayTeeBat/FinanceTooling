@@ -68,7 +68,23 @@ any transform work is needed.
 Prefer targeted transform scopes or similarly minimal recomputation before
 adding more workflow surface area.
 
-3. Expand planning and reporting only when it serves the core pipeline.
+3. Add pipeline observability and corpus diff reporting.
+
+Make it easy to understand how each run changes the corpus and the
+categorization state.
+
+Track corpus-level diffs on every run, including transaction count deltas and
+EUR amount deltas.
+
+For full-refresh ingest, report how many new transactions were added and how
+many existing logical rows were rekeyed because parser output changed. Keep a
+reviewable export of those changed rows for HIL inspection.
+
+For full-refresh transform, report category-change deltas in count and EUR
+amount, surface stale transaction overrides, and export all rows whose
+category changed for HIL review.
+
+4. Expand planning and reporting only when it serves the core pipeline.
 
 The repo includes planning, budgeting, and reporting modules plus the
 `planning/household_finance_360/` workspace. Keep additions to that surface
@@ -80,7 +96,7 @@ stage API that consumes the canonical transform output and exposes budget
 actuals, monthly planning ledgers, and other decision-facing summaries as a
 named workflow surface rather than only as library helpers.
 
-4. Keep quality gates mandatory.
+5. Keep quality gates mandatory.
 
 Continue enforcing:
 
@@ -109,9 +125,6 @@ Preserved repo-level follow-up ideas that are not yet scoped as active work:
 - Add a first-class `planning` or `budget-status` workflow command that reads
   canonical transform outputs and emits budget-vs-actual and monthly planning
   KPI artifacts without re-running ingest or transform.
-- Add `review-export` filters for taxonomy/category buckets, such as
-  `--category`, `--subcategory`, `--category-id`, and
-  `--reporting-category-id`.
 
 ## Success Target
 
