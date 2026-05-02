@@ -1129,6 +1129,10 @@ def classify_transactions_with_diagnostics(
             rules=rules,
         )
         reporting_category_id = resolve_reporting_category_id(durable_category_id, rules=rules)
+        taxonomy_decision_role = resolve_taxonomy_decision_role_for_category_id(
+            durable_category_id,
+            rules=rules,
+        )
         category_label, subcategory_label = resolve_taxonomy_labels(
             reporting_category_id or durable_category_id,
             rules=rules,
@@ -1146,7 +1150,7 @@ def classify_transactions_with_diagnostics(
                 category_source="rule",
                 category_rule_id=matched_rule.rule_id,
                 economic_role=matched_rule.economic_role or tx.economic_role,
-                decision_role=matched_rule.decision_role or tx.decision_role,
+                decision_role=matched_rule.decision_role or taxonomy_decision_role,
             )
         )
     diagnostics = build_classification_diagnostics(classified)

@@ -724,6 +724,20 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
             subcategory="Savings Transfer",
             cashflow_type="transfer",
         ),
+        Transaction(
+            booking_date=date(2025, 1, 5),
+            description="To Trade Republic",
+            amount_native=Decimal("-1340.00"),
+            currency="EUR",
+            source_file=Path("stmt.pdf"),
+            bank="HSBC",
+            parser="hsbc",
+            category="Transfers",
+            subcategory="Investment Transfer",
+            cashflow_type="out",
+            economic_role="variable_expense",
+            decision_role="not_applicable",
+        ),
     ]
 
     dataframe = _frame_from_transactions(transactions)
@@ -737,7 +751,15 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
                 decision_role="savings",
                 category_label="Transfers",
                 subcategory_label="Savings Transfer",
-            )
+            ),
+            "transfers.investment_transfer": TaxonomyCategory(
+                name="Transfers",
+                subcategories=(),
+                cashflow_type="out",
+                decision_role="investment",
+                category_label="Transfers",
+                subcategory_label="Investment Transfer",
+            ),
         },
     )
     result = resolve_decision_roles_for_dataframe(dataframe, classification_rules=rules)
@@ -746,6 +768,7 @@ def test_resolve_decision_roles_uses_taxonomy_and_transfer_defaults() -> None:
         "essential",
         "not_applicable",
         "not_applicable",
+        "investment",
     ]
 
 
@@ -762,6 +785,26 @@ def test_resolve_decision_roles_marks_excluded_rows_as_not_applicable() -> None:
         cashflow_type="out",
         economic_role="exclude",
         amount_eur=Decimal("-42.00"),
+    )
+
+    result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))
+
+    assert result.dataframe.loc[0, "decision_role"] == "not_applicable"
+
+
+def test_resolve_decision_roles_treats_unknown_income_as_not_applicable() -> None:
+    tx = Transaction(
+        booking_date=date(2025, 1, 7),
+        description="Salary correction",
+        amount_native=Decimal("42.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="HSBC",
+        parser="hsbc",
+        category="Income",
+        cashflow_type="in",
+        economic_role="income",
+        decision_role="unknown",
     )
 
     result = resolve_decision_roles_for_dataframe(_frame_from_transactions([tx]))

@@ -443,28 +443,13 @@ def resolve_decision_roles_for_dataframe(
                 category_id,
                 rules=active_rules,
             )
-            category = (tx.category or "").strip().casefold()
-            if category in {"income", "transfers"}:
-                resolved_role = "not_applicable"
-            elif rule_role is not None:
-                resolved_role = rule_role
-            elif taxonomy_role is not None:
-                resolved_role = taxonomy_role
-            elif category in {
-                "groceries",
-                "housing",
-                "utilities",
-                "family",
-                "insurance",
-                "transport",
-            }:
-                resolved_role = "essential"
-            elif category == "taxes":
-                resolved_role = "tax"
-            elif category in {"dining", "shopping", "leisure"}:
-                resolved_role = "discretionary"
-            else:
-                resolved_role = "unknown"
+            resolved_role = normalize_decision_role_for_row(
+                rule_role or taxonomy_role,
+                cashflow_role=tx.cashflow_type,
+                economic_role=tx.economic_role,
+                category=tx.category,
+                subcategory=tx.subcategory,
+            )
         resolved_roles.append(resolved_role)
 
     resolved = normalized_frame.copy()

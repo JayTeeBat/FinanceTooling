@@ -5,6 +5,7 @@ from pathlib import Path
 from finance_tooling.categorization.classify import (
     CategoryRule,
     ClassificationRules,
+    TaxonomyCategory,
     classify_transactions,
     classify_transactions_with_diagnostics,
     load_classification_rules,
@@ -96,6 +97,53 @@ def test_classify_transactions_prefers_rule_over_no_match() -> None:
     assert classified[0].category == "Transfers"
     assert classified[0].subcategory == "Wallet Transfer"
     assert classified[0].category_source == "rule"
+
+
+def test_classify_transactions_uses_taxonomy_decision_role_over_stale_row_value() -> None:
+    tx = Transaction(
+        booking_date=date(2026, 2, 1),
+        description="Broker Funding Transfer",
+        amount_native=Decimal("-500.00"),
+        currency="EUR",
+        source_file=Path("stmt.pdf"),
+        bank="Revolut",
+        parser="revolut",
+        category="Transfers",
+        subcategory="Investment Transfer",
+        cashflow_type="out",
+        economic_role="variable_expense",
+        decision_role="not_applicable",
+    )
+    rules = ClassificationRules(
+        rules=(
+            CategoryRule(
+                rule_id="transfers.investment_transfer",
+                priority=100,
+                category="Transfers",
+                subcategory="Investment Transfer",
+                match_type="contains",
+                patterns=("broker funding transfer",),
+                expense_only=False,
+                income_only=False,
+                banks=(),
+                account_labels=(),
+            ),
+        ),
+        taxonomy={
+            "transfers.investment_transfer": TaxonomyCategory(
+                name="Transfers",
+                subcategories=("Investment Transfer",),
+                cashflow_type="out",
+                decision_role="investment",
+                category_label="Transfers",
+                subcategory_label="Investment Transfer",
+            ),
+        },
+    )
+
+    classified = classify_transactions([tx], rules=rules)
+
+    assert classified[0].decision_role == "investment"
 
 
 def test_load_classification_rules_supports_yaml_schema_aliases(tmp_path: Path) -> None:

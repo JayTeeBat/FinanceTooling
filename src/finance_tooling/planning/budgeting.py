@@ -373,14 +373,10 @@ def build_monthly_planning_ledger(
                     )
                     or economic_role
                 )
-            if decision_role in {"", "unknown"}:
-                decision_role = (
-                    resolve_taxonomy_decision_role_for_category_id(
-                        category_id,
-                        rules=classification_rules,
-                    )
-                    or decision_role
-                )
+            decision_role = resolve_taxonomy_decision_role_for_category_id(
+                category_id,
+                rules=classification_rules,
+            )
         decision_role = normalize_decision_role_for_row(
             decision_role,
             cashflow_role=cashflow_role,

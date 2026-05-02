@@ -139,6 +139,72 @@ def _surface_monthly_breakdown_by_month(
     }
 
 
+def _category_breakdown(
+    frame: pd.DataFrame,
+    *,
+    economic_roles: set[str],
+) -> dict[str, object]:
+    if (
+        frame.empty
+        or "category" not in frame.columns
+        or "economic_role" not in frame.columns
+        or "amount_eur" not in frame.columns
+    ):
+        return {
+            "monthly_totals": [],
+            "monthly_totals_by_month": {},
+            "bucket_totals": {},
+        }
+    working = frame.copy()
+    working["category"] = working["category"].map(_normalize_surface_bucket_label)
+    roles = working["economic_role"].astype("string").fillna("").str.strip().str.casefold()
+    working = working.loc[roles.isin(economic_roles)].copy()
+    if working.empty:
+        return {
+            "monthly_totals": [],
+            "monthly_totals_by_month": {},
+            "bucket_totals": {},
+        }
+    working["_category_volume"] = (
+        pd.to_numeric(working["amount_eur"], errors="coerce").fillna(0.0).abs()
+    )
+    grouped = working.groupby(["month", "category"], dropna=False)["_category_volume"].sum()
+    monthly_totals: list[dict[str, object]] = []
+    monthly_totals_by_month: dict[str, dict[str, float]] = {}
+    for (month, bucket), amount in grouped.items():
+        month_key = str(month)
+        bucket_key = _normalize_surface_bucket_label(bucket)
+        rounded = round(float(amount), 2)
+        monthly_totals.append(
+            {
+                "month": month_key,
+                "bucket": bucket_key,
+                "amount_eur": rounded,
+            }
+        )
+        monthly_totals_by_month.setdefault(month_key, {})[bucket_key] = rounded
+    monthly_totals.sort(key=lambda row: (str(row["month"]), str(row["bucket"])))
+    monthly_totals_by_month = {
+        month: dict(sorted(bucket_totals.items(), key=lambda item: item[0]))
+        for month, bucket_totals in sorted(
+            monthly_totals_by_month.items(), key=lambda item: item[0]
+        )
+    }
+    bucket_totals = (
+        working.groupby("category", dropna=False)["_category_volume"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+    return {
+        "monthly_totals": monthly_totals,
+        "monthly_totals_by_month": monthly_totals_by_month,
+        "bucket_totals": {
+            _normalize_surface_bucket_label(bucket): round(float(amount), 2)
+            for bucket, amount in bucket_totals.items()
+        },
+    }
+
+
 def _available_months(frame: pd.DataFrame) -> list[str]:
     if frame.empty or "month" not in frame.columns:
         return []
@@ -296,6 +362,7 @@ def build_planning_kpi_summary(
         ytd_totals: dict[str, float] = {}
         monthly_totals: list[dict[str, object]] = []
         surface_breakdowns: dict[str, dict[str, object]] = {}
+        category_breakdowns: dict[str, dict[str, object]] = {}
         surface_volume_notes = {
             "cashflow_type": {"transfer_volume_eur": 0.0},
             "economic_role": {"excluded_net_volume_eur": 0.0},
@@ -326,6 +393,13 @@ def build_planning_kpi_summary(
         monthly_totals.sort(
             key=lambda row: (str(row["month"]), str(row["planning_bucket"])),
         )
+        category_breakdowns = {
+            "income": _category_breakdown(ledger, economic_roles={"income"}),
+            "expense": _category_breakdown(
+                ledger,
+                economic_roles={"fixed_expense", "variable_expense", "expense"},
+            ),
+        }
         surface_breakdowns = {
             "economic_role": {
                 "monthly_totals": _monthly_surface_breakdown(ledger, "economic_role"),
@@ -356,7 +430,6 @@ def build_planning_kpi_summary(
             "cashflow_type": {"transfer_volume_eur": _transfer_volume(ledger)},
             "economic_role": {"excluded_net_volume_eur": _excluded_net_volume(ledger)},
         }
-
     budget_actual_total = 0.0
     budget_target_total = 0.0
     budget_variance_total = 0.0
@@ -385,6 +458,7 @@ def build_planning_kpi_summary(
         "ytd_totals_by_planning_bucket": ytd_totals,
         "monthly_totals_by_planning_bucket": monthly_totals,
         "surface_breakdowns": surface_breakdowns,
+        "category_breakdowns": category_breakdowns,
         "surface_volume_notes": surface_volume_notes,
         "cashflow_type_counts": _value_counts(ledger, "cashflow_type"),
         "economic_role_counts": _value_counts(ledger, "economic_role"),
@@ -476,6 +550,7 @@ def _render_planning_stage_dashboard_html_legacy(
     surface_json = _serialize_payload(
         {
             "surface_breakdowns": surface_breakdowns,
+            "category_breakdowns": kpi_summary.get("category_breakdowns", {}),
             "surface_volume_notes": kpi_summary.get("surface_volume_notes", {}),
             "available_months": months,
         }
@@ -857,6 +932,7 @@ def render_planning_stage_dashboard_html(
     surface_json = _serialize_payload(
         {
             "surface_breakdowns": surface_breakdowns,
+            "category_breakdowns": kpi_summary.get("category_breakdowns", {}),
             "surface_volume_notes": kpi_summary.get("surface_volume_notes", {}),
             "available_months": available_months,
             "available_years": available_years,
@@ -920,6 +996,15 @@ def render_planning_stage_dashboard_html(
     h2 { font-size: 20px; color: var(--accent); }
     h3 { font-size: 18px; }
     .hero p, .muted, .chart-note { margin: 0; color: var(--muted); }
+    .chart-note {
+      display: grid;
+      gap: 4px;
+      justify-items: end;
+      text-align: right;
+    }
+    .chart-note-line {
+      white-space: nowrap;
+    }
     .meta-row {
       display: flex;
       flex-wrap: wrap;
@@ -1006,6 +1091,14 @@ def render_planning_stage_dashboard_html(
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
       align-items: stretch;
+    }
+    .charts-grid-secondary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .section-heading {
+      display: grid;
+      gap: 4px;
+      margin-top: 6px;
     }
     .chart-card {
       padding: 16px;
@@ -1148,6 +1241,7 @@ def render_planning_stage_dashboard_html(
     }
     @media (max-width: 1180px) {
       .charts-grid { grid-template-columns: 1fr; }
+      .charts-grid-secondary { grid-template-columns: 1fr; }
     }
     @media (max-width: 760px) {
       .shell { padding: 16px; }
@@ -1231,6 +1325,30 @@ def render_planning_stage_dashboard_html(
           <div class="legend" id="legend-decision_role"></div>
         </article>
       </div>
+      <div class="section-heading">
+        <h2>Category Breakdown</h2>
+        <div class="muted">Income and expense categories by taxonomy category.</div>
+      </div>
+      <div class="charts-grid charts-grid-secondary">
+        <article class="chart-card" data-category-surface="income">
+          <div class="panel-header">
+            <h3>Income Categories</h3>
+            <div class="chart-note" id="chart-note-income_category"></div>
+          </div>
+          <div class="chart-controls" id="chart-controls-income_category"></div>
+          <svg id="chart-income_category" viewBox="0 0 320 270" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="legend" id="legend-income_category"></div>
+        </article>
+        <article class="chart-card" data-category-surface="expense">
+          <div class="panel-header">
+            <h3>Expense Categories</h3>
+            <div class="chart-note" id="chart-note-expense_category"></div>
+          </div>
+          <div class="chart-controls" id="chart-controls-expense_category"></div>
+          <svg id="chart-expense_category" viewBox="0 0 320 270" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="legend" id="legend-expense_category"></div>
+        </article>
+      </div>
       <div id="chart-tooltip" class="chart-tooltip"></div>
     </section>
 
@@ -1255,6 +1373,7 @@ def render_planning_stage_dashboard_html(
     const months = Array.isArray(payload.available_months) ? payload.available_months.slice() : [];
     const years = Array.isArray(payload.available_years) ? payload.available_years.slice() : [];
     const surfaces = payload.surface_breakdowns || {};
+    const categoryBreakdowns = payload.category_breakdowns || {};
     const surfaceVolumeNotes = payload.surface_volume_notes || {};
     const defaultWindow = payload.default_window || {};
     const startSelect = document.getElementById("month-start");
@@ -1266,10 +1385,15 @@ def render_planning_stage_dashboard_html(
     const windowSummary = document.getElementById("window-summary");
     const chartTooltip = document.getElementById("chart-tooltip");
     const surfaceKeys = ["cashflow_type", "economic_role", "decision_role"];
+    const categoryKeys = ["income_category", "expense_category"];
     const surfaceLabels = {
       cashflow_type: "Cashflow Type",
       economic_role: "Economic Role",
       decision_role: "Decision Role",
+    };
+    const categoryLabels = {
+      income_category: "Income Categories",
+      expense_category: "Expense Categories",
     };
     const surfaceConfigs = {
       cashflow_type: {
@@ -1316,6 +1440,16 @@ def render_planning_stage_dashboard_html(
         balanceFn: null,
       },
     };
+    const categoryConfigs = {
+      income_category: {
+        breakdownKey: "income",
+        volumeLabel: "income volume",
+      },
+      expense_category: {
+        breakdownKey: "expense",
+        volumeLabel: "expense volume",
+      },
+    };
     const palette = ["#9a6b4c", "#4f7358", "#6f86b8", "#c36a5c", "#7c8f43", "#a0739f", "#d08b47", "#567f8c"];
     const fixedBucketColors = {
       in: "#2563eb",
@@ -1325,9 +1459,9 @@ def render_planning_stage_dashboard_html(
       fixed_expense: "#92400e",
       variable_expense: "#d97706",
       savings: "#0f766e",
-      investment: "#7c3aed",
+      investment: "#4f46e5",
       debt_service: "#be185d",
-      tax: "#0f766e",
+      tax: "#f97316",
       essential: "#0f766e",
       discretionary: "#b91c1c",
       not_applicable: "#8f8a83",
@@ -1372,6 +1506,11 @@ def render_planning_stage_dashboard_html(
       return normalized.replaceAll("_", " ");
     }
 
+    function displayCategoryLabel(category) {
+      const normalized = String(category || "").trim();
+      return normalized ? normalized : "unknown";
+    }
+
     function normalizedBucketKey(bucket) {
       return String(bucket || "").trim().toLowerCase();
     }
@@ -1386,6 +1525,30 @@ def render_planning_stage_dashboard_html(
         hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
       }
       return palette[hash % palette.length];
+    }
+
+    function aggregateCategoryBreakdown(chartKey, windowMonths) {
+      const config = categoryConfig(chartKey);
+      const breakdown = categoryBreakdowns[config.breakdownKey] || {};
+      const byMonth = breakdown.monthly_totals_by_month || {};
+      const totals = new Map();
+      windowMonths.forEach((month) => {
+        const monthBuckets = byMonth[month] || {};
+        Object.entries(monthBuckets).forEach(([bucketKey, amount]) => {
+          const key = displayCategoryLabel(bucketKey);
+          totals.set(key, (totals.get(key) || 0) + Number(amount || 0));
+        });
+      });
+      const entries = Array.from(totals.entries())
+        .map(([key, amount]) => ({ key, label: displayCategoryLabel(key), amount }));
+      entries.sort((left, right) => {
+        const amountDelta = Math.abs(Number(right.amount || 0)) - Math.abs(Number(left.amount || 0));
+        if (amountDelta !== 0) {
+          return amountDelta;
+        }
+        return String(left.label).localeCompare(String(right.label));
+      });
+      return { entries, totals };
     }
 
     function setSelectOptions(select, values, selectedValue, emptyLabel) {
@@ -1435,6 +1598,13 @@ def render_planning_stage_dashboard_html(
         bucketOrder: [],
         balanceLabel: null,
         balanceFn: null,
+      };
+    }
+
+    function categoryConfig(chartKey) {
+      return categoryConfigs[chartKey] || {
+        breakdownKey: null,
+        volumeLabel: "volume",
       };
     }
 
@@ -1505,6 +1675,16 @@ def render_planning_stage_dashboard_html(
       chartTooltip.classList.add("visible");
     }
 
+    function renderChartNote(noteElement, lines) {
+      if (!noteElement) {
+        return;
+      }
+      noteElement.innerHTML = lines
+        .filter((line) => line !== null && line !== undefined && String(line).trim() !== "")
+        .map((line) => `<div class="chart-note-line">${line}</div>`)
+        .join("");
+    }
+
     function renderVisibilityControls() {
       surfaceKeys.forEach((surfaceKey) => {
         const container = document.getElementById(`chart-controls-${surfaceKey}`);
@@ -1532,6 +1712,36 @@ def render_planning_stage_dashboard_html(
       return typeof config.balanceFn === "function" ? config.balanceFn(totals) : null;
     }
 
+    function balanceDenominatorFor(surfaceKey, totals) {
+      if (surfaceKey === "cashflow_type") {
+        return Number(totals.get("in") || 0);
+      }
+      if (surfaceKey === "economic_role") {
+        return Number(totals.get("income") || 0);
+      }
+      return null;
+    }
+
+    function volumeNotesFor(surfaceKey, windowMonths) {
+      const monthly = ((surfaces[surfaceKey] || {}).monthly_totals_by_month) || {};
+      if (!windowMonths.length) {
+        return 0;
+      }
+      if (surfaceKey === "cashflow_type") {
+        return windowMonths.reduce((total, month) => {
+          const monthData = monthly[month] || {};
+          return total + Math.abs(Number(monthData.transfer || 0));
+        }, 0);
+      }
+      if (surfaceKey === "economic_role") {
+        return windowMonths.reduce((total, month) => {
+          const monthData = monthly[month] || {};
+          return total + Number(monthData.exclude || 0);
+        }, 0);
+      }
+      return 0;
+    }
+
     function renderSurface(surfaceKey, windowMonths) {
       const svg = document.getElementById(`chart-${surfaceKey}`);
       const legend = document.getElementById(`legend-${surfaceKey}`);
@@ -1540,23 +1750,32 @@ def render_planning_stage_dashboard_html(
       const buckets = aggregation.entries.filter((entry) => bucketVisible(surfaceKey, entry.key));
       const total = buckets.reduce((sum, entry) => sum + Math.abs(Number(entry.amount || 0)), 0);
       const balance = balanceFor(surfaceKey, aggregation.totals);
+      const balanceDenominator = balanceDenominatorFor(surfaceKey, aggregation.totals);
       const context = windowLabel(windowMonths);
       const notes = surfaceVolumeNotes[surfaceKey] || {};
+      const windowVolume = volumeNotesFor(surfaceKey, windowMonths);
       svg.innerHTML = "";
       legend.innerHTML = "";
       if (balance === null) {
-        note.textContent = buckets.length > 0
-          ? `${buckets.length} visible buckets.`
-          : "No visible buckets for the selected window.";
+        renderChartNote(note, [
+          buckets.length > 0
+            ? `${buckets.length} visible buckets.`
+            : "No visible buckets for the selected window.",
+        ]);
       } else {
         const extraNote = surfaceKey === "cashflow_type"
-          ? `transfer volume: ${currency(Number(notes.transfer_volume_eur || 0))}`
+          ? `transfer volume: ${currency(windowVolume)}`
           : surfaceKey === "economic_role"
-            ? `excluded net volume: ${currency(Number(notes.excluded_net_volume_eur || 0))}`
+            ? `excluded net volume: ${currency(windowVolume)}`
             : null;
-        note.textContent = extraNote
-          ? `${surfaceConfig(surfaceKey).balanceLabel}: ${currency(balance)} · ${extraNote}`
-          : `${surfaceConfig(surfaceKey).balanceLabel}: ${currency(balance)} · ${buckets.length} visible buckets`;
+        const ratioNote = Number(balanceDenominator || 0) !== 0
+          ? `balance ratio: ${percent(Number(balance || 0) / balanceDenominator)} of ${surfaceKey === "cashflow_type" ? "inflow" : "income"}`
+          : null;
+        renderChartNote(note, [
+          `${surfaceConfig(surfaceKey).balanceLabel}: ${currency(balance)}`,
+          ratioNote || "balance ratio: n/a",
+          extraNote || `${buckets.length} visible buckets`,
+        ]);
       }
 
       if (!buckets.length || total <= 0) {
@@ -1610,10 +1829,88 @@ def render_planning_stage_dashboard_html(
 
         const legendItem = document.createElement("div");
         legendItem.className = "legend-item";
+        const legendShare = surfaceKey === "decision_role" ? ` · ${percent(share)}` : "";
         legendItem.innerHTML =
           `<span class="legend-swatch" style="background:${color}"></span>` +
           `<span>${entry.label}</span>` +
-          `<span class="legend-amount">${currency(value)}</span>`;
+          `<span class="legend-amount">${currency(value)}${legendShare}</span>`;
+        legend.appendChild(legendItem);
+      });
+    }
+
+    function renderCategoryChart(chartKey, windowMonths) {
+      const svg = document.getElementById(`chart-${chartKey}`);
+      const legend = document.getElementById(`legend-${chartKey}`);
+      const note = document.getElementById(`chart-note-${chartKey}`);
+      const config = categoryConfig(chartKey);
+      const aggregation = aggregateCategoryBreakdown(chartKey, windowMonths);
+      const buckets = aggregation.entries;
+      const total = buckets.reduce((sum, entry) => sum + Math.abs(Number(entry.amount || 0)), 0);
+      const context = windowLabel(windowMonths);
+      svg.innerHTML = "";
+      legend.innerHTML = "";
+      renderChartNote(note, [
+        buckets.length > 0
+          ? `${config.volumeLabel}: ${currency(total)}`
+          : "No visible categories for the selected window.",
+        buckets.length > 0 ? `${buckets.length} categories` : null,
+      ]);
+
+      if (!buckets.length || total <= 0) {
+        const empty = createSvgElement("text");
+        empty.setAttribute("x", "160");
+        empty.setAttribute("y", "128");
+        empty.setAttribute("text-anchor", "middle");
+        empty.setAttribute("fill", "#7b7168");
+        empty.setAttribute("font-size", "14");
+        empty.textContent = "No visible category data";
+        svg.appendChild(empty);
+        return;
+      }
+
+      const cx = 160;
+      const cy = 118;
+      const radius = 84;
+      let startAngle = -Math.PI / 2;
+      buckets.forEach((entry) => {
+        const value = Number(entry.amount || 0);
+        const sliceValue = Math.abs(value);
+        const share = sliceValue / total;
+        const endAngle = startAngle + ((Math.PI * 2) * share);
+        const color = bucketColor(entry.key);
+        const path = createSvgElement("path");
+        path.setAttribute("fill", color);
+        path.setAttribute("stroke", "rgba(255,250,244,0.92)");
+        path.setAttribute("stroke-width", "2");
+        path.setAttribute(
+          "d",
+          share >= 0.999999 ? fullCirclePath(cx, cy, radius) : arcPath(cx, cy, radius, startAngle, endAngle)
+        );
+        path.setAttribute("tabindex", "0");
+        path.setAttribute(
+          "aria-label",
+          `${categoryLabels[chartKey]} slice ${entry.label} representing ${percent(share)}`
+        );
+        const tooltipHtml = [
+          `<div class="title">${categoryLabels[chartKey]}</div>`,
+          `<div class="context">${context}</div>`,
+          `<div class="row"><span class="label">Category</span><span class="value">${entry.label}</span></div>`,
+          `<div class="row"><span class="label">Amount</span><span class="value">${currency(value)}</span></div>`,
+          `<div class="row"><span class="label">Share</span><span class="value">${percent(share)}</span></div>`,
+        ].join("");
+        path.addEventListener("mouseenter", (event) => showTooltip(event, tooltipHtml));
+        path.addEventListener("mousemove", (event) => showTooltip(event, tooltipHtml));
+        path.addEventListener("mouseleave", hideTooltip);
+        path.addEventListener("blur", hideTooltip);
+        svg.appendChild(path);
+        startAngle = endAngle;
+
+        const legendItem = document.createElement("div");
+        legendItem.className = "legend-item";
+        legendItem.innerHTML =
+          `<span class="legend-swatch" style="background:${color}"></span>` +
+          `<span>${entry.label}</span>` +
+          `<span class="legend-amount">${currency(value)} · ${percent(share)}</span>`;
         legend.appendChild(legendItem);
       });
     }
@@ -1622,6 +1919,7 @@ def render_planning_stage_dashboard_html(
       const windowMonths = selectedMonths();
       windowSummary.textContent = windowLabel(windowMonths);
       surfaceKeys.forEach((surfaceKey) => renderSurface(surfaceKey, windowMonths));
+      categoryKeys.forEach((chartKey) => renderCategoryChart(chartKey, windowMonths));
     }
 
     function applyMonthPreset() {
@@ -1685,6 +1983,12 @@ def render_planning_stage_dashboard_html(
         input.checked = false;
         input.addEventListener("change", renderWindow);
       });
+    });
+    categoryKeys.forEach((chartKey) => {
+      const container = document.getElementById(`chart-controls-${chartKey}`);
+      if (container) {
+        container.hidden = true;
+      }
     });
     renderWindow();
     hideTooltip();

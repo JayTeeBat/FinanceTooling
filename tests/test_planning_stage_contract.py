@@ -436,6 +436,16 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert summary_payload["surface_breakdowns"]["decision_role"]["bucket_totals"][
         "not_applicable"
     ] == pytest.approx(1400.0)
+    assert "category_breakdowns" in summary_payload
+    assert summary_payload["category_breakdowns"]["income"]["bucket_totals"][
+        "Income"
+    ] == pytest.approx(1500.0)
+    assert summary_payload["category_breakdowns"]["expense"]["bucket_totals"][
+        "Housing"
+    ] == pytest.approx(300.0)
+    assert summary_payload["category_breakdowns"]["expense"]["bucket_totals"][
+        "Food"
+    ] == pytest.approx(200.0)
     assert summary_payload["surface_volume_notes"]["cashflow_type"][
         "transfer_volume_eur"
     ] == pytest.approx(100.0)
@@ -469,14 +479,33 @@ def test_run_planning_writes_expected_artifacts_and_reconciles_kpis(tmp_path: Pa
     assert 'id="chart-economic_role"' in dashboard_html
     assert 'id="chart-cashflow_type"' in dashboard_html
     assert 'id="chart-decision_role"' in dashboard_html
+    assert 'id="chart-income_category"' in dashboard_html
+    assert 'id="chart-expense_category"' in dashboard_html
     assert 'id="chart-tooltip"' in dashboard_html
     assert "index === buckets.length - 1" not in dashboard_html
     assert "const endAngle = startAngle + ((Math.PI * 2) * share);" in dashboard_html
     assert "balance (in - out)" in dashboard_html
     assert "balance (income - expenses)" in dashboard_html
+    assert "balance ratio:" in dashboard_html
+    assert '? "inflow" : "income"' in dashboard_html
     assert "transfer volume:" in dashboard_html
-    assert "excluded net volume:" in dashboard_html
+    assert 'class="chart-note-line"' in dashboard_html
+    assert "renderChartNote(note, [" in dashboard_html
+    assert 'const legendShare = surfaceKey === "decision_role"' in dashboard_html
+    assert " · ${percent(share)}" in dashboard_html
     assert "surface_volume_notes" in dashboard_html
+    assert "Category Breakdown" in dashboard_html
+    assert 'data-category-surface="income"' in dashboard_html
+    assert 'data-category-surface="expense"' in dashboard_html
+    assert "chart-note-income_category" in dashboard_html
+    assert "chart-note-expense_category" in dashboard_html
+    assert 'const categoryKeys = ["income_category", "expense_category"];' in dashboard_html
+    assert "categoryBreakdowns = payload.category_breakdowns || {};" in dashboard_html
+    assert "categoryLabels = {" in dashboard_html
+    assert "renderCategoryChart(chartKey, windowMonths)" in dashboard_html
+    assert 'essential: "#0f766e"' in dashboard_html
+    assert 'investment: "#4f46e5"' in dashboard_html
+    assert 'tax: "#f97316"' in dashboard_html
     assert 'id="chart-controls-cashflow_type"' in dashboard_html
     assert 'id="chart-controls-economic_role"' in dashboard_html
     assert 'id="chart-controls-decision_role"' in dashboard_html

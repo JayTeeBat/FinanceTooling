@@ -56,6 +56,15 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
                 category_label="Transport",
                 subcategory_label="Public Transport",
             ),
+            "transfers.investment_transfer": TaxonomyCategory(
+                name="Transfers",
+                subcategories=(),
+                cashflow_type="out",
+                economic_role="variable_expense",
+                decision_role="investment",
+                category_label="Transfers",
+                subcategory_label="Investment Transfer",
+            ),
         },
     )
     frame = pd.DataFrame(
@@ -94,6 +103,18 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
             },
             {
                 "booking_date": "2026-01-29",
+                "transaction_id": "tx-7",
+                "category": "Transfers",
+                "category_id": "transfers.investment_transfer",
+                "subcategory": "Investment Transfer",
+                "project": "Mobility",
+                "cashflow_type": "out",
+                "economic_role": "variable_expense",
+                "decision_role": "not_applicable",
+                "amount_eur": -500.0,
+            },
+            {
+                "booking_date": "2026-01-29",
                 "transaction_id": "tx-5",
                 "category": "Transfers",
                 "category_id": "transfers.savings_transfer",
@@ -118,13 +139,14 @@ def test_build_budget_status_supports_category_and_project_targets(tmp_path: Pat
     )
 
     ledger = build_monthly_planning_ledger(frame, classification_rules=rules)
-    assert set(ledger["transaction_id"]) == {"tx-1", "tx-2", "tx-3", "tx-4", "tx-5", "tx-6"}
+    assert set(ledger["transaction_id"]) == {"tx-1", "tx-2", "tx-3", "tx-4", "tx-5", "tx-6", "tx-7"}
     ledger_by_id = ledger.set_index("transaction_id")
     assert "planning_amount_eur" not in ledger.columns
     assert ledger_by_id.loc["tx-1", "planning_bucket"] == "expense"
     assert ledger_by_id.loc["tx-1", "amount_eur"] == -50.0
     assert ledger_by_id.loc["tx-4", "planning_bucket"] == "expense"
     assert ledger_by_id.loc["tx-4", "amount_eur"] == 20.0
+    assert ledger_by_id.loc["tx-7", "decision_role"] == "investment"
     assert ledger_by_id.loc["tx-5", "planning_bucket"] == "savings"
     assert ledger_by_id.loc["tx-5", "amount_eur"] == -100.0
     assert ledger_by_id.loc["tx-6", "planning_bucket"] == "excluded"

@@ -130,6 +130,36 @@ Use this template:
 
 ## Hand-Off Log
 
+### 2026-05-03 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
+  - Fixed the decision-role planning mismatch by moving the hard gates ahead of the `unknown` fallback in semantic normalization.
+  - Updated the transform, reporting, and planning resolvers so taxonomy-driven `decision_role` values now survive correctly while `income` and `transfer` rows still collapse to `not_applicable`.
+  - Verified the in-memory planning builder now matches the transform-side 2025 `unknown` total and added regressions for the stale-value cases that were inflating the saved planning ledger.
+- Checks:
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/categorization/classify.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/planning/budgeting.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_cashflow.py tests/test_classify.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/categorization/classify.py src/finance_tooling/core/semantic_resolution.py src/finance_tooling/planning/budgeting.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/planning_stage.py tests/test_budgeting.py tests/test_cashflow.py tests/test_classify.py tests/test_planning_stage_contract.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py`: pass
+- Open items:
+  - Regenerate the live planning artifacts so the saved ledger/dashboard pick up the corrected decision-role totals.
+- Next action:
+  - Commit the semantic normalization fix and refresh the PR description before merging.
+
+### 2026-05-02 - codex
+- Branch: `codex/stage-aligned-planning`
+- Completed:
+  - Reworked decision-role resolution so taxonomy and rule roles win over stale row values, which lets `investment` surface again for transfer-like outflows such as Trade Republic funding rows.
+  - Updated the planning budgeting path and reporting resolver to recompute decision roles from the active taxonomy before applying the semantic gates.
+  - Added regressions covering taxonomy-driven `investment` resolution in classification, reporting, and planning-ledger generation.
+- Checks:
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/categorization/classify.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/planning/budgeting.py tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/categorization/classify.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/planning/budgeting.py tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py`: pass
+  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_cashflow.py tests/test_classify.py tests/test_budgeting.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py`: pass
+- Open items:
+  - The live transform/planning artifacts still need to be regenerated so the updated `investment` role appears in the dashboard output.
+- Next action:
+  - Re-run transform and planning against the live corpus, then verify the Trade Republic rows now show `decision_role = investment`.
+
 ### 2026-05-02 - codex
 - Branch: `codex/stage-aligned-planning`
 - Completed:
@@ -144,33 +174,3 @@ Use this template:
   - None.
 - Next action:
   - Keep the PR wording aligned if the dashboard notes or balance labels need one more pass.
-
-### 2026-05-02 - codex
-- Branch: `codex/stage-aligned-planning`
-- Completed:
-  - Added `surface_volume_notes` to the planning dashboard payload so the transfer and excluded volume annotations now render from real data instead of falling back to zero.
-  - Kept the compact chart notes under the cashflow and economic pies while preserving the removed toggle behavior.
-  - Added a regression assertion that the dashboard HTML embeds the new payload key.
-- Checks:
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/workflow/planning_stage.py tests/test_planning_stage_contract.py`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/workflow/planning_stage.py tests/test_planning_stage_contract.py`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_budgeting.py`: pass
-- Open items:
-  - None.
-- Next action:
-  - Regenerate the planning artifact so the live HTML picks up the payload field.
-
-### 2026-05-02 - codex
-- Branch: `codex/stage-aligned-planning`
-- Completed:
-  - Changed the semantic defaults so any unresolved spend row now falls back to `variable_expense` instead of the generic `expense` role.
-  - Updated the reporting and workflow normalization layers to keep the new default consistent across planning and transform outputs.
-  - Added a planning regression check so the economic-role summary no longer retains an `expense` bucket in the dashboard payload.
-- Checks:
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff format src/finance_tooling/core/semantic_resolution.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/reporting.py tests/test_cashflow.py tests/test_planning_stage_contract.py`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run ruff check src/finance_tooling/core/semantic_resolution.py src/finance_tooling/reporting/cashflow.py src/finance_tooling/workflow/reporting.py tests/test_cashflow.py tests/test_planning_stage_contract.py`: pass
-  - `env UV_CACHE_DIR=/tmp/uv-cache rtk uv run pytest -q tests/test_cashflow.py tests/test_planning_stage_contract.py tests/test_planning_dashboard.py tests/test_budgeting.py`: pass
-- Open items:
-  - None.
-- Next action:
-  - Keep an eye on any legacy review/export views that still intentionally label rows as `expense`.

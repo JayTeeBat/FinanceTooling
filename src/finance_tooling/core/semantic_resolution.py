@@ -21,7 +21,7 @@ _ESSENTIAL_CATEGORY_NAMES = frozenset(
 )
 _DISCRETIONARY_CATEGORY_NAMES = frozenset({"dining", "shopping", "leisure"})
 _NOT_APPLICABLE_CATEGORY_NAMES = frozenset(
-    {"income", "transfers", "non personal transactions", "pass-through", "excluded"}
+    {"non personal transactions", "pass-through", "excluded"}
 )
 _TRANSFER_DECISION_ROLE_MARKERS: tuple[tuple[str, DecisionRoleType], ...] = (
     ("savings", "savings"),
@@ -116,7 +116,7 @@ def normalize_economic_role_for_row(
     normalized_cashflow_role = normalize_cashflow_role_value(cashflow_role or cashflow_type)
     normalized_category = _normalized_text(category)
     normalized_subcategory = _normalized_text(subcategory)
-    if normalized_cashflow_role == "transfer" or normalized_category == "transfers":
+    if normalized_cashflow_role == "transfer":
         return None
     if normalized_category in {"non personal transactions", "pass-through", "excluded"}:
         return "exclude"
@@ -149,9 +149,6 @@ def normalize_decision_role_for_row(
     subcategory: object = None,
 ) -> DecisionRoleType:
     """Normalize a resolved decision role with semantic fallbacks."""
-    normalized = normalize_decision_role_value(value)
-    if normalized is not None:
-        return normalized
     normalized_cashflow_role = normalize_cashflow_role_value(cashflow_role or cashflow_type)
     normalized_economic_role = normalize_economic_role_value(economic_role)
     normalized_category = _normalized_text(category)
@@ -159,16 +156,11 @@ def normalize_decision_role_for_row(
 
     if normalized_cashflow_role == "transfer":
         return "not_applicable"
-    if normalized_economic_role == "exclude" or normalized_category in {
-        "income",
-        "transfers",
-        "non personal transactions",
-        "pass-through",
-        "excluded",
-    }:
+    if normalized_economic_role in {"exclude", "income"}:
         return "not_applicable"
-    if normalized_economic_role == "income":
-        return "not_applicable"
+    normalized = normalize_decision_role_value(value)
+    if normalized is not None and normalized != "unknown":
+        return normalized
 
     fallback: DecisionRoleType = "unknown"
     if normalized_category in _ESSENTIAL_CATEGORY_NAMES:
@@ -215,7 +207,7 @@ def default_economic_role_for_category(
 ) -> EconomicRoleType | None:
     """Return the legacy economic-role default for a category label."""
     normalized = _normalized_text(category)
-    if cashflow_role == "transfer" or normalized == "transfers":
+    if cashflow_role == "transfer":
         return None
     if normalized == "income":
         return "income"
