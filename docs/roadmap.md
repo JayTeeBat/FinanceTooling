@@ -133,6 +133,9 @@ Preserved repo-level follow-up ideas that are not yet scoped as active work:
 - Add a canonical statement account identifier on transactions using the
   snake_case format `<bank>_<account_holder>_<last_4_digits_of_account>`, while
   keeping parser-provided `bank` and `account_label` fields as source context.
+- Refactor the Python `Transaction` model into source, parsed-facts, and
+  enrichment components while keeping canonical parquet, CSV, and JSON outputs
+  flat and backward-compatible.
 - Add a taxonomy/reporting surface for fixed expenses, variable expenses, and
   savings so reports can quickly distinguish those item types.
 - Split finance presentation into two clear HTML layers:

@@ -144,6 +144,34 @@ improves:
 Unknown should be explicit. For financial decisions, an unknown value is better
 than a confident-looking guess.
 
+### Future Python Model Shape
+
+The stored canonical transaction data should remain flat for parquet, CSV, and
+JSON compatibility. The Python domain model should become nested so ownership
+by workflow stage is explicit:
+
+- `TransactionSourceRef`: source-statement linkage and source context,
+  including `source_document_id`, `source_record_index`, `source_file`,
+  `source_file_mtime`, `bank`, `account_label`, and `parser`.
+- `ParsedTransactionFacts`: statement-extracted facts, including
+  `booking_date`, `description`, `amount_native`, and `currency`.
+- `TransactionEnrichment`: transform/enrichment outputs, including FX fields,
+  `category_id`, `reporting_category_id`, display category labels,
+  `cashflow_role`, `economic_role`, `decision_role`, account-boundary fields,
+  project fields, and review state.
+
+The source reference must preserve a bijective link from one canonical
+transaction row to one parsed source-statement record. Treat
+`source_document_id + source_record_index` as the source-record identity, with
+`transaction_id` remaining a stable derived key for upserts, review state, and
+transaction overrides.
+
+Keep flat persistence as the public file contract. Serialization and
+deserialization should map the nested Python model to the existing
+`CANONICAL_TRANSACTION_COLUMNS` order at the storage boundary. During migration,
+write the existing `cashflow_type` column while exposing `cashflow_role` in the
+domain model and keeping `cashflow_type` as a compatibility alias.
+
 ## Derivation Rules
 
 The semantic order should be deterministic and explainable.
@@ -273,6 +301,25 @@ Status: this document.
   cashflow type, economic role, reporting dimensions, account-boundary fields,
   project tags, reviewed state, bank/account, and source metadata.
 - Keep legacy dashboard output temporarily for compatibility.
+
+### PR 8: Nest The Python Transaction Model
+
+- Introduce nested transaction dataclasses for source reference, parsed facts,
+  and enrichment while keeping stored canonical data flat.
+- Keep `CANONICAL_TRANSACTION_COLUMNS` unchanged for the first implementation
+  so existing parquet, CSV, JSON, dashboards, review export/import, and metrics
+  keep their current file contract.
+- Add conversion helpers between nested transactions and flat canonical rows,
+  and keep `compute_transaction_id` stable against existing transaction IDs.
+- Update parser normalization to populate source and parsed sections with a
+  default enrichment section.
+- Update enrichment, review-state projection, account inference, and reporting
+  code to replace only the enrichment section when stage-owned fields change.
+- Prefer `cashflow_role` in the domain model while writing the existing
+  `cashflow_type` flat column during the compatibility window.
+- Add regression coverage for parser output shape, dataframe round-trips,
+  stable transaction IDs, enrichment-only updates, and `cashflow_role` /
+  `cashflow_type` compatibility.
 
 ## Testing Strategy
 
